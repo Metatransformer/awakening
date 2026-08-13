@@ -64,6 +64,13 @@ player has inhabited. Small acts such as tending the hearth, stocking supper,
 and staying connected make care legible without turning residents into meters
 to manage or services to unlock.
 
+### Bright above, warm below
+
+The visual target is PS2-era stylized realism. Exteriors are bright, welcoming
+sunny places; dungeons are dark but shaped by warm local light, with threats,
+routes, and puzzle verbs always readable. [STYLEGUIDE.md](STYLEGUIDE.md) owns
+the reference roles and visual gates.
+
 ### Consequences are legible and recoverable
 
 Warnings arrive before commitments. Losses are visible and attributable. A

@@ -353,13 +353,60 @@ do not instance a second.
 **`Settings` owns one node that is not in that table and draws the whole world.**
 `ScreenPresent` (`scripts/core/screen_present.gd`, added 2026-08-11 for card #58)
 is a child of the `Settings` autoload, not an autoload of its own: it holds
-`docs/STYLEGUIDE.md` §4.5's 480 × 270 SubViewport, the sharp-bilinear present
-layer at `CanvasLayer` **−100**, and the proxy camera that mirrors the live one.
+the current 480 × 270 SubViewport, sharp-bilinear present layer at `CanvasLayer`
+**−100**, and the proxy camera that mirrors the live one. This is the current
+transitional implementation and legacy migration debt under
+`docs/STYLEGUIDE.md` §9, not the visual target.
 It lives under `Settings` precisely so this file did not need an `[autoload]`
 line — and because `Settings.apply_video()` already owned `msaa_3d`,
 `scaling_3d_scale` and the shadow atlas, which now have to land on whichever
 viewport is drawing 3D. One field, `Settings.internal_render`, turns it off; the
 root window's `disable_3d` is the only other thing it touches.
+
+### PS2 stylized-realism renderer target
+
+These are target values for issue #205's visual-cohesion initiative. A slice
+does not claim conformance until its native captures use them.
+
+- **Renderer and resolution:** Forward+, 1280×720 canonical internal/output
+  proof at `resolution_scale = 1.0`. `internal_render = false`; no quantizing
+  present pass, vertex snap, affine mapping, ordered dither, or framebuffer
+  palette reduction.
+- **Tonemap and exposure:** AgX, fixed exposure per zone, auto-exposure off.
+  Per-zone light and fog may change; a full-frame color grade may not.
+- **Anti-aliasing:** SMAA 1x by default, MSAA off by default and optional at 2x.
+  No FXAA or TAA. UI remains at the root canvas and is never downsampled with
+  the world.
+- **Texture sampling:** world textures use linear filtering with mipmaps and 4x
+  anisotropy. UI follows its named control/icon owner. Nearest filtering is not
+  a world-style effect.
+- **Post effects:** glow, SSR, SSIL, SDFGI, and depth of field are off. SSAO is
+  off by default and no material or composition may depend on it. Depth fog is
+  allowed for separation; global volumetric fog and light shafts are off.
+- **Exterior light:** one shadowed directional sun, four cascades, 80 m maximum
+  distance, plus sky ambient. Medium quality is the baseline: 4096 directional
+  atlas and 2048 positional atlas.
+- **Dungeon light:** neutral/cool ambient plus one or two visible warm pools per
+  ordinary room. At most four local lights overlap one surface and at most one
+  local key per room casts shadows. Fill lights do not cast shadows.
+- **Materials:** `StandardMaterial3D` with authored albedo and broad roughness;
+  metallic only on metal. Normal maps are omitted or low-frequency and may not
+  provide the asset's identity. Environment modules use 256–1024 px texture
+  sets; hero characters and landmarks may use 1024–2048 px. Repeated detail
+  belongs in shared atlases, not unique 4K maps.
+- **Geometry:** silhouette and planar massing carry the style. Ordinary props
+  target 200–5,000 rendered triangles, modular landmarks 5,000–30,000, standard
+  actors 6,000–18,000, and major creatures 15,000–35,000 at LOD0. Exceeding a
+  range requires a named silhouette/deformation need and an LOD proof.
+
+`docs/STYLEGUIDE.md` owns what those choices must communicate. This section owns
+the renderer destination; `Settings`, environment resources, materials, and
+directors implement and prove it.
+
+For UI, `docs/STYLEGUIDE.md` §6 owns visual principles. Exact shared geometry,
+type, and color tokens have one executable owner: `scripts/ui/style.gd`.
+`scripts/ui/hud/hud.gd` owns HUD behavior and composition; this contract owns
+the interfaces between them. Area visual cards do not edit UI.
 
 Need a new autoload, input action, or project setting? **Ask the orchestrator.**
 `project.godot` is the file every agent would otherwise fight over. Edit it only
@@ -3381,7 +3428,7 @@ elsewhere that a manifest is uniquely well placed to break:
 - **Four tints, and none of them dims the room.** `TINTS.size()` is SCOPE §1's
   variety budget. Every `stone` entry is a multiply with a channel at 1.00, and
   every `air` is *lighter* than the shipped `env_dungeon.tres` fog — contrast is
-  range and hue, never an absence of light (GDD pillar 5, STYLEGUIDE §1).
+  range and hue, never an absence of light (GDD pillar 5; STYLEGUIDE §§2, 5).
 
 `RelicDb` owns what a relic does; `FloorDb` owns only where it lies. `BossDb`
 owns the move sets; `FloorDb` owns only the id. The Long Descent (GDD §8) is one
@@ -3514,10 +3561,12 @@ rich chest had no gate at all behind three rooms of level+1 bodies.
 
 ## 9. Proving your work — you do not get to say it looks good
 
-You produce **frames**, and the critic compares them to `refs/`.
+You produce **frames**, and an independent critic compares them to the current
+GDD pillar, STYLEGUIDE reference role and acceptance gate, and the named
+gameplay question. Mechanical OOT comparisons still use `refs/`.
 
 ```bash
-godot --path . -s tools/shoot.gd -- \
+tools/quiet.sh --path . -s tools/shoot.gd -- \
   --scene=res://scenes/rooms/room_01.tscn \
   --out=/abs/path/shot.png --warmup=45 --size=1280x720
 ```

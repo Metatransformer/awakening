@@ -43,6 +43,28 @@ services, and garrison spaces. It may add only what the slice requires.
 
 ## Owner-authorised implementation alongside the freeze
 
+### PS2 visual-cohesion initiative
+
+The owner authorises an autonomous, system-by-system visual-quality pass across
+the shared renderer, Highbridge garrison, the currently implemented dungeon,
+and the existing outdoor area. [STYLEGUIDE.md](STYLEGUIDE.md) is the target.
+Each area must stay on its own claimed card, use native-resolution before/after
+frames, preserve combat/navigation space, and pass independent adversarial
+review before landing.
+
+The visual scene roots are `scenes/rooms/garrison.tscn`,
+`scenes/rooms/dungeon.tscn`, and the compatibility proof shell
+`scenes/rooms/garrison_outskirts.tscn`; the outskirts itself remains embedded in
+the garrison. Visual cards may change visible meshes, materials, lights, sky,
+fog, and collision-free dressing. Room topology, ports, item and NPC placement,
+collision shapes, navigation, interactions, schedules, quest state, camera
+behavior, and UI are read-only unless a separate gameplay card authorises them.
+
+This authorises lighting, environment, material, dressing, and presentation
+changes needed to replace the legacy PSX look with coherent PS2-era stylized
+realism. It authorises no new floor, boss, enemy kind, quest, reward, gameplay
+system, UI screen, or production-content expansion.
+
 Issue #168 is an explicitly owner-authorised, bounded daily-life implementation
 slice: one fishing pond and minigame, a three-meal Fish reserve, supper-derived
 Fed state, visible derived morale, and a one-descent Well Fed benefit. Its exact
