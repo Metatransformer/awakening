@@ -182,6 +182,8 @@ func _fresh_smith() -> void:
 		"A3 every visible track has textured stone (%d of %d)" % [_stone_tracks(ladder), rows])
 	_ck(named.x == named.y and named.y > 0,
 		"A4 every rung has an authored name (%d of %d)" % [named.x, named.y])
+	_ck(_square_rungs(ladder), "A4b every upgrade rung is square (%s)"
+		% UpgradeLadder.RUNG_SIZE)
 	_ck(_locks(ladder) > 0,
 		"A5 future rungs are full locked nodes (%d locks)" % _locks(ladder))
 	var detail := screen.find_child("UpgradeDetail", true, false) as Control
@@ -328,6 +330,17 @@ func _named_rungs(ladder: UpgradeLadder) -> Vector2i:
 		if not text.is_empty() and not roman.has(text):
 			good += 1
 	return Vector2i(good, total)
+
+
+func _square_rungs(ladder: UpgradeLadder) -> bool:
+	if ladder == null or not is_equal_approx(UpgradeLadder.RUNG_SIZE.x,
+			UpgradeLadder.RUNG_SIZE.y):
+		return false
+	for node in ladder.find_children("Rung_*", "Button", true, false):
+		var size := (node as Button).custom_minimum_size
+		if not is_equal_approx(size.x, size.y):
+			return false
+	return true
 
 
 func _recipe_icons(detail: Control) -> int:

@@ -15,8 +15,11 @@ signal tab_changed(first_selection: int)
 
 const ARROW := "→"
 const TICK := "✓"
-const RUNG_SIZE := Vector2(112, 58)
-const ROW_HEIGHT := 74
+## Square by contract: the track is a chain of hotkeys/icons, not a row of
+## landscape cards. 80 preserves two-line authored names while cutting each
+## four-rung chain's width by 128 px compared with the old 112×58 nodes.
+const RUNG_SIZE := Vector2(80, 80)
+const ROW_HEIGHT := 96
 const ROW_ICON_PX := 42
 const RUNG_ICON_PX := 46
 const TITLE_WIDTH := 148
@@ -381,8 +384,8 @@ func _make_rung(group: Dictionary, track: Dictionary, rank: int, line: int,
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	button.add_child(col)
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	col.offset_left = 8
-	col.offset_right = -8
+	col.offset_left = 4
+	col.offset_right = -4
 	col.offset_top = 5
 	col.offset_bottom = -5
 
@@ -395,6 +398,7 @@ func _make_rung(group: Dictionary, track: Dictionary, rank: int, line: int,
 	name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.apply_text_style(name_label, UITheme.TYPE_PARAGRAPH_2, UITheme.TEXT)
+	name_label.add_theme_font_size_override("font_size", 11)
 	col.add_child(name_label)
 
 	var status := HBoxContainer.new()
