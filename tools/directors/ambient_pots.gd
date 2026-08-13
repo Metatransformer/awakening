@@ -17,7 +17,7 @@ const COIN_SCRIPT := "res://scripts/world/coin_pickup.gd"
 const APPROVED := {
 	&"coins": 5,
 	&"moss_agate": 1,
-	&"hearts": 2,
+	&"health": 2,
 	&"arrows": 3,
 	&"tide_sapphire": 1,
 	&"charges": 1,

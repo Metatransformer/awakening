@@ -41,10 +41,10 @@ func _seed_slots() -> void:
 	var restore_scene := Saves.current_scene_path
 
 	if bool(Saves.peek(0).get("empty", true)):
-		_stage(5, 20, 137, 2, &"entrance_hall")
+		_stage(20, 20, 137, 2, &"entrance_hall")
 		Saves.save(0)
 	if bool(Saves.peek(1).get("empty", true)):
-		_stage(3, 12, 44, 1, &"west_corridor")
+		_stage(12, 12, 44, 1, &"west_corridor")
 		Saves.save(1)
 
 	Game.reset()
@@ -53,9 +53,10 @@ func _seed_slots() -> void:
 	Saves.active_slot = -1
 
 
-func _stage(hearts: int, quarters: int, rupees: int, keys: int, room: StringName) -> void:
-	Game.max_quarters = hearts * K.HEART
-	Game.quarters = quarters
+func _stage(max_health_points: int, health_points: int,
+		rupees: int, keys: int, room: StringName) -> void:
+	Game.max_health_points = max_health_points
+	Game.health_points = health_points
 	Game.rupees = rupees
 	Game.small_keys = keys
 	# `&"bombs"` for a while, which was never an item id at all -- the count was

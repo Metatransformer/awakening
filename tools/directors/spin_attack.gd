@@ -153,7 +153,7 @@ func run(rig) -> void:
 	var spin_dmg := _damage("PostC")
 
 	print("SPIN tap    front=%s side=%s back=%s" % [tap_front, tap_side, tap_back])
-	print("SPIN charged release front=%s side=%s back=%s (back took %d quarter-hearts)"
+	print("SPIN charged release front=%s side=%s back=%s (back took %d HP)"
 		% [spin_front, spin_side, spin_back, spin_dmg])
 
 	# The tap. Front and nothing else -- this is the beat that catches the spin's
@@ -174,9 +174,9 @@ func run(rig) -> void:
 		rig.fail("SPIN FAIL the spin missed the post on the flank")
 	if not spin_back:
 		rig.fail("SPIN FAIL the spin missed the post BEHIND him — it is not a 360")
-	if spin_dmg > 0 and spin_dmg <= 2 * K.QUARTER:
+	if spin_dmg > 0 and spin_dmg <= 2 * K.HEALTH_POINT:
 		rig.fail("SPIN FAIL the post behind took %d, no more than a light swing's %d"
-			% [spin_dmg, 2 * K.QUARTER])
+			% [spin_dmg, 2 * K.HEALTH_POINT])
 
 	# --- 4. the arc, from where you can actually see it ------------------------
 	# The game camera rides just over his shoulder, which is the right place to

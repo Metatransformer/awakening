@@ -78,7 +78,7 @@ const PORTRAIT_Z := 3.0
 ## are still the same shot. The distance stays exactly `WATCH_DIST`.
 const PORTRAIT_YAW := 20.0
 
-## Quarter-hearts a director swing takes. Six blows kills the biggest of the
+## HP a director swing takes. Six blows kills the biggest of the
 ## four, which keeps the whole run inside one `timeout 400`.
 const SWING := 12
 
@@ -269,7 +269,7 @@ func _one(rig, n: int, id: StringName) -> void:
 	_ck("D%d.2 and is not the same silhouette as floor %d's boss (%s vs %s)"
 		% [n, level, row["model"], boss_row.get("model", &"?")],
 		row["model"] != boss_row.get("model", &""))
-	print("MB   %d q against %s's %d q (%.2fx)"
+	print("MB   %d HP against %s's %d HP (%.2fx)"
 		% [int(row["health"]), boss_id, int(boss_row.get("health", 0)),
 			float(row["health"]) / maxf(float(boss_row.get("health", 1)), 1.0)])
 
@@ -290,9 +290,9 @@ func _one(rig, n: int, id: StringName) -> void:
 		_punish["%s/%s" % [id, bid]] = measured)
 
 	_ck("D%d.4 it is asleep until the room seals" % n, not boss.is_awake())
-	_ck("D%d.5 with the %d q the row authored (%d)"
-		% [n, int(row["health"]), boss.health.max_quarters],
-		boss.health.max_quarters == int(row["health"]))
+	_ck("D%d.5 with the %d HP the row authored (%d)"
+		% [n, int(row["health"]), boss.health.max_health_points],
+		boss.health.max_health_points == int(row["health"]))
 	# Executor contract §1b: the fit is MEASURED, never a magic factor. Proving
 	# the NUMBER and not the code path -- the rendered mesh has to actually be
 	# that tall or the division did nothing.
@@ -466,27 +466,27 @@ func _kill(rig, arena: Node3D, boss: Node, id: StringName, n: int,
 		authored: int) -> void:
 	var before := _defeated
 	var clears_before := _clear_grades.size()
-	var start_q: int = boss.health.quarters
-	_ck("F%d.0 it comes to the kill on the row's %d q (%d)" % [n, authored, start_q],
-		start_q == authored)
+	var start_hp: int = boss.health.health_points
+	_ck("F%d.0 it comes to the kill on the row's %d HP (%d)" % [n, authored, start_hp],
+		start_hp == authored)
 	var hero := _hero(rig)
 	var swings := 0
 	var tries := 0
-	while boss.health.quarters > 0 and tries < 40:
+	while boss.health.health_points > 0 and tries < 40:
 		tries += 1
 		if boss.health.apply_hit(Hit.make(SWING, hero.global_position, &"sword",
 				0.0, 0.0, &"director")):
 			swings += 1
-		if boss.health.quarters == 0:
+		if boss.health.health_points == 0:
 			break
 		# The hero is standing in a live fight for as long as this takes, and
 		# killing him would end the run in the middle of a measurement.
 		Game.heal(999)
 		await rig.wait_seconds(K.ENEMY_IFRAME_TIME + 0.06)
-	print("MB   killed with %d landed blows of %d q (%d q, %d expected)"
-		% [swings, SWING, start_q, ceili(start_q / float(SWING))])
+	print("MB   killed with %d landed blows of %d HP (%d HP, %d expected)"
+		% [swings, SWING, start_hp, ceili(start_hp / float(SWING))])
 	_ck("F%d.1 it dies (%d blows)" % [n, swings],
-		is_instance_valid(boss) and boss.health.quarters == 0)
+		is_instance_valid(boss) and boss.health.health_points == 0)
 	await rig.wait_seconds(1.2)
 	_ck("F%d.2 Bus.boss_defeated fired once for it (%d)" % [n, _defeated - before],
 		_defeated - before == 1)

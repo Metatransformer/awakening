@@ -122,13 +122,13 @@ func _struck(rig, out: String) -> void:
 	# The damage path itself. Not "did a signal fire" -- did the health number
 	# move. Everything else here is feedback ABOUT a blow, and feedback about a
 	# blow that never landed is the failure that hides every other failure.
-	var before: int = foe.health.quarters
+	var before: int = foe.health.health_points
 	_strike(foe, 2)
 	await rig.wait_frames(2)
-	if foe.health.quarters >= before:
+	if foe.health.health_points >= before:
 		_fail("the blow did not land: health stayed at %d" % before)
 	else:
-		print("FEEL hit %d -> %d quarters" % [before, foe.health.quarters])
+		print("FEEL hit %d -> %d HP" % [before, foe.health.health_points])
 
 	# Did the world stop, and did the camera move? Both are read one frame after
 	# the blow, which is where a player would feel them.
@@ -260,7 +260,7 @@ func _striking(rig, out: String) -> void:
 	Bus.camera_recenter.emit()
 	await rig.wait_frames(30)
 
-	var hp_before: int = Game.quarters
+	var hp_before: int = Game.health_points
 	# Photograph the wind-up on its way through. The orc's is the longest in the
 	# roster (0.62 s) precisely so it can be read, so if the tell is invisible it
 	# is invisible here first.
@@ -275,15 +275,15 @@ func _striking(rig, out: String) -> void:
 			# nothing, which is exactly what the first pass of this director did.
 			await rig.wait_frames(22)
 			await rig.capture(out.path_join("feel_05_windup.png"))
-		if Game.quarters < hp_before:
+		if Game.health_points < hp_before:
 			break
 
 	if not saw_windup:
 		_fail("the orc never wound up -- it closed and never committed")
-	if Game.quarters >= hp_before:
+	if Game.health_points >= hp_before:
 		_fail("the orc never landed a blow on the hero in 260 frames")
 	else:
-		print("FEEL hero %d -> %d quarters" % [hp_before, Game.quarters])
+		print("FEEL hero %d -> %d HP" % [hp_before, Game.health_points])
 		await rig.capture(out.path_join("feel_06_hero_hurt.png"))
 
 	await rig.wait_frames(30)

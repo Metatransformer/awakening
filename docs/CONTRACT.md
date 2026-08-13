@@ -261,7 +261,7 @@ These nine facts are the ones clones get wrong. Build to them:
 | Autoload | Script | Purpose |
 |---|---|---|
 | `Bus` | `scripts/autoload/event_bus.gd` | sideways peer→peer signals |
-| `Game` | `scripts/autoload/game_state.gd` | hearts, magic, keys, items, flags |
+| `Game` | `scripts/autoload/game_state.gd` | health points, magic, keys, items, flags |
 | `Run` | `scripts/autoload/run_state.gd` | the current delve; **after `Game`** — it spends and grants gold |
 | `Heat` | `scripts/autoload/heat.gd` | the kill chain and what it is worth; **after `Game`** (it refunds stamina) and **after `Run`** (no chain outside the dungeon) |
 | `Settings` | `scripts/autoload/settings.gd` | volumes, video, binds, and their persistence |
@@ -736,7 +736,7 @@ reaches it through `Intent.HEAVY`; a successful parry's riposte window maps
 `attack` to `Intent.DASH`. Both enter `_dash_swing`: a committed forward move in
 which `Hero.request_dash` drives him along
 `_forward()` at 8.0 m/s for `dash_drive_time` (0.20 s) under the `SwingDash`
-one-shot and does 3 quarter-hearts. The Heavy route advances its dedicated
+one-shot and does 3 HP. The Heavy route advances its dedicated
 two-step chain; the riposte route does not. Only the earned riposte carries
 i-frames. LT changes neither the move nor its ordinary vulnerability.
 
@@ -1067,6 +1067,14 @@ is deliberate:
 | Enemies, props | a `HealthComponent` child | health dies with the body |
 | The hero | `Hero.take_hit(hit) -> bool` | his health lives in `Game` so it survives the scene change extracting causes |
 
+Health is integer HP throughout this path. One point is `K.HEALTH_POINT`; the
+hero starts at `K.START_HEALTH_POINTS` (12), a permanent `&"health"` upgrade adds
+`K.HEALTH_UPGRADE_POINTS` (4), each Vigor rung adds
+`K.JEWEL_VIGOR_HEALTH_POINTS` (2), and `K.MAX_HEALTH_POINTS` caps the hero's
+maximum health at 32. The live fields are `health_points` and
+`max_health_points` on both
+`Game` and `HealthComponent`.
+
 `DamageArea` asks for `take_hit` first and falls back to the component. **Do not
 reach around it** — the box-built placeholder enemy (`Crawler`, since deleted)
 did, calling `hero.take_hit` itself, and that is the only reason it was the one
@@ -1079,17 +1087,17 @@ first is announced on `connected`.
 The hero resolves defences in one order inside `Hero.take_hit`: parry, roll and
 perfect-dodge handling, existing i-frames, then the frontal shield, then damage.
 A shield block is eligible only while `Game.stamina > 0.0`; when it catches a
-blow it spends `hit.amount * K.STAMINA_BLOCK_PER_QUARTER` through
+blow it spends `hit.amount` scaled by the per-HP stamina block cost through
 `Game.spend_stamina(cost, true)` before block feedback. Partial spending is the
 rule: any positive stamina catches that blow and clamps to zero, while the next
-blow lands if stamina remains empty. `Hit.amount`, in quarter-hearts, is the one
+blow lands if stamina remains empty. `Hit.amount`, in HP, is the one
 measure of attack weight; do not add a second weight field.
 
 `HealthComponent` (`scripts/combat/health_component.gd`, owned by P4):
 
 ```gdscript
 class_name Hit extends RefCounted
-var amount: int          # in QUARTER hearts (K.QUARTER); 4 = one heart
+var amount: int          # integer HP; one point is K.HEALTH_POINT
 var from: Vector3        # world position the hit came from
 var knockback: float     # metres/sec applied away from `from`
 var stun: float          # seconds the victim is stunned
@@ -1101,6 +1109,8 @@ var odds_knockdown: float  # authored override, -1 = use the curve
 var odds_stagger: float    # authored override, -1 = use the curve
 
 # on HealthComponent:
+var health_points: int
+var max_health_points: int
 func apply_hit(hit: Hit) -> void
 signal damaged(hit: Hit)
 signal died
@@ -1397,7 +1407,7 @@ The cursor walks `order()`, never `lines()`: the smith's board reorders what
 `lines()` hands over, and its LENGTH depends on what the player owns (`arrows`
 does not appear until you own a bow). **No fixed press count into a counter is
 ever safe** — `mvp_loop` walks the board by `TradeScreen.cursor_label()` for that
-reason, having once silently bought a heart container instead of a bag slot.
+reason, having once silently bought a health upgrade instead of a bag slot.
 
 ### Counters — one screen, one contract, a subclass per shop
 
@@ -1720,8 +1730,8 @@ var components: Dictionary[StringName, int] = {}   # the workbench, survives dea
 
 func forge_level(track: StringName) -> int         # 0..K.FORGE_MAX, clamped
 
-func sword_bonus() -> int        # K.EDGE_DAMAGE[level]   quarter-hearts
-func armour_soak() -> int        # K.PLATE_SOAK[level]    quarter-hearts
+func sword_bonus() -> int        # K.EDGE_DAMAGE[level]   HP
+func armour_soak() -> int        # K.PLATE_SOAK[level]    HP
 func guard_arc() -> float        # K.GUARD_ARC[level]     degrees
 func bow_draw_time() -> float    # K.BOW_DRAW[level]      seconds
 func hook_reach() -> float       # K.CHAIN_REACH[level]   metres
@@ -1956,6 +1966,8 @@ func start_draught(id: StringName, seconds: float) -> void
 
 Rules:
 
+- **Health Draught is `&"health_draught"`.** It restores 8 HP immediately and
+  never enters the timed `draughts` dictionary.
 - **There is no bottle count.** `bottle_contents.size()` is it. A separate
   integer is a second source of truth that will disagree with this one.
 - **A bottle is USED, never drawn**, and that asymmetry is the whole reason
@@ -2113,7 +2125,7 @@ hero.request_lunge(duration: float, drive_time: float, hop: float) -> bool
 hero.wish_dir() -> Vector3          # the stick, camera-relative, in world space
 ```
 
-| Move | Clip | Button | Damage (quarter-hearts) |
+| Move | Clip | Button | Damage (HP) |
 |---|---|---|---|
 | light 1 | `ss_slash_01` | attack | 2 |
 | light 2 | `ss_slash_03` | attack, again inside `chain_window` | 2 |
@@ -2590,12 +2602,12 @@ far shots streak, which is the giveaway tell of a clone.
 `L_WORLD | L_HOOK | L_ENEMY`, and a hit on `L_ENEMY` neither damages nor pulls:
 
 ```gdscript
-foe.freeze(K.HOOK_FREEZE)   # 1.0 s, State.FROZEN, zero quarters of damage
+foe.freeze(K.HOOK_FREEZE)   # 1.0 s, State.FROZEN, zero HP damage
 foe.is_frozen() -> bool
 ```
 
 Zero damage is the design, not a gap — `HealthComponent.apply_hit` refuses a
-zero-quarter blow anyway, so nothing is sent down the damage path at all
+zero-HP blow anyway, so nothing is sent down the damage path at all
 (§ "one damage path"). The hero is handed straight back rather than dragged,
 because reeling him into the thing he just stopped would spend the shot's reward
 on closing the distance he wanted. `freeze` interrupts whatever the monster was
@@ -2894,7 +2906,7 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
   miniboss drops, which is what brings the smith back. It is the only rung on the
   arrival ladder that is not a body count, and the asymmetry is deliberate: the
   smith has to be reachable on the first descent or `arrows`, `bag_slot` and
-  `heart` are unreachable for an hour. See `docs/METAGAME.md` §6.
+  `health` are unreachable for an hour. See `docs/METAGAME.md` §6.
 - **The latch is what makes an object safe to gate on.** `unlocked()` stamps the
   arrival flag the first time the metric is met, so spending, dropping or losing
   the mark cannot un-arrive Brannoc. `tools/directors/roster.gd` beat D erases
@@ -3015,21 +3027,23 @@ off the disk.
 # scripts/autoload/game_state.gd
 var deaths: int = 0                       # incremented ONLY by Run.die()
 func mercy_rate() -> float                # 0.0 unless Settings.mercy; K.MERCY_* otherwise
-func resync_maxima(fill := false) -> void # rebuild max_quarters / max_stamina from `upgrades`
+var health_points: int                    # current integer HP
+var max_health_points: int                # 12..32, derived from `upgrades`
+func resync_maxima(fill := false) -> void # rebuild max_health_points / max_stamina from `upgrades`
 ```
 
 `Game.damage()` is the only place mercy applies, and it never zeroes a blow: a
-one-quarter hit lands in full, and the softened fraction is carried in
+one-HP hit lands in full, and the softened fraction is carried in
 `_mercy_carry` between hits rather than rounded per hit. **Nothing else reads
 `mercy_rate()`** — not `Prog`, not the spawner, not the telegraphs — because the
 moment the world reads it this stops being forgiveness and becomes difficulty
 scaling (GDD §7.1's second property).
 
 `resync_maxima()` exists because Recut has to run a purchase *backwards*.
-Deriving both maxima from `upgrades` means the jeweller's undo is one call, and
-it replaced `add_heart_container()` / `add_max_stamina()`, which could only ever
-count up. Pass `fill := true` on a purchase (the player should feel the new
-heart at once) and leave it false on a Recut, where clamping down is the point.
+Deriving both maxima from `upgrades` means the jeweller's undo is one call; the
+old one-way maximum-growth helpers could only ever count up. Pass `fill := true`
+on a purchase (the player should feel the new maximum at once) and leave it
+false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused

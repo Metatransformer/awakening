@@ -850,7 +850,7 @@ func _sustain(rig) -> void:
 	Bus.enemy_died.emit(null, Vector3.ZERO)
 	await rig.wait_frames(2)
 	var kills_before := Heat.kills
-	Game.damage(K.QUARTER)
+	Game.damage(K.HEALTH_POINT)
 	await rig.wait_frames(6)
 	print("RELIC struck: tier %d -> %d, kills %d -> %d, armed=%s" % [
 		tier_before, Heat.tier, kills_before, Heat.kills, Heat.sustained])
@@ -862,7 +862,7 @@ func _sustain(rig) -> void:
 
 	# The control. Same blow, no ward: if this one does not cost the chain, the
 	# frame above is a picture of a bar that never drops.
-	Game.damage(K.QUARTER)
+	Game.damage(K.HEALTH_POINT)
 	await rig.wait_frames(6)
 	print("RELIC struck again: tier %d kills %d" % [Heat.tier, Heat.kills])
 	_ck("K16 the NEXT break costs the chain (tier %d, %d kills)"
@@ -944,14 +944,14 @@ func _ballast(rig) -> void:
 		return
 	Game.heal(99)
 	await rig.wait_frames(4)
-	var before := Game.quarters
-	var landed: bool = hero.take_hit(Hit.make(K.HEART,
+	var before := Game.health_points
+	var landed: bool = hero.take_hit(Hit.make(4,
 		hero.global_position + Vector3(0.0, 0.0, 2.0), &"contact"))
 	await rig.wait_frames(6)
-	var soaked := before - Game.quarters
-	print("RELIC soaked blow: %d quarters (landed=%s)" % [soaked, landed])
-	_ck("K26 a four-quarter blow cost %d while the window was up" % soaked,
-		landed and soaked < K.HEART)
+	var soaked := before - Game.health_points
+	print("RELIC soaked blow: %d HP (landed=%s)" % [soaked, landed])
+	_ck("K26 a 4 HP blow cost %d while the window was up" % soaked,
+		landed and soaked < 4)
 	await rig.capture(out.path_join("r_53_hit_soaked.png"))
 
 	# The control, and it doubles as proof the window ENDS. Waited out on the
@@ -962,12 +962,12 @@ func _ballast(rig) -> void:
 		Game.draught_left(Game.BALLAST_ID) <= 0.0)
 	Game.heal(99)
 	await rig.wait_seconds(K.IFRAME_TIME + 0.2)
-	var bare_before := Game.quarters
-	var bare_landed: bool = hero.take_hit(Hit.make(K.HEART,
+	var bare_before := Game.health_points
+	var bare_landed: bool = hero.take_hit(Hit.make(4,
 		hero.global_position + Vector3(0.0, 0.0, 2.0), &"contact"))
 	await rig.wait_frames(6)
-	var bare := bare_before - Game.quarters
-	print("RELIC bare blow: %d quarters (landed=%s)" % [bare, bare_landed])
+	var bare := bare_before - Game.health_points
+	print("RELIC bare blow: %d HP (landed=%s)" % [bare, bare_landed])
 	_ck("K28 the same blow costs %d with the window gone -- %d more"
 		% [bare, bare - soaked], bare_landed and bare > soaked)
 	await rig.capture(out.path_join("r_54_hit_bare.png"))

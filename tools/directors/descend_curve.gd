@@ -94,13 +94,13 @@ func _read_floor(rig) -> void:
 		# The BOSS is an `Enemy` in the enemy group like everything else, and it
 		# is the wrong body to measure this curve with: `BossDb` sets its health
 		# and it is four to five times a rank-and-file monster. Counted, floor 1
-		# reads as 48 q against bossless floor 5's 44 q and `_compare` reports
+		# reads as 48 HP against bossless floor 5's 44 HP and `_compare` reports
 		# that the game got EASIER with depth -- which is a lie about the curve
 		# told by a body that is not on the curve. Skipped by where it stands,
 		# not by kind: an arena has exactly one occupant.
 		if _under(e, "Arena"):
 			continue
-		health = maxi(health, e.health.max_quarters)
+		health = maxi(health, e.health.max_health_points)
 		damage = maxi(damage, e._damage)
 		kinds[e.kind] = true
 		if e.elite:
@@ -298,12 +298,12 @@ func _elites(rig) -> void:
 	var plain := pair[0]
 	var big := pair[1]
 	print("DIVE elite skeleton %dq/%dq vs plain %dq/%dq"
-		% [big.health.max_quarters, big._damage,
-			plain.health.max_quarters, plain._damage])
+		% [big.health.max_health_points, big._damage,
+			plain.health.max_health_points, plain._damage])
 
-	if big.health.max_quarters <= plain.health.max_quarters:
+	if big.health.max_health_points <= plain.health.max_health_points:
 		_fail("an elite is no tougher than an ordinary one (%dq vs %dq)"
-			% [big.health.max_quarters, plain.health.max_quarters])
+			% [big.health.max_health_points, plain.health.max_health_points])
 	if big._damage <= plain._damage:
 		_fail("an elite hits no harder than an ordinary one (%dq vs %dq)"
 			% [big._damage, plain._damage])

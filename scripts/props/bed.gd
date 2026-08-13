@@ -14,7 +14,7 @@ extends Interactable
 ## shape has used to say it.
 ##
 ## **Recovery is complete.** Every successful sleep fills real health, while
-## each `elder_bed` rung grants one quarter-heart of temporary overhealth. The
+## each `elder_bed` rung grants 1 temporary HP. The
 ## clock jump happens behind Flow's existing black veil so every clock listener
 ## finds morning already true when the world comes back.
 ##
@@ -131,7 +131,7 @@ func _sleep(destination_id: StringName) -> void:
 	if not completed:
 		return
 	var bed_rank := int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0))
-	Game.heal(Game.max_quarters)
+	Game.heal(Game.max_health_points)
 	Game.set_temporary_overhealth(
 		bed_rank * ElderUpgradeDb.BED_OVERHEALTH_PER_RANK)
 	Game.refund_stamina(Game.max_stamina)

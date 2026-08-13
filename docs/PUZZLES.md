@@ -144,7 +144,7 @@ listens.
 | Atom | Verb | Where it comes from | Phase |
 |---|---|---|---|
 | **Locked door + small key** | T0 key | Every OOT dungeon | **1** |
-| **Urn** — breaks, drops arrows/hearts | T0 sword | Every OOT dungeon | **1** |
+| **Urn** — breaks, drops arrows/health pickups | T0 sword | Every OOT dungeon | **1** |
 | **Pressure plate** — a body or a block holds it | T0 | Forest, Fire | **1** |
 | **Push block** — grid-stepped, into a hole or onto a plate | T0 | Forest, Spirit, Shadow | **1** |
 | **Eye switch** — opens when struck at range | T1 bow | Deku Tree, Forest, Water | **1** |
@@ -170,7 +170,7 @@ the whole reason combinator 6 below can exist. It costs the manifest one atom
 | Atom | Script | Solved by |
 |---|---|---|
 | Small key | `scripts/props/atoms/small_key.gd` | walking onto it; `Game.add_key(1)` |
-| Urn | `scripts/props/atoms/urn.gd` | any `apply_hit` — spills arrows or hearts |
+| Urn | `scripts/props/atoms/urn.gd` | any `apply_hit` — spills arrows or `&"health"` pickups |
 | Pressure plate | `scripts/props/atoms/pressure_plate.gd` | the hero, or anything in group `plate_weight` |
 | Push block | `scripts/props/atoms/push_block.gd` | shoved onto its mark, one 1.2 m step at a time — **held**, see below |
 | Eye switch | `scripts/props/atoms/eye_switch.gd` | `apply_hit` with `kind == &"arrow"`, and nothing else |

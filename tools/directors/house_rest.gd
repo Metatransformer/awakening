@@ -287,18 +287,18 @@ func _survives_a_run(rig, _garrison: Garrison) -> void:
 func _sleep(rig, garrison: Garrison) -> void:
 	var h := garrison.house
 	# Sleep always restores real health now; Elder rank two adds exactly two
-	# temporary quarters. One real quarter is low enough that the old rank-two
+	# temporary HP. One real HP is low enough that the old rank-two
 	# ordinary heal could not have reached the maximum, so this distinguishes the
 	# new contract from the one it replaced.
 	Game.upgrades[&"elder_bed"] = 2
 	Game.upgrades.erase(&"elder_reveille")
 	Game.set_temporary_overhealth(0)
-	Game.quarters = K.QUARTER
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Game.health_points = K.HEALTH_POINT
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	await rig.wait_frames(4)
-	var hurt := Game.quarters
-	_check("he is at one quarter before he lies down (%d/%d)"
-		% [hurt, Game.max_quarters], hurt == K.QUARTER)
+	var hurt := Game.health_points
+	_check("he is at 1 HP before he lies down (%d/%d)"
+		% [hurt, Game.max_health_points], hurt == K.HEALTH_POINT)
 
 	if not await _approach(rig, h.bed, h.bed.global_position + Vector3(1.2, 0.0, 0.0)):
 		return
@@ -322,11 +322,11 @@ func _sleep(rig, garrison: Garrison) -> void:
 	await rig.wait_frames(30)
 
 	_check("sleep fully restored real health (%d -> %d/%d)"
-		% [hurt, Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	_check("the rank-two bunk granted two temporary quarters (%d)"
+		% [hurt, Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	_check("the rank-two bunk granted two temporary HP (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == 2 * K.QUARTER)
+		Game.temporary_overhealth == 2 * K.HEALTH_POINT)
 	_check("the rest wrote a slot (%d)" % Saves.active_slot, Saves.has_save(0))
 	var rest_slot := Saves.active_slot
 	var minutes_after_open := (Clock.hour - Clock.effective_service_open_hour()) * 60.0
@@ -334,38 +334,38 @@ func _sleep(rig, garrison: Garrison) -> void:
 		minutes_after_open >= 0.0 and minutes_after_open < 2.0
 		and Clock.services_available())
 	_check("the world is running again", not rig.paused)
-	await _shot(rig, "woke_gold_cap_2q")
+	await _shot(rig, "woke_gold_cap_2hp")
 
-	Game.damage(K.QUARTER)
+	Game.damage(K.HEALTH_POINT)
 	await rig.wait_frames(2)
-	_check("one damage quarter reduced temporary overhealth from two to one (%d)"
+	_check("1 HP of damage reduced temporary overhealth from two to one (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == K.QUARTER)
-	_check("the first damage quarter left real health full (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	await _shot(rig, "damage_gold_cap_1q")
+		Game.temporary_overhealth == K.HEALTH_POINT)
+	_check("the first 1 HP of damage left real health full (%d/%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	await _shot(rig, "damage_gold_cap_1hp")
 
-	# Two one-quarter blows, not one two-quarter blow: mercy never softens a
-	# one-quarter hit, so this proof is independent of the player's preference.
-	Game.damage(K.QUARTER)
-	Game.damage(K.QUARTER)
-	_check("two more damage quarters consumed the last temporary quarter (%d)"
+	# Two 1 HP blows, not one 2 HP blow: mercy never softens a
+	# 1 HP hit, so this proof is independent of the player's preference.
+	Game.damage(K.HEALTH_POINT)
+	Game.damage(K.HEALTH_POINT)
+	_check("two more HP of damage consumed the last temporary HP (%d)"
 		% Game.temporary_overhealth, Game.temporary_overhealth == 0)
-	_check("only the one-quarter remainder reduced real health (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters - K.QUARTER)
+	_check("only the 1 HP remainder reduced real health (%d/%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points - K.HEALTH_POINT)
 
 	# The autosave predates the damage probes. Loading it proves the rest wrote
 	# both kinds of health and the locker's contents, not merely live memory.
 	Game.stash.clear()
 	Saves.load_slot(rest_slot)
 	_check("full real health came back off the disk (%d/%d)"
-		% [Game.quarters, Game.max_quarters],
-		Game.quarters == Game.max_quarters)
-	_check("the saved two-quarter temporary overhealth came back off the disk (%d)"
+		% [Game.health_points, Game.max_health_points],
+		Game.health_points == Game.max_health_points)
+	_check("the saved 2 HP temporary overhealth came back off the disk (%d)"
 		% Game.temporary_overhealth,
-		Game.temporary_overhealth == 2 * K.QUARTER)
+		Game.temporary_overhealth == 2 * K.HEALTH_POINT)
 	_check("the shelf came back off the disk (%d pearls)"
 		% Game.stash_count(&"void_pearl"), Game.stash_count(&"void_pearl") == 2)
 

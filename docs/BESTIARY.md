@@ -168,7 +168,7 @@ Five things the build had to decide that the table above does not say:
   is asking nothing at all. Without this the grab check — which sits ahead of
   the wind-up — turned an empty-handed run into a monster that could not attack.
 - **The grab is a distance check, not a hitbox.** It costs a bag slot and no
-  hearts. That is what makes stepping out of the tell the whole defence — the
+  HP. That is what makes stepping out of the tell the whole defence — the
   player is not trading health for loot, they are choosing whether to be there.
 - **The telegraph is `K.THIEF_GRAB` = 0.75 s**, more than twice a goblin's 0.32 s
   swing, scaled by `Prog.windup_scale(level)` like every other beat, so it floors
@@ -366,14 +366,14 @@ number that makes a blow readable, is what tells the pricing it was committed.
 Nothing new is authored to make either true.
 
 **The troll is the only roster body with two beats**, and it has them because it
-needed them. With one swing at `damage 6 / windup 0.72` its every attack read as
-a fully committed heavy and floored the player 31% of the time — a tax, not a
-telegraph. Split, the pairing is the mechanic rather than a note about it:
+needed them. With one swing at `damage 6 HP / windup 0.72` its every attack
+read as a fully committed heavy and floored the player 31% of the time — a tax,
+not a telegraph. Split, the pairing is the mechanic rather than a note about it:
 
-| | tell | damage | shove | floors you |
+| | tell | damage (HP) | shove | floors you |
 |---|---|---|---|---|
-| ordinary swing | 0.50 s | 4 q | light | 8% |
-| heavy | 1.05 s | 7 q | heavy | 35% |
+| ordinary swing | 0.50 s | 4 | light | 8% |
+| heavy | 1.05 s | 7 | heavy | 35% |
 
 The heavy rears 1.55× as far, glows hotter, and **roars** (`monster_attack`,
 where the ordinary swing gets `attack_prepare`) — four channels, because in a
@@ -451,7 +451,7 @@ three-beat cap is untouched, and so is *new monster models: 0*.
 |---|---|---|---|---|
 | **The Cistern Warden** | 1 | sword, shield, rope | **Reflect** — the one blow whose band you choose to stand in; caught on the beat, the force goes back and staggers it | `cistern_drop` |
 | **The Slag Ogre** | 2 | **the Bow** | **Receptacle** — the bellows draw before it charges; an arrow in the open intake stops the charge before it starts | `bellows_charge` |
-| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — *the aspiration; neither half of it is built.* It sings through the choir it calls, and a blast into the pair buys about a second before they are back on you. There is no core to open (`Boss._on_damaged` has no gate) and one blast strips nothing (2 quarters of 9). Measured, board card 73 — **`docs/BOSSES.md` §6.3 is the design of record and §7 grades this floor *pressure, not a lock*.** | `hushing_choir` |
+| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — *the aspiration; neither half of it is built.* It sings through the choir it calls, and a blast into the pair buys about a second before they are back on you. There is no core to open (`Boss._on_damaged` has no gate) and one blast strips nothing (2 HP of 9 HP). Measured, board card 73 — **`docs/BOSSES.md` §6.3 is the design of record and §7 grades this floor *pressure, not a lock*.** | `hushing_choir` |
 | **The Riven Knight** | 4 | **the Hookshot** | **Positional** — it holds the far side of the gate ring; hookshot is both the way across and the way back | `gate_lunge` |
 
 **Read that table the same way `docs/PUZZLES.md` §1 asks you to read its
@@ -630,7 +630,7 @@ corridor on held input rather than setting him down in the middle of a room:
   against an 11–15 m `detect`, so this is the leash and the grid behaving, not
   failing. Three has never been seen.
 - **A hero who walks in and swings clears a 3–4 body room in 3–6 s**, losing 2–6
-  of 12 quarter-hearts — and the director's hero never blocks, never rolls and
+  of 12 HP — and the director's hero never blocks, never rolls and
   never parries, so that is the floor of what a player does, not the ceiling.
 - **A hero who walks in and does nothing at all dies in 11–13 s.** That is not a
   bug and it is not in tension with GDD §7's *"the Cistern's mouth stays easy

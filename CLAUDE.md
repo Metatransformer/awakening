@@ -380,7 +380,10 @@ class is not knowing the pattern.
 ## 6. House style
 
 - Static types everywhere. `snake_case` files, `PascalCase` classes.
-- Health is in **quarter-hearts** (`K.QUARTER` = 1, `K.HEART` = 4).
+- Health uses integer **health points (HP)**. Runtime fields are `health_points`
+  and `max_health_points`; `K.HEALTH_POINT` = 1, `K.START_HEALTH_POINTS` = 12,
+  `K.HEALTH_UPGRADE_POINTS` = 4, `K.JEWEL_VIGOR_HEALTH_POINTS` = 2 per rung,
+  and `K.MAX_HEALTH_POINTS` = 32.
 - Metric: 1 unit = 1 m. Hero is 1.65 m. Constants live in `scripts/core/consts.gd` (`K`).
 - Values tagged `[oot]` in `K` are **measured from reference footage**. They are
   not typos and they are not yours to "correct".

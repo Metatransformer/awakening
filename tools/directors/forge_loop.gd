@@ -110,8 +110,8 @@ func _catalogue() -> void:
 # --- P. The armour split ----------------------------------------------------
 ## docs/GDD.md §6.6, and the beat that would have caught the tuning trap the GDD
 ## warns about by name: four pieces each carrying `[0, 1, 2, 3]` is TWELVE
-## quarter-hearts against a bestiary tuned for three, which would put every blow
-## in the game on `Hero.hurt`'s one-quarter floor.
+## HP against a bestiary tuned for three, which would put every blow
+## in the game on `Hero.hurt`'s 1 HP floor.
 ##
 ## Run on a scratch `upgrades` and put back afterwards, because every later beat
 ## in this file is written against the rungs it buys itself.
@@ -140,7 +140,7 @@ func _plate_split() -> void:
 		Game.upgrades[Game.plate_track(piece, Game.PLATE_HEAVY)] = K.FORGE_MAX
 	print("PLATE full-heavy soak=%.2f speed=%.4f" % [
 		Game.armour_soak_exact(), Game.speed_mult()])
-	_ck("P1 four heavy pieces soak 4 quarters",
+	_ck("P1 four heavy pieces soak 4 HP",
 		is_equal_approx(Game.armour_soak_exact(), 4.0))
 	_ck("P2 and cost exactly 8% of the run (never K.RUN_SPEED itself)",
 		is_equal_approx(snappedf(Game.speed_mult(), 0.0001), 0.92))
@@ -150,7 +150,7 @@ func _plate_split() -> void:
 		Game.upgrades[Game.plate_track(piece, Game.PLATE_LIGHT)] = K.FORGE_MAX
 	print("PLATE full-light soak=%.2f speed=%.4f" % [
 		Game.armour_soak_exact(), Game.speed_mult()])
-	_ck("P3 four light pieces soak 2 quarters",
+	_ck("P3 four light pieces soak 2 HP",
 		is_equal_approx(Game.armour_soak_exact(), 2.0))
 	_ck("P4 and cost nothing at all", is_equal_approx(Game.speed_mult(), 1.0))
 
@@ -247,7 +247,7 @@ func _smith(rig) -> void:
 	# asserted below is the widest the board ever gets, which is also the one the
 	# panel has to be able to draw.
 	#
-	# **It was fifteen until card #91.** Arrows, bag slots and hearts left the
+	# **It was fifteen until card #91.** Arrows, bag slots and max-health upgrades left the
 	# forge for the quartermaster's Trade and Upgrades services (`SupplyDb`) when the smith went behind
 	# the floor 1 miniboss -- with him gone for the whole first hour, those three
 	# were the lines a new save could not otherwise reach.

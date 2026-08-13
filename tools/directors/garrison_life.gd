@@ -354,7 +354,7 @@ func _well_fed_run(rig) -> void:
 	var focus_before: int = int(Game.upgrades.get(focus_track, 0))
 	var gold_before: int = Game.gold
 	var deaths_before: int = Game.deaths
-	var quarters_before: int = Game.quarters
+	var quarters_before: int = Game.health_points
 	var stamina_before: float = Game.stamina
 	var flow_busy_before: bool = Flow.busy
 
@@ -403,7 +403,7 @@ func _well_fed_run(rig) -> void:
 	Flow.busy = flow_busy_before
 	Game.gold = gold_before
 	Game.deaths = deaths_before
-	Game.quarters = quarters_before
+	Game.health_points = quarters_before
 	if had_focus:
 		Game.upgrades[focus_track] = focus_before
 	else:
