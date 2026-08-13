@@ -135,7 +135,7 @@ func _inside(pouch) -> bool:
 
 
 func _calibrate(pouch) -> void:
-	var cell := Rect2(100.0, 100.0, 84.0, 84.0)
+	var cell := Rect2(Vector2(100.0, 100.0), ItemCell.SIZE)
 	_ck(_hits(Rect2(120.0, 110.0, 340.0, 90.0), cell)
 			and not _hits(Rect2(200.0, 100.0, 340.0, 90.0), cell),
 		"Z0 calibration: the overlap check sees a card ON a cell and not one beside it")

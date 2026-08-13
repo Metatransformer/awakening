@@ -1905,15 +1905,17 @@ for 2D art anywhere else.
   compatibility name) with two layouts: **Trade** is a dual-inventory shop with
   NPC stock on one side, the player's bag on the other and shared item details;
   quartermaster and jewelcrafter **Upgrades**, **Smithing**, **Alchemy** and
-  **Artifacts** use the progression layout, which is a wrapping field of PLATES
-  and not a list (card #118). A plate is one track: its face (§4.7b) at the
-  left, lit `0.34 -> 1.0` with the fraction of its rungs bought, then the chain
-  of rungs, with an unreached rung drawn as a narrow empty SOCKET rather than a
-  dimmed copy of a cell. The socket is the load-bearing half — a greyed row says
-  "you cannot afford this", an absence says "there is more ladder here", and
-  only the second one makes a maxed board and a fresh one different SHAPES.
-  Measured by `tools/directors/upgrade_board.gd`: **50.5% of the board's own
-  pixels differ** between a save at rung 0 and one with every ladder climbed. This is one shared
+  **Artifacts** use the tabbed progression layout (cards #118 and #175). Tabs
+  divide upgrade families; within the active tab, every upgrade type owns one
+  full-width textured-stone row. Its track icon is the row identity and is also
+  ghosted directly behind every 80×80 square rung. Every rung stays full-size,
+  carries an authored name rather than a Roman numeral, and is joined to the
+  next by an arrow. Future rungs are visible locked nodes with the lock glyph,
+  not empty sockets. The selected rung has a persistent inspector: ownership or
+  affordability, before→after stats, authored effect copy, price, and one recipe
+  row per material with its item icon, Required/Owned counts, and green check or
+  red cross. `tools/directors/upgrade_board.gd` proves those structural rules and
+  captures fresh and climbed saves for the pixel comparison. This is one shared
   implementation, not a claim that every service is Trade; and the footlocker
   (`StashScreen`), whose
   refusal moved off the hint line and into a `FooterToast`, so "← STOW

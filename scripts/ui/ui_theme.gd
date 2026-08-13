@@ -329,6 +329,9 @@ static func _soft_edge_box(tex: ImageTexture, pad_h: int = 20, pad_v: int = 10) 
 ## is chrome, it is `_flat`. This is the entire exception list.
 const PARCH_DIM := 40
 static var _parchment_tex: ImageTexture = null
+const STONE_TRACK_PATH := "res://assets/textures/rock_wall_tiled.png"
+static var _stone_track_tex: ImageTexture = null
+static var _stone_track_box: StyleBoxTexture = null
 
 
 static func _paper_image(dim: int, with_keyline: bool) -> Image:
@@ -370,6 +373,39 @@ static func parchment() -> StyleBoxTexture:
 	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
 	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
 	return sb
+
+
+## A quiet tiled stone surface for progression tracks. The source rock texture
+## is recoloured once into the dark vellum palette so its mottling remains
+## visible without competing with rung names, then both texture and stylebox are
+## cached for every row on every rebuild.
+static func stone_track() -> StyleBoxTexture:
+	if _stone_track_box != null:
+		return _stone_track_box
+	if _stone_track_tex == null:
+		var source := load(STONE_TRACK_PATH) as Texture2D
+		var image: Image = source.get_image() if source != null else null
+		if image == null or image.is_empty():
+			image = Image.create(32, 32, false, Image.FORMAT_RGBA8)
+			image.fill(FRAME_FACE_OPAQUE)
+		else:
+			image.convert(Image.FORMAT_RGBA8)
+			for y in image.get_height():
+				for x in image.get_width():
+					var source_pixel := image.get_pixel(x, y)
+					var grain := (source_pixel.get_luminance() - 0.5) * 0.075
+					image.set_pixel(x, y, Color(
+						clampf(FRAME_FACE_OPAQUE.r + grain, 0.0, 1.0),
+						clampf(FRAME_FACE_OPAQUE.g + grain, 0.0, 1.0),
+						clampf(FRAME_FACE_OPAQUE.b + grain * 0.9, 0.0, 1.0),
+						0.96))
+		_stone_track_tex = ImageTexture.create_from_image(image)
+	_stone_track_box = StyleBoxTexture.new()
+	_stone_track_box.texture = _stone_track_tex
+	_stone_track_box.set_content_margin_all(9)
+	_stone_track_box.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	_stone_track_box.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	return _stone_track_box
 
 
 # ---- the factories -----------------------------------------------------------

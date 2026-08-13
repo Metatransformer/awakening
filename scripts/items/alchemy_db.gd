@@ -66,6 +66,7 @@ const BREW_GOLD := {
 ## is permanent, and because the fourth one should hurt.
 const BOTTLE_GOLD := 110
 const BOTTLE_GROWTH := 2.4
+const BOTTLE_RUNG_NAMES := ["Bottle 2", "Bottle 3", "Bottle 4"]
 
 
 
@@ -118,11 +119,13 @@ static func groups() -> Array[Dictionary]:
 	# `_bottle_line` is always `lines()[0]`; asserting that here rather than
 	# searching for the id, because if it ever stops being true the glass row is
 	# the wrong length and that is worth failing loudly over.
-	out.append({"title": "GLASS", "icon": "glass", "tracks": [{
+	var bottle_rungs: int = K.BOTTLE_MAX - K.BOTTLE_START
+	out.append({"title": "GLASS", "tab": "BOTTLES", "icon": "glass", "tracks": [{
 		"name": "",
 		"line": 0 if Game.bottle_count() < K.BOTTLE_MAX else -1,
 		"owned": Game.bottle_count() - K.BOTTLE_START,
-		"rungs": K.BOTTLE_MAX - K.BOTTLE_START,
+		"rungs": bottle_rungs,
+		"rung_names": _bottle_rung_names(bottle_rungs),
 	}]})
 	# Everything after the glass is a draught, and `flat_group` is still not what
 	# builds it. A third row (CHARGES) lived here until the charges moved to the
@@ -133,11 +136,25 @@ static func groups() -> Array[Dictionary]:
 	# `lines()`, which is the only coupling this row has.
 	var draughts: Array = []
 	for i in range(1, rows.size()):
+		var id: StringName = rows[i]["id"]
 		draughts.append({"name": String(rows[i].get("label", "")), "line": i,
-			"owned": 0, "rungs": 1})
+			"owned": 0, "rungs": 1, "rung_names": _one_rung(PotionDb.name_of(id))})
 	if not draughts.is_empty():
-		out.append({"title": "DRAUGHTS", "icon": "draughts", "tracks": draughts})
+		out.append({"title": "DRAUGHTS", "tab": "DRAUGHTS", "icon": "draughts",
+			"tracks": draughts})
 	return out
+
+
+static func _bottle_rung_names(rungs: int) -> Array[String]:
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(BOTTLE_RUNG_NAMES[i]) if i < BOTTLE_RUNG_NAMES.size()
+			else "Bottle %d" % (K.BOTTLE_START + i + 1))
+	return names
+
+
+static func _one_rung(name: String) -> Array[String]:
+	return [name]
 
 
 static func _bottle_line() -> Dictionary:

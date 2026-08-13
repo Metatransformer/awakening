@@ -181,6 +181,12 @@ func _counter(rig) -> void:
 	# the row that was asked for -- so a beat that waits a frame before acting is
 	# safe rather than racing. That is why no wait is added here: the fix is the
 	# call, not a sleep.
+	# Card #175 split bottles and draughts into tabs. Move to DRAUGHTS through the
+	# same public ladder seam the screen's left/right tab input uses before asking
+	# `_point_at` for a draught line; the active BOTTLES tab quite correctly rejects
+	# a selection it is not drawing.
+	screen._ladder.cycle_tab(1)
+	await rig.wait_frames(4)
 	screen._point_at(screen._rows.find(heart))
 	screen._commit()
 	await rig.wait_frames(12)

@@ -330,10 +330,10 @@ The civil day lasts **32 real minutes**.
   trade.
 - Bedtime runs **23:00–05:00**.
 
-Sleeping advances to the next dawn. Every crossed civil boundary resolves
-once; loading does not replay it. Missing dawn on the surface returns the
-player to the bunk. Missing dawn underground uses the ordinary death-loss
-outcome and never becomes free extraction.
+Bed sleep advances to the chosen nightfall or morning destination. Every
+crossed civil boundary resolves once; loading does not replay it. Missing dawn
+on the surface returns the player to the bunk. Missing dawn underground uses
+the ordinary death-loss outcome and never becomes free extraction.
 
 ### Service ownership
 
@@ -423,9 +423,16 @@ It uses the same stack-to-cell arithmetic as the bag. A full locker refuses a
 transfer visibly. Starting a new trip clears the run bag, so anything the player
 wants to keep unsold must first be sold, crafted, or moved into the locker.
 
-The bed requires a hold, advances to dawn, fully restores real health and
-stamina, grants purchased Better Bed overhealth, and requests an autosave. It is
-unavailable during a descent.
+The personal bed requires a hold and is identified by its **SLEEP IN YOUR BED**
+prompt, focused quilt glow, and warm motes. It offers **Sleep until nightfall**
+and **Sleep until morning**: nightfall means the next strictly future 20:00, while
+morning settles at 07:00 or at 06:00 with Early Reveille. Sleep pauses the world
+for a 2.4-second analog clock whose hands sweep linearly from the starting time
+to the target before the jump is applied. A successful sleep fully restores real
+health and stamina, grants purchased Better Bed overhealth, and requests an
+autosave. A raid boundary at 23:00 can interrupt either destination; interrupted
+sleep grants no recovery and requests no autosave. The bed is unavailable during
+a descent.
 
 ## 11. Boundaries
 

@@ -245,6 +245,14 @@ func _aim(rig, screen, id: StringName) -> bool:
 	var row := _row(screen, id)
 	if row.is_empty():
 		return false
+	# Card #175 gives WORKSHOP its own tab. Cycle through the live strip until the
+	# requested catalogue line is actually on the active board; `_point_at`
+	# correctly refuses hidden-tab selections.
+	for _i in 8:
+		if screen._ladder.slot_of_line(screen._rows.find(row)) >= 0:
+			break
+		screen._ladder.cycle_tab(1)
+		await rig.wait_frames(3)
 	screen._point_at(screen._rows.find(row))
 	await rig.wait_frames(8)
 	row = _row(screen, id)
@@ -257,21 +265,25 @@ func _recipe_have(screen, id: StringName) -> int:
 	var def := ItemDb.get_def(id)
 	if def == null:
 		return -1
-	# The recipe rows moved onto the hover card with the rest of the detail
-	# column (card #156). Same rows, same two labels, one owner further out.
-	for child in screen._tip.rows.get_children():
-		if child.get_child_count() < 2:
-			continue
-		var what := child.get_child(0) as Label
-		var tally := child.get_child(1) as Label
-		if what == null or tally == null:
-			continue
-		if not String(what.text).begins_with(def.display_name):
+	# Progression recipes are persistent inspector rows: icon, a name/tally
+	# column, and a ready/missing mark. Read the exact Required/Owned copy the
+	# player sees instead of reaching around it into Run.bag.
+	for child in screen._detail._recipe_rows.get_children():
+		var labels: Array[Node] = child.find_children("*", "Label", true, false)
+		var has_name := false
+		var tally := ""
+		for node in labels:
+			var text := String((node as Label).text)
+			if text == def.display_name:
+				has_name = true
+			elif text.begins_with("Required:"):
+				tally = text
+		if not has_name or tally.is_empty():
 			continue
 		var need: int = Fletching.RECIPE[id]
-		if not String(what.text).ends_with("×%d" % need):
+		if not tally.begins_with("Required: %d" % need):
 			return -1
-		return String(tally.text).trim_prefix("have ").to_int()
+		return tally.get_slice("Owned:", 1).strip_edges().to_int()
 	return -1
 
 
@@ -300,6 +312,6 @@ func _focused_on_fletch(screen) -> bool:
 
 
 func _detail_is_current(screen) -> bool:
-	var text := String(screen._tip.blurb.text)
+	var text := "%s %s" % [screen._detail._detail.text, screen._detail._blurb.text]
 	return text.contains("Makes %d arrows per batch" % Fletching.batch()) \
 		and text.contains("Quiver %d / %d" % [Game.arrows, Game.max_arrows])

@@ -90,6 +90,15 @@ const PATH_INFO := {
 	},
 }
 
+const RUNG_NAMES := {
+	&"vigor": ["Seed of Vigor", "Heartroot Setting", "Crimson Pulse", "Valen's Heart"],
+	&"focus": ["Quiet Mind", "Clear Thought", "Stillwater Focus", "Seer's Eye"],
+	&"edge": ["Keen Shard", "Biting Stone", "Razor Facet", "Wyrmtooth"],
+	&"swift": ["Quickstep Cut", "Fleetstone", "Windcarved Gem", "Mercury Ring"],
+	&"ward": ["Wardstone", "Iron Halo", "Bulwark Seal", "Aegis Bracelet"],
+	&"wind": ["Breathstone", "Gale Setting", "Stormglass", "Endless Wind"],
+}
+
 ## What rung N costs in stones, index 0 being the FIRST one bought -- the same
 ## shape as `ShopDb.PARTS` so `Catalogue.crafts()` and the recipe column need no
 ## special case.
@@ -185,8 +194,9 @@ static func groups() -> Array[Dictionary]:
 			var i: int = at.get(blank_id(slot), -1)
 			if i < 0:
 				continue
-			out.append({"title": title, "icon": glyph, "tracks": [{
-				"name": "BLANK", "line": i, "owned": 0, "rungs": 1}]})
+			out.append({"title": title, "tab": title, "icon": glyph, "tracks": [{
+				"name": "BLANK", "line": i, "owned": 0, "rungs": 1,
+				"rung_names": _one_rung(String(BLANKS[slot]["name"]).capitalize())}]})
 			continue
 		var tracks: Array = []
 		for path: StringName in PATHS[slot]:
@@ -198,9 +208,10 @@ static func groups() -> Array[Dictionary]:
 				"line": int(at.get(track, -1)),
 				"owned": Game.jewel_level(track),
 				"rungs": K.JEWEL_MAX,
+				"rung_names": _rung_names(path, K.JEWEL_MAX),
 			})
 		if not tracks.is_empty():
-			out.append({"title": title, "icon": glyph, "tracks": tracks})
+			out.append({"title": title, "tab": title, "icon": glyph, "tracks": tracks})
 
 	var undo: Array = []
 	for slot: StringName in Game.JEWEL_SLOTS:
@@ -208,10 +219,24 @@ static func groups() -> Array[Dictionary]:
 		if i < 0:
 			continue
 		undo.append({"name": String(BLANKS[slot]["name"]), "line": i,
-			"owned": 0, "rungs": 1})
+			"owned": 0, "rungs": 1,
+			"rung_names": _one_rung(String(rows[i].get("label", "")).capitalize())})
 	if not undo.is_empty():
-		out.append({"title": "RECUT", "icon": "recut", "tracks": undo})
+		out.append({"title": "RECUT", "tab": "RECUT", "icon": "recut", "tracks": undo})
 	return out
+
+
+static func _rung_names(path: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(path, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(path).capitalize(), i + 1])
+	return names
+
+
+static func _one_rung(name: String) -> Array[String]:
+	return [name]
 
 
 ## Has the player bought the blank for `slot`? Stored as a rung count on the

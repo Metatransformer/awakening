@@ -138,7 +138,7 @@ func run(rig) -> void:
 	_key(KEY_W, false)
 	await rig.until(func() -> bool: return int(hero.get(&"state")) == 0, 2.5)
 
-	# Held past sprint_hold_time (0.18 s) the same key becomes the sprint instead.
+	# Held past sprint_hold_time (0.36 s) the same key becomes the sprint instead.
 	_key(KEY_SPACE, true)
 	var ran: bool = await rig.until(func() -> bool: return bool(hero.get(&"sprinting")), 1.5)
 	_check("Space HELD became the sprint", ran)

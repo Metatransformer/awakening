@@ -25,6 +25,9 @@ const GARRISON_DAYTIME: StringName = &"daytime"
 const GARRISON_BONFIRE: StringName = &"bonfire"
 const GARRISON_BEDTIME: StringName = &"bedtime"
 
+const SLEEP_DESTINATION_MORNING: StringName = &"morning"
+const SLEEP_DESTINATION_NIGHTFALL: StringName = &"nightfall"
+
 var day: int = 1
 var hour: float = 8.0
 var running: bool = true
@@ -83,6 +86,48 @@ func sleep_to_dawn() -> bool:
 	# before dawn on the same calendar day.
 	set_time(target_day, DAWN_HOUR, true)
 	return true
+
+
+## The clock face and the eventual mutation read one answer from here. Morning
+## is selected by its next dawn boundary, but hands control back at the service
+## opening that follows it; nightfall is the next strictly-future 20:00 edge.
+func effective_sleep_destination(destination_id: StringName) \
+		-> Dictionary[StringName, Variant]:
+	var target_day: int
+	var target_hour: float
+	match destination_id:
+		SLEEP_DESTINATION_MORNING:
+			target_day = day if hour < DAWN_HOUR else day + 1
+			target_hour = effective_service_open_hour()
+		SLEEP_DESTINATION_NIGHTFALL:
+			target_day = day if hour < BONFIRE_HOUR else day + 1
+			target_hour = BONFIRE_HOUR
+		_:
+			return {}
+
+	if Game.raid_sleep_crosses_attack(target_day, target_hour):
+		return {
+			&"day": Game.raid_scheduled_day(),
+			&"hour": float(Game.raid_attack_hour()),
+			&"interrupted": true,
+		}
+	return {
+		&"day": target_day,
+		&"hour": target_hour,
+		&"interrupted": false,
+	}
+
+
+## Recompute at the completion edge so the displayed promise and the mutation
+## use the same authority. One set_time call replays every crossed civil edge;
+## for morning it crosses dawn and lands directly at service opening.
+func sleep_until(destination_id: StringName) -> bool:
+	var destination: Dictionary[StringName, Variant] = \
+		effective_sleep_destination(destination_id)
+	if destination.is_empty():
+		return false
+	set_time(int(destination[&"day"]), float(destination[&"hour"]), true)
+	return not bool(destination[&"interrupted"])
 
 
 func effective_service_open_hour() -> float:
@@ -148,8 +193,12 @@ func restore(data: Dictionary) -> void:
 	running = bool(data.get("running", true))
 
 
+func absolute_hours(at_day: int, at_hour: float) -> float:
+	return float(at_day - 1) * HOURS_PER_DAY + at_hour
+
+
 func _absolute_hour() -> float:
-	return float(day - 1) * HOURS_PER_DAY + hour
+	return absolute_hours(day, hour)
 
 
 func _minute_of_day() -> int:

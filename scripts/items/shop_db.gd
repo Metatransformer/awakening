@@ -164,6 +164,21 @@ const PARTS := {
 	],
 }
 
+const RUNG_NAMES := {
+	&"edge": ["Tempered Longsword", "Runed Broadsword", "Oathkeeper Blade"],
+	&"guard": ["Ironbound Kite", "Bastion Shield", "Highbridge Aegis"],
+	&"string": ["Ashwood Bow", "Warbow", "Eaglehorn Bow"],
+	&"chain": ["Iron Chain", "Deep-Reach Chain", "Abyssal Chain"],
+	&"plate_chest_heavy": ["Riveted Cuirass", "Iron Cuirass", "Bastion Cuirass"],
+	&"plate_chest_light": ["Scout's Vest", "Ranger's Jerkin", "Shadow Jerkin"],
+	&"plate_legs_heavy": ["Riveted Greaves", "Iron Greaves", "Bastion Greaves"],
+	&"plate_legs_light": ["Scout's Leggings", "Ranger's Chausses", "Shadow Chausses"],
+	&"plate_arms_heavy": ["Riveted Vambraces", "Iron Vambraces", "Bastion Vambraces"],
+	&"plate_arms_light": ["Scout's Bracers", "Ranger's Bracers", "Shadow Bracers"],
+	&"plate_boots_heavy": ["Riveted Sabatons", "Iron Sabatons", "Bastion Sabatons"],
+	&"plate_boots_light": ["Scout's Boots", "Ranger's Boots", "Shadow Boots"],
+}
+
 
 ## The prefix a REFORGE line's id carries, so `buy()` can tell one from a rung
 ## without a table of four more ids. `reforge_chest` is not a track and never
@@ -246,7 +261,7 @@ static func _forge_row(out: Array[Dictionary], at: Dictionary,
 		id: StringName, title: String, icon: String) -> void:
 	if not stocked(id):
 		return
-	out.append({"title": title, "icon": icon,
+	out.append({"title": title, "tab": "WEAPONS", "icon": icon,
 		"tracks": [_track(at, id, "", K.FORGE_MAX)]})
 
 
@@ -256,11 +271,12 @@ static func _axe_row(out: Array[Dictionary], at: Dictionary) -> void:
 	if not stocked(WOODSMAN_AXE_ID):
 		return
 	var owned: int = 1 if Game.has(WOODSMAN_AXE_ID) else 0
-	out.append({"title": "TOOLS", "icon": "tools", "tracks": [{
+	out.append({"title": "TOOLS", "tab": "WORKSHOP", "icon": "tools", "tracks": [{
 		"name": "WOODSMAN'S AXE",
 		"line": -1 if owned > 0 else int(at.get(WOODSMAN_AXE_ID, -1)),
 		"owned": owned,
 		"rungs": 1,
+		"rung_names": _one_rung("Woodsman's Axe"),
 	}]})
 
 
@@ -271,8 +287,9 @@ static func _fletch_row(out: Array[Dictionary], at: Dictionary) -> void:
 	var i: int = at.get(FLETCH, -1)
 	if i < 0:
 		return
-	out.append({"title": "FLETCHING", "icon": "fletching", "tracks": [{
+	out.append({"title": "FLETCHING", "tab": "WORKSHOP", "icon": "fletching", "tracks": [{
 		"name": "FLETCH ARROWS", "line": i, "owned": 0, "rungs": 1,
+		"rung_names": _one_rung("Fletch Arrows"),
 	}]})
 
 
@@ -288,7 +305,7 @@ static func _armour_row(out: Array[Dictionary], at: Dictionary,
 		tracks.append(_track(at, id, String(path).to_upper(), K.FORGE_MAX))
 	if tracks.is_empty():
 		return
-	out.append({"title": String(piece).to_upper(), "icon": String(piece),
+	out.append({"title": String(piece).to_upper(), "tab": "ARMOUR", "icon": String(piece),
 		"tracks": tracks})
 
 
@@ -311,10 +328,11 @@ static func _reforge_row(out: Array[Dictionary], at: Dictionary) -> void:
 		if i < 0:
 			continue
 		tracks.append({"name": String(piece).to_upper(), "line": i,
-			"owned": 0, "rungs": 1})
+			"owned": 0, "rungs": 1,
+			"rung_names": _one_rung("Reforge %s" % String(piece).capitalize())})
 	if tracks.is_empty():
 		return
-	out.append({"title": "REFORGE", "icon": "reforge", "tracks": tracks})
+	out.append({"title": "REFORGE", "tab": "WORKSHOP", "icon": "reforge", "tracks": tracks})
 
 
 ## Which path `piece` has committed to, and how far up it. `[&"", 0]` when it has
@@ -395,7 +413,21 @@ static func _track(at: Dictionary, id: StringName, branch: String,
 		"line": int(at.get(id, -1)),
 		"owned": int(Game.upgrades.get(id, 0)),
 		"rungs": rungs,
+		"rung_names": _rung_names(id, rungs),
 	}
+
+
+static func _rung_names(id: StringName, rungs: int) -> Array[String]:
+	var authored: Array = RUNG_NAMES.get(id, [])
+	var names: Array[String] = []
+	for i in rungs:
+		names.append(String(authored[i]) if i < authored.size()
+			else "%s %d" % [String(id).replace("_", " ").capitalize(), i + 1])
+	return names
+
+
+static func _one_rung(name: String) -> Array[String]:
+	return [name]
 
 
 ## Is `id` on the counter at all? Public because a caller that wants to know

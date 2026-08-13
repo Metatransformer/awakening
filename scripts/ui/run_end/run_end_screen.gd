@@ -52,9 +52,10 @@ extends Control
 const COLS := ItemGrid.COLS
 ## Cells across on a death, where the haul is drawn as TWO columns: what the
 ## floor kept, and what the document case brought home (docs/GDD.md §3.1). The
-## frame is 878 px of usable width; at the old 140 px card that bought 3 + 2, and
-## at the square 84 px tile (card #156) it buys 4 + 3 — 4x84 + 3x84 plus their
-## separations is 636.
+## frame is 878 px of usable width; at the old 140 px card that bought 3 + 2.
+## The compact 60 px square easily preserves 4 + 3 with room for the two ending
+## captions, so the columns stay semantically stable rather than expanding just
+## because the tile shrank.
 const LOST_COLS := 4
 const KEPT_COLS := 3
 ## Cells of loot, before the haul starts running off the panel. Twelve bag slots

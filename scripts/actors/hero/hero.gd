@@ -706,7 +706,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## classified. The window is one number and not two on purpose: the frame the
 ## sprint begins is the frame the dodge stops being possible, so there is no
 ## band in which a press means neither.
-@export var sprint_hold_time: float = 0.18
+@export var sprint_hold_time: float = 0.36
 ## Stamina per second, spent while running. The bar is the whole limit on it —
 ## there is no separate sprint meter, so a run and a dodge come out of the same
 ## pocket and a player who sprints everywhere arrives with nothing to dodge on.

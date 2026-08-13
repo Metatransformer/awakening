@@ -21,9 +21,16 @@ The civil clock is the only owner of day and time:
 - **Bedtime, 23:00–05:00:** residents retire to their authored sleeping places
   and the yard closes.
 
-Sleeping and forward time jumps resolve every crossed boundary once. Save/load
-restores the current result without replaying it. Weather and lighting share
-this civil day; they do not create a second calendar or simulation.
+The personal bed is identified by its **SLEEP IN YOUR BED** prompt, focused
+quilt glow, and warm motes. It offers **Sleep until nightfall** and **Sleep until
+morning**.
+Nightfall is the next strictly future 20:00; morning settles at 07:00, or 06:00
+with Early Reveille. Before applying either jump, sleep pauses the world for a
+2.4-second analog-clock presentation whose hands sweep linearly from the start
+to the target. Sleeping and forward time jumps then resolve every crossed
+boundary once. Save/load restores the current result without replaying it.
+Weather and lighting share this civil day; they do not create a second calendar
+or simulation.
 
 The dawn boundary remains 05:00, but waking is a later settlement: deliberate
 rest and the automatic dawn return both hand control back at the effective
@@ -101,7 +108,16 @@ entry, bag item, wheel item, or shop good.
 
 Interacting enters one bounded fishing mode: choose near or deep water, cast,
 react to the bite, and reel while steering against the fish's run and managing
-tension. The rules that bound its resource economy are exact:
+tension. Water ripples are the bite language: quiet pulses mark the wait and a
+bright, fast expansion marks the hook window. Once hooked, one dominant arrow
+shows the counter-steer input direction rather than the fish's travel; its color
+reacts to correct or wrong steering beside compact **TENSION** and **LAND** bars.
+A landed catch reveals a fish icon with its one- or two-unit yield, while an
+escape or snapped line has a distinct failure emblem. Semantic bite, catch, and
+failure SFX route through the shared pool. Authored cast, bite, hook, neutral
+reel, directional strain, catch, and failure recordings voice the full attempt
+without changing the interaction. The rules that
+bound its resource economy are exact:
 
 - Fish reserve capacity is **three units**, representing three suppers.
 - At most **three Fish units per campaign day** may be banked.
@@ -156,7 +172,8 @@ systems named under Aldric.
 
 The implemented prototype is one authored occurrence armed by donation of the
 Tally-Ledger and scheduled for the next day. It warns at 15:00, sounds the raid
-horn at 23:00, and interrupts sleep when the attack boundary is crossed.
+horn at 23:00, and interrupts sleep when the attack boundary is crossed; an
+interrupted sleep grants no recovery and requests no autosave.
 Underground players choose between continuing and the ordinary Escape Rope;
 the raid never summons, teleports, or grants free extraction.
 

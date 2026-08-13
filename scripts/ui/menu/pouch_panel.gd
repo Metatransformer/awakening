@@ -84,10 +84,9 @@ const ROPE_HOLD := 0.9
 ## minimum size is bigger than the screen, it clips it. The hundred px had to be
 ## taken off the paper doll and the detail column to make five fit at all.
 ##
-## Card #156 made the cell a square 84 px tile, so the same five cells are
-## **452 px**, and it took the detail column off this screen entirely (the hover
-## card says what the cursor is on). Both loans are repaid: `DOLL_W` is back at
-## its comfortable width and there is slack in the row for the first time.
+## The shared cell is now a 60 px square, so the same five cells are **332 px**;
+## the hover card carries the long name and detail the tighter strip elides.
+## `DOLL_W` stays at its comfortable width and the bag keeps generous slack.
 ##
 ## The case draws at this width too. It was `Run.CASE_SLOTS` — three cells
 ## STRETCHED across the bag's width — which put two cell sizes on one screen and
