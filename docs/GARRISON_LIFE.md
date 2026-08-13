@@ -112,6 +112,8 @@ tension. Water ripples are the bite language: quiet pulses mark the wait and a
 bright, fast expansion marks the hook window. Once hooked, one dominant arrow
 shows the counter-steer input direction rather than the fish's travel; its color
 reacts to correct or wrong steering beside compact **TENSION** and **LAND** bars.
+A released reel safely eases tension, but the fish steadily takes line back and
+the **LAND** bar recedes; easing is recovery with a cost, not banked progress.
 A landed catch reveals a fish icon with its one- or two-unit yield, while an
 escape or snapped line has a distinct failure emblem. Semantic bite, catch, and
 failure SFX route through the shared pool. Authored cast, bite, hook, neutral

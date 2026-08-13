@@ -134,16 +134,26 @@ func run(rig) -> void:
 	var desired: int = fishing.desired_steer_direction()
 	var correct_action: StringName = &"move_left" if desired < 0 else &"move_right"
 	var wrong_action: StringName = &"move_right" if desired < 0 else &"move_left"
+	var line_before_gain: float = fishing.line_progress()
 	await rig.press(&"interact")
 	await rig.press(correct_action)
-	await rig.wait_frames(3)
+	await rig.wait_frames(12)
 	rig.check(fishing.actual_steering() == desired
 		and fishing.feedback_reaction_name() == &"correct",
 		"real counter-steer input turns the arrow response correct")
+	var line_after_gain: float = fishing.line_progress()
+	rig.check(line_after_gain < line_before_gain,
+		"correct counter-steer visibly gains LAND progress")
 	await rig.capture("fishing_05_hooked_correct.png")
 	rig.release(correct_action)
 	rig.release(&"interact")
-	await rig.wait_frames(2)
+	await rig.wait_frames(18)
+	var line_after_ease: float = fishing.line_progress()
+	rig.check(line_after_ease > line_after_gain and line_after_ease <= 1.0,
+		"releasing A lowers tension but lets the fish take LAND progress back")
+	rig.check(line_after_ease - line_after_gain < line_before_gain - line_after_gain,
+		"short easing loses less progress than correct reeling gained")
+	await rig.capture("fishing_05b_hooked_easing_loses_land.png")
 
 	await rig.press(&"interact")
 	await rig.press(wrong_action)

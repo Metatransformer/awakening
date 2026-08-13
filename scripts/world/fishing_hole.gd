@@ -19,6 +19,8 @@ const BITE_WINDOW: float = 0.9
 const RESULT_TIME: float = 1.8
 const NEAR_RUN_TIME: float = 1.45
 const DEEP_RUN_TIME: float = 0.95
+const NEAR_LINE_ESCAPE_RATE: float = 0.09
+const DEEP_LINE_ESCAPE_RATE: float = 0.11
 const REEL_SFX_GAP: float = 0.72
 const STRAIN_SFX_GAP: float = 0.58
 
@@ -374,6 +376,9 @@ func _tick_hooked(delta: float, reeling: bool, left_down: bool,
 	var following: bool = steer == _run_direction
 	if not reeling:
 		_tension_value -= delta * (0.31 if _target == TARGET_NEAR else 0.25)
+		var escape_rate: float = NEAR_LINE_ESCAPE_RATE if _target == TARGET_NEAR \
+			else DEEP_LINE_ESCAPE_RATE
+		_line_value += delta * escape_rate
 	elif correcting:
 		_tension_value -= delta * (0.24 if _target == TARGET_NEAR else 0.18)
 		var reel_rate: float = 0.27 if _target == TARGET_NEAR else 0.17
