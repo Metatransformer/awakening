@@ -121,8 +121,10 @@ func _check_crop_loop(rig, garrison: Garrison, hero: Hero) -> void:
 	await rig.capture("garden_02_ripe_crop.png")
 
 	var original_slots := Game.bag_slots
-	Game.bag_slots = 3
-	Run.collect(&"iron_scrap", 1)
+	Game.bag_slots = Run.CASE_SLOTS
+	for filler_id: StringName in [&"iron_scrap", &"oak_plank", &"cold_iron_core",
+			&"fired_cullet", &"bitter_root"]:
+		Run.collect(filler_id, 1)
 	var ready_before := Game.garden_plot(0)
 	rig.check(Run.room_for(&"turnip") == 0 and not Game.harvest_plot(0)
 		and Game.garden_plot(0) == ready_before,
