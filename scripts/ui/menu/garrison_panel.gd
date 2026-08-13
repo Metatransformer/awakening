@@ -247,6 +247,8 @@ func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
 		return "Not assigned"
 	if not owns_axe:
 		return "Craft the Woodsman's Axe at Brannoc's forge."
+	if not Game.tool_usable(ToolDb.WOODSMAN_AXE_ID):
+		return "Reforge the broken Woodsman's Axe at Brannoc's forge."
 	if _carried_firewood() > 0 or _carried_food() > 0:
 		return "Deposit carried cargo at the south-gate supply box."
 	if completed:

@@ -48,10 +48,10 @@ func _ready() -> void:
 		global_position = _route_position(route_progress)
 	if _objective != null:
 		_anchor = _objective.global_position
-	health.quarters = clampi(_last_synced_hp, 1, health.max_quarters)
+	health.health_points = clampi(_last_synced_hp, 1, health.max_health_points)
 	health.dead = false
 	state = State.IDLE
-	_last_synced_hp = health.quarters
+	_last_synced_hp = health.health_points
 	_last_synced_progress = route_progress
 	_last_synced_cooldown = objective_cooldown
 
@@ -178,14 +178,14 @@ func _tick_sync(delta: float) -> void:
 func _sync_campaign(force: bool) -> void:
 	if raid_id == &"" or health == null or health.dead:
 		return
-	var hp_changed := health.quarters != _last_synced_hp
+	var hp_changed := health.health_points != _last_synced_hp
 	var route_changed := absf(route_progress - _last_synced_progress) >= 0.01
 	var cooldown_changed := absf(objective_cooldown - _last_synced_cooldown) >= 0.05
 	if not force and not hp_changed and not route_changed and not cooldown_changed:
 		return
 	if Game.raid_sync_attacker(
-			raid_id, health.quarters, route_progress, objective_cooldown):
-		_last_synced_hp = health.quarters
+			raid_id, health.health_points, route_progress, objective_cooldown):
+		_last_synced_hp = health.health_points
 		_last_synced_progress = route_progress
 		_last_synced_cooldown = objective_cooldown
 
@@ -204,7 +204,7 @@ func _on_damaged(hit: Hit) -> void:
 	super(hit)
 	# HealthComponent has already spent the hit. Mirroring that total here avoids
 	# applying the same blow a second time to campaign state.
-	if health.quarters > 0:
+	if health.health_points > 0:
 		_sync_campaign(true)
 
 

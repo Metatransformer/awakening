@@ -13,7 +13,7 @@ extends Area3D
 
 signal connected(victim: Node3D, hit: Hit)
 
-## Damage in quarter-hearts. Set per swing — the hero reads it off the blade tier.
+## Damage in HP. Set per swing — the hero reads it off the blade tier.
 @export var amount: int = 2
 @export var knockback: float = K.KNOCKBACK_LIGHT
 @export var stun: float = 0.15

@@ -2,8 +2,7 @@ class_name HealthComponent
 extends Node
 ## Hit points for anything that can be hurt. docs/CONTRACT.md §8.
 ##
-## Counted in QUARTER hearts throughout, so the same component serves the hero
-## (whose HUD draws quarter states) and an enemy (whose "2 hearts" is just 8).
+## Counted in integer HP throughout, for both heroes and enemies.
 ##
 ## Invulnerability lives here rather than in each attacker, because the rule is
 ## a property of the victim: OOT gives you i-frames after a hit whatever hit you.
@@ -12,22 +11,22 @@ signal damaged(hit: Hit)
 signal healed(amount: int)
 signal died
 
-@export var max_quarters: int = 4 * K.HEART
+@export var max_health_points: int = 16
 ## Seconds of invulnerability after a hit lands. K.IFRAME_TIME is the hero's.
 @export var iframe_time: float = K.IFRAME_TIME
 ## Emit to the global bus as well. On for the hero; off for enemies, which would
 ## otherwise spam every listener.
 @export var broadcast: bool = false
 
-var quarters: int = 0
+var health_points: int = 0
 var dead: bool = false
 
 var _invuln: float = 0.0
 
 
 func _ready() -> void:
-	if quarters <= 0:
-		quarters = max_quarters
+	if health_points <= 0:
+		health_points = max_health_points
 
 
 func _process(delta: float) -> void:
@@ -48,13 +47,13 @@ func apply_hit(hit: Hit) -> bool:
 	if hit.amount <= 0:
 		return false
 
-	quarters = maxi(0, quarters - hit.amount)
+	health_points = maxi(0, health_points - hit.amount)
 	_invuln = iframe_time
 	damaged.emit(hit)
 	if broadcast:
-		Bus.player_health_changed.emit(quarters, max_quarters)
+		Bus.player_health_changed.emit(health_points, max_health_points)
 
-	if quarters == 0:
+	if health_points == 0:
 		dead = true
 		died.emit()
 		if broadcast:
@@ -65,11 +64,11 @@ func apply_hit(hit: Hit) -> bool:
 func heal(amount: int) -> void:
 	if dead or amount <= 0:
 		return
-	quarters = mini(max_quarters, quarters + amount)
+	health_points = mini(max_health_points, health_points + amount)
 	healed.emit(amount)
 	if broadcast:
-		Bus.player_health_changed.emit(quarters, max_quarters)
+		Bus.player_health_changed.emit(health_points, max_health_points)
 
 
 func fraction() -> float:
-	return float(quarters) / float(maxi(max_quarters, 1))
+	return float(health_points) / float(maxi(max_health_points, 1))

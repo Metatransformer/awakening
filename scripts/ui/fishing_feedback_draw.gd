@@ -23,6 +23,8 @@ var caught_tier: int = 0
 var caught_tint: Color = Pal.GOLD
 var failure_result: StringName = &""
 var animation_phase: float = 0.0
+var rod_durability: int = 0
+var rod_max_durability: int = 0
 
 
 func _ready() -> void:
@@ -39,17 +41,18 @@ func reaction_name() -> StringName:
 ## Text painted by this component, exposed so the visual proof can reject the
 ## old prose even though CanvasItem draw strings are not Label nodes.
 func visual_text() -> String:
+	var rod := " ROD %d/%d" % [rod_durability, rod_max_durability]
 	match mode:
 		MODE_CASTING:
-			return "CAST"
+			return "CAST" + rod
 		MODE_HOOKED:
-			return "L R TENSION LAND"
+			return "L R TENSION LAND" + rod
 		MODE_RESULT_SUCCESS:
 			var pips := ""
 			for _i: int in caught_tier:
 				pips += " •"
-			return caught_name.to_upper() + pips
-	return ""
+			return caught_name.to_upper() + pips + rod
+	return rod.strip_edges()
 
 
 func _draw() -> void:
@@ -67,6 +70,11 @@ func _draw() -> void:
 			_draw_success(centre)
 		MODE_RESULT_FAILURE:
 			_draw_failure(centre)
+	var rod_color: Color = Pal.VITAL if rod_durability <= 0 else Pal.CYAN
+	draw_rect(Rect2(Vector2(size.x * 0.5 - 56.0, 2.0), Vector2(112.0, 22.0)),
+		Color(Pal.VOID, 0.76), true)
+	CanvasText.draw_centred(self, "ROD %d / %d" % [rod_durability,
+		rod_max_durability], Vector2(size.x * 0.5, 8.0), 0.68, rod_color)
 
 
 func _draw_casting(centre: Vector2) -> void:

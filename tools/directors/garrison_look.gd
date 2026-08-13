@@ -63,7 +63,7 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("tl_02_gatehouse.png"))
 
 	# And the plaza from over the south opening, which shows the yard's landmark
-	# and the distinct rooms and service nooks around it.
+	# and the distinct residential, craft, garden, and supply districts around it.
 	cam.fov = 62.0
 	cam.global_position = garrison.plaza.global_position + Vector3(0.0, 7.0, 13.0)
 	cam.look_at(garrison.plaza.global_position + Vector3(0.0, 1.6, 0.0), Vector3.UP)

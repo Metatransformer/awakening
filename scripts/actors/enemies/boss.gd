@@ -167,7 +167,7 @@ func _ready() -> void:
 ##
 ## Health is copied ABSOLUTE and the damage is 0, both per contract §2: a boss is
 ## authored for exactly one floor and its numbers are already that floor's
-## numbers, and every quarter-heart it deals comes from a beat rather than from a
+## numbers, and every HP it deals comes from a beat rather than from a
 ## contact hitbox. `Prog` is not consulted anywhere in this file.
 func _resolve_def() -> Dictionary:
 	_row = BossDb.get_boss(boss_id)
@@ -260,10 +260,10 @@ func _build_body() -> void:
 func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
-	health.max_quarters = maxi(int(_row.get("health", 48)), 1)
+	health.max_health_points = maxi(int(_row.get("health", 48)), 1)
 	# The same monster i-frames `Enemy` takes, and for the same reason: the light
 	# chain has to land all three of its steps on a boss too. What makes a boss
-	# hard is the authored beats and forty-odd quarters of health, never a hidden
+	# hard is the authored beats and forty-odd HP, never a hidden
 	# rule that quietly deletes two thirds of the player's damage.
 	health.iframe_time = K.ENEMY_IFRAME_TIME
 	add_child(health)
@@ -276,7 +276,7 @@ func _build_combat() -> void:
 ## `Enemy` re-runs the floor's curve every time `level` is written now (card #22),
 ## which is right for a generated body and would be a disaster here: contract §2
 ## authors a boss's health ABSOLUTE for the one floor it stands on, so a single
-## stray `boss.level = 3` would otherwise rewrite the Bellwake's 96 quarters as
+## stray `boss.level = 3` would otherwise rewrite the Bellwake's 96 HP as
 ## `_row["health"] * Prog.health_mult(3)` and make the swing arithmetic in the
 ## row's own comment a lie. Nothing writes it today. This is what keeps that from
 ## being a thing anyone has to remember.
@@ -653,7 +653,7 @@ func _end_charge() -> void:
 ##     second damage source on that health nobody tuned makes the swing counts in
 ##     every row's comment arithmetic about a number that is no longer true.
 ##  3. It buys nothing. Measured against the scatter, a disc lands on the boss on
-##     the order of once a fight for three quarters out of seventy-two -- so the
+##     the order of once a fight for 3 HP out of 72 -- so the
 ##     rule costs a random hitstop, a camera kick and a health bar that moves when
 ##     the player did nothing, and returns about two percent of a fight.
 ##
@@ -721,7 +721,7 @@ func _burst(z: Dictionary) -> void:
 ##
 ## `kind` is always a key of `Enemy.DEFS` and `BossDb.validate()` enforces it,
 ## because `Enemy._ready` swaps an unknown kind for skeleton's STATS while
-## keeping the requested MODEL -- a boss that summons a troll-shaped six-quarter
+## keeping the requested MODEL -- a boss that summons a troll-shaped 6 HP
 ## skeleton is a fight nobody can tune.
 ##
 ## **The level is an ARGUMENT to `spawn` and not a write afterwards.** It used to
@@ -729,7 +729,7 @@ func _burst(z: Dictionary) -> void:
 ## curved by the boss's band -- and they were not: `spawn` calls `add_child`,
 ## `add_child` runs `_ready`, and `_ready` had already latched health and damage
 ## off the `Prog.FIRST` default by the time the write landed. The Bellwake's
-## choristers came out at 6 quarters instead of 9 and the Riven Knight's wraiths
+## choristers came out at 6 HP instead of 9 and the Riven Knight's wraiths
 ## at 20 instead of 35, with a perfectly correct `level` sitting on both, on
 ## floors 3 and 4. Nothing on screen said so -- the bodies looked right and simply
 ## hit for less, which is the one place `docs/GDD.md` §7's "difficulty comes from
@@ -991,7 +991,7 @@ func _ring_marker(inner: float, outer: float, col: Color) -> Node3D:
 		# a starfish -- twenty 4.1 m spokes laid across the circle -- and it drew
 		# the danger as a thin 3.5-4.8 m hoop when the slam actually reaches from
 		# 2.1 m to 6.2 m. A player standing at 5.5 m read clear floor and took
-		# four quarters, which is the exact failure the marks exist to prevent.
+		# 4 HP, which is the exact failure the marks exist to prevent.
 		#
 		# Godot's Y rotation puts local X at `(cos t, 0, -sin t)`, so tangential
 		# `(-sin a, 0, cos a)` needs `t = -a - PI/2`. Render it and look; this is

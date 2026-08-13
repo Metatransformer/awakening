@@ -109,8 +109,8 @@ ITEMS = {
     "hardtack": "one square hard ship's biscuit with a grid of docking holes "
                 "punched through it",
     "small_beer": "a squat wooden tankard of beer with an iron band and a handle",
-    "heart_draught": "a rounded glass flask of thick dark liquid, corked, a "
-                     "heart-shaped wax seal on its neck",
+    "health_draught": "a rounded glass flask of thick dark liquid, corked, a "
+                      "cross-shaped wax seal on its neck",
     "ironhide_draught": "a squat heavy glass flask of opaque liquid, corked, "
                         "bound in an iron cage",
     "emberblood_draught": "a tall narrow glass flask of liquid, corked, glowing "

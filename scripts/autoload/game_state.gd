@@ -2,8 +2,7 @@ extends Node
 ## Autoload `Game`. The save-able truth about the run: health, magic, keys,
 ## items, world flags. Nothing in here touches the scene tree.
 ##
-## Health is counted in QUARTER hearts (K.QUARTER), like the source material —
-## a heart is K.HEART == 4 quarters, and the HUD draws quarter-heart states.
+## Health is counted and presented as integer HP.
 
 const GarrisonRaidStateScript := preload(
 	"res://scripts/systems/garrison_raid_state.gd")
@@ -14,8 +13,8 @@ signal garrison_raid_restoring
 ## Local developer-only state. Deliberately absent from Saves.
 var dev_god_mode: bool = false
 
-var max_quarters: int = K.START_HEARTS * K.HEART
-var quarters: int = K.START_HEARTS * K.HEART
+var max_health_points: int = K.START_HEALTH_POINTS
+var health_points: int = K.START_HEALTH_POINTS
 var temporary_overhealth: int = 0
 
 ## The blue bar. **Full from the first frame of a new save**, which is a change
@@ -45,8 +44,8 @@ var max_stamina: float = K.MAX_STAMINA
 var stamina: float = K.MAX_STAMINA
 ## Counts down from K.STAMINA_DELAY after a spend. Regen is frozen while > 0.
 var _stamina_hold: float = 0.0
-## Fractions of a quarter-heart that mercy has forgiven but not yet spent. See
-## `_softened`. Not saved: it is at most one quarter of one heart of credit, and
+## Fractions of an HP that mercy has forgiven but not yet spent. See
+## `_softened`. Not saved: it is less than 1 HP of credit, and
 ## a number in the save file for it would be the accessibility toggle leaving
 ## archaeology behind.
 var _mercy_carry: float = 0.0
@@ -74,9 +73,11 @@ var gold: int = K.START_GOLD
 ##
 ## Not seeded with `K.START_GOLD`: the purse you arrive with was not earned.
 var gold_earned: int = 0
-## Society Field Notes already settled from completed descents. Observations are
-## a permanent set so replayed run settlement cannot award one twice.
+## Society Field Notes already filed through the bedside book. Completion and
+## filing are separate permanent sets: a run-end records what happened, while
+## the book awards its authored value exactly once when the player files it.
 var field_notes: int = 0
+var completed_field_observations: Dictionary[StringName, bool] = {}
 var awarded_field_observations: Dictionary[StringName, bool] = {}
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
@@ -194,8 +195,8 @@ const DRAUGHT_PLATE_ID := &"ironhide_draught"
 ##
 ## **It has a slot on the HUD's draught row anyway** (#39). It used to be kept out
 ## of that row by the row deriving itself from `PotionDb.IDS`, and the argument
-## written here was that the health bar was enough -- a blow that costs one
-## quarter instead of three, and the stack that left the bag paying for it. That
+## written here was that the health bar was enough -- a blow that costs 1 HP
+## instead of 3 HP, and the stack that left the bag paying for it. That
 ## is inference, not an instrument: it says a ward is up only once you have
 ## already been hit by something, and it never says HOW LONG IS LEFT, which for an
 ## eight-second window bought with a bag stack is the only question the player is
@@ -227,6 +228,9 @@ var has_compass: bool = false
 
 ## Item ids the player owns, e.g. &"hookshot".
 var items: Dictionary[StringName, bool] = {}
+## Durable utility tool id -> uses remaining. Zero is retained as the durable
+## fact that a tool was made and broke; positive entries mirror into `items`.
+var tool_durabilities: Dictionary[StringName, int] = {}
 
 # --- The selected item ------------------------------------------------------
 ## Which bottle D-pad ↓ has stepped to, and X will use. An index into
@@ -415,8 +419,8 @@ func _grant_starter_kit() -> void:
 
 func reset() -> void:
 	dev_god_mode = false
-	max_quarters = K.START_HEARTS * K.HEART
-	quarters = max_quarters
+	max_health_points = K.START_HEALTH_POINTS
+	health_points = max_health_points
 	temporary_overhealth = 0
 	# Focus raises this, so a reset has to put it back. It did not need clearing
 	# while nothing could buy it.
@@ -434,6 +438,7 @@ func reset() -> void:
 	gold = K.START_GOLD
 	gold_earned = 0
 	field_notes = 0
+	completed_field_observations.clear()
 	awarded_field_observations.clear()
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
@@ -448,6 +453,7 @@ func reset() -> void:
 	has_map = false
 	has_compass = false
 	items.clear()
+	tool_durabilities.clear()
 	bottle_contents.clear()
 	rations.clear()
 	# Through `cancel_meal` rather than by clearing the three fields, so the hero
@@ -485,10 +491,11 @@ func reset() -> void:
 	Bus.ammo_changed.emit(&"charges", charges)
 	Bus.gold_changed.emit(gold)
 	Bus.key_count_changed.emit(small_keys)
-	Bus.player_health_changed.emit(quarters, max_quarters)
+	Bus.player_health_changed.emit(health_points, max_health_points)
 	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 	Bus.magic_changed.emit(magic, max_magic)
 	Bus.wishlist_changed.emit()
+	garrison_changed.emit()
 	stamina = max_stamina
 	_stamina_hold = 0.0
 	Bus.stamina_changed.emit(stamina, max_stamina)
@@ -499,21 +506,72 @@ func has_field_observation(id: StringName) -> bool:
 		and bool(awarded_field_observations.get(id, false))
 
 
-## Settle observations carried home by a run. Input order is receipt order;
-## invalid, repeated and previously awarded ids are ignored. One batch emits one
-## signal so the Field Notes UI never observes a half-settled balance.
+func has_completed_field_observation(id: StringName) -> bool:
+	return FieldNotesDb.is_observation(id) \
+		and bool(completed_field_observations.get(id, false))
+
+
+func field_observation_ready_to_file(id: StringName) -> bool:
+	return has_completed_field_observation(id) and not has_field_observation(id)
+
+
+## Authored order is book order. The saved dictionaries remain sets so neither
+## JSON ordering nor the order producers happened to fire can reorder the book.
+func ready_field_observations() -> Array[StringName]:
+	var ready: Array[StringName] = []
+	for id: StringName in FieldNotesDb.OBSERVATION_IDS:
+		if field_observation_ready_to_file(id):
+			ready.append(id)
+	return ready
+
+
+## Finish observations carried home by a run without touching currency. Input
+## order is receipt order; invalid, repeated and already-completed ids are
+## ignored. One typed event exposes the completed transaction to the bedside
+## marker without making it poll permanent state.
+func complete_field_observations(ids: Array[StringName]) -> Array[StringName]:
+	var newly_completed: Array[StringName] = []
+	for id: StringName in ids:
+		if not FieldNotesDb.is_observation(id) \
+				or has_completed_field_observation(id) or newly_completed.has(id):
+			continue
+		completed_field_observations[id] = true
+		newly_completed.append(id)
+	if not newly_completed.is_empty():
+		Bus.field_observations_completed.emit(newly_completed)
+	return newly_completed
+
+
+## File one completed entry from the bedside book. The definition, not the UI,
+## owns its value; readiness makes retries and replayed input harmless.
+func file_field_observation(id: StringName) -> bool:
+	if not _file_field_observation(id):
+		return false
+	var filed: Array[StringName] = [id]
+	Bus.field_notes_awarded.emit(filed, field_notes)
+	return true
+
+
+## Compatibility/dev batch seam. It retains the old convenient behaviour while
+## preserving the new invariant: every awarded observation is completed first.
+## One batch emits one award signal so listeners never see a half-filed balance.
 func award_field_observations(ids: Array[StringName]) -> Array[StringName]:
+	complete_field_observations(ids)
 	var newly_awarded: Array[StringName] = []
 	for id: StringName in ids:
-		if not FieldNotesDb.is_observation(id) or has_field_observation(id) \
-				or newly_awarded.has(id):
-			continue
-		awarded_field_observations[id] = true
-		field_notes += FieldNotesDb.observation_note_value(id)
-		newly_awarded.append(id)
+		if not newly_awarded.has(id) and _file_field_observation(id):
+			newly_awarded.append(id)
 	if not newly_awarded.is_empty():
 		Bus.field_notes_awarded.emit(newly_awarded, field_notes)
 	return newly_awarded
+
+
+func _file_field_observation(id: StringName) -> bool:
+	if not field_observation_ready_to_file(id):
+		return false
+	awarded_field_observations[id] = true
+	field_notes += FieldNotesDb.observation_note_value(id)
+	return true
 
 
 func garrison_snapshot() -> Dictionary:
@@ -787,6 +845,18 @@ func deposit_supplies() -> Dictionary:
 	return receipt
 
 
+## Spend stored hearth stock as one checked mutation. Tool recipes use this
+## after their complete gold/material/firewood bill has been found affordable.
+func consume_stored_firewood(amount: int) -> bool:
+	if amount <= 0:
+		return true
+	if firewood_stock < amount:
+		return false
+	firewood_stock -= amount
+	garrison_changed.emit()
+	return true
+
+
 func fish_space() -> int:
 	return FISH_CAP - fish_stock
 
@@ -958,19 +1028,19 @@ func restore_wishlist_lines(raw: Array) -> void:
 
 # --- Health -----------------------------------------------------------------
 
-func damage(amount_quarters: int) -> void:
-	if dev_god_mode or amount_quarters <= 0:
+func damage(amount_health_points: int) -> void:
+	if dev_god_mode or amount_health_points <= 0:
 		return
-	var remaining: int = _softened(amount_quarters)
+	var remaining: int = _softened(amount_health_points)
 	if temporary_overhealth > 0:
 		var absorbed := mini(temporary_overhealth, remaining)
 		set_temporary_overhealth(temporary_overhealth - absorbed)
 		remaining -= absorbed
 	if remaining <= 0:
 		return
-	quarters = maxi(0, quarters - remaining)
-	Bus.player_health_changed.emit(quarters, max_quarters)
-	if quarters == 0:
+	health_points = maxi(0, health_points - remaining)
+	Bus.player_health_changed.emit(health_points, max_health_points)
+	if health_points == 0:
 		Bus.player_died.emit()
 
 
@@ -986,88 +1056,82 @@ func mercy_rate() -> float:
 	return minf(K.MERCY_BASE + K.MERCY_PER_DEATH * float(deaths), K.MERCY_MAX)
 
 
-## The blow after mercy, in whole quarter-hearts.
+## The blow after mercy, in whole HP.
 ##
-## **The carry is the whole of this function.** Health is integer quarters and a
-## 5% resistance on a two-quarter blow is a tenth of one: rounded per hit it is
+## **The carry is the whole of this function.** Health is integer HP and a
+## 5% resistance on a 2 HP blow is a tenth of one: rounded per hit it is
 ## nought every single time, so the toggle would be a switch that does nothing
 ## for the first several hours and then, somewhere past 25%, starts halving
-## things. So the fraction ACCUMULATES across blows and is spent as whole quarters
-## when it comes due -- one blow in ten lands for a quarter less, which is a
-## sixteenth of a heart an hour that the player never has to understand, and it is
+## things. So the fraction ACCUMULATES across blows and is spent as whole HP
+## when it comes due -- one blow in ten lands for 1 HP less, which is
+## small enough that the player never has to understand the carry, and it is
 ## honest: over a fight, exactly the advertised fraction is forgiven.
 ##
-## Never below one quarter, and never on a blow that was already one. `Hero` keeps
+## Never below 1 HP, and never on a blow that was already one. `Hero` keeps
 ## the same floor for armour and for the same reason (GDD §7.1 caps this well
 ## short of invulnerable): a hit that can be reduced to nothing stops being a
 ## reason to move.
 func _softened(amount: int) -> int:
 	var rate := mercy_rate()
-	if rate <= 0.0 or amount <= K.QUARTER:
+	if rate <= 0.0 or amount <= K.HEALTH_POINT:
 		return amount
 	_mercy_carry += float(amount) * rate
 	# Only what the floor leaves room for is actually spent, so a big carry over a
-	# one-quarter blow is banked rather than thrown away.
-	var forgive := mini(int(floorf(_mercy_carry)), amount - K.QUARTER)
+	# 1 HP blow is banked rather than thrown away.
+	var forgive := mini(int(floorf(_mercy_carry)), amount - K.HEALTH_POINT)
 	if forgive <= 0:
 		return amount
 	_mercy_carry -= float(forgive)
 	return amount - forgive
 
 
-func heal(amount_quarters: int) -> void:
-	quarters = mini(max_quarters, quarters + amount_quarters)
-	Bus.player_health_changed.emit(quarters, max_quarters)
+func heal(amount_health_points: int) -> void:
+	health_points = mini(max_health_points, health_points + amount_health_points)
+	Bus.player_health_changed.emit(health_points, max_health_points)
 
 
-func set_temporary_overhealth(amount_quarters: int) -> void:
-	temporary_overhealth = maxi(0, amount_quarters)
+func set_temporary_overhealth(amount_health_points: int) -> void:
+	temporary_overhealth = maxi(0, amount_health_points)
 	Bus.temporary_overhealth_changed.emit(temporary_overhealth)
 
 
 ## The maxima are STORED rather than returned from an accessor, unlike soak and
-## speed, and that is on purpose: `max_quarters` is read straight by the HUD, by
+## speed, and that is on purpose: `max_health_points` is read straight by the HUD,
+## by
 ## `hurt` and by `heal`, and `max_stamina` by every `spend_stamina` caller. What
 ## follows is the one function that writes them.
 ##
 ## **Re-derive both stored maxima from `upgrades`.** The one place that knows how
-## many hearts and how much bar the ladders add up to.
+## much max HP and stamina the ladders add up to.
 ##
-## It used to be two `+=` calls -- a heart line that added a container and a Focus
+## It used to be two `+=` calls -- a health line that added 4 HP and a Focus
 ## rung that added points -- and that shape can only ever count UP. Recut (GDD
 ## §6.6) takes a rung back off a jewel, and a maximum that was accumulated cannot
 ## be un-accumulated without the shop doing the arithmetic a second time and
 ## getting the odd Vigor rung wrong. Derived, the answer is the same however you
 ## arrived at it, and Recut is one call.
 ##
-## `fill` tops both bars up, which is what a PURCHASE does -- a container you just
-## paid for arrives full. A Recut passes false: the maxima come down, the bars are
+## `fill` tops both bars up, which is what a PURCHASE does -- a health upgrade you
+## just paid for arrives full. A Recut passes false: the maxima come down, the bars are
 ## clamped to them, and nobody is healed for changing their mind.
 func resync_maxima(fill: bool = false) -> void:
-	# Vigor is half a container a rung, so two rungs is one heart and an odd rung
-	# is one that has been paid for and is not on the HUD yet. Integer division is
-	# that rule; the shop's `_detail` shows the half so the odd rung does not read
-	# as a purchase that did nothing.
-	var hearts := K.START_HEARTS + int(upgrades.get(&"heart", 0)) \
-		+ jewel_level(jewel_track(&"amulet", &"vigor")) / 2
+	var permanent_health_points := K.START_HEALTH_POINTS \
+		+ int(upgrades.get(&"health", 0)) * K.HEALTH_UPGRADE_POINTS \
+		+ jewel_level(jewel_track(&"amulet", &"vigor")) \
+		* K.JEWEL_VIGOR_HEALTH_POINTS
 	# Ceiling enforced HERE rather than in the two shops, so a third source cannot
-	# arrive and quietly raise it (K.HEART_MAX, and the note over K.SOAK_MAX about
-	# why ceilings belong to the number).
-	max_quarters = mini(hearts, K.HEART_MAX) * K.HEART
-	quarters = max_quarters if fill else clampi(quarters, 0, max_quarters)
+	# arrive and quietly raise it (K.MAX_HEALTH_POINTS, and the note over
+	# K.SOAK_MAX about why ceilings belong to the number).
+	max_health_points = mini(permanent_health_points, K.MAX_HEALTH_POINTS)
+	health_points = max_health_points if fill \
+		else clampi(health_points, 0, max_health_points)
 	var permanent_stamina := minf(K.STAMINA_MAX, K.MAX_STAMINA
 		+ K.JEWEL_FOCUS_STAMINA
 		* float(jewel_level(jewel_track(&"amulet", &"focus"))))
 	max_stamina = permanent_stamina + well_fed_bonus()
 	stamina = max_stamina if fill else minf(stamina, max_stamina)
-	Bus.player_health_changed.emit(quarters, max_quarters)
+	Bus.player_health_changed.emit(health_points, max_health_points)
 	Bus.stamina_changed.emit(stamina, max_stamina)
-
-
-## How many heart containers the player has. The unit the shops and the
-## equipment screen both count in.
-func heart_containers() -> int:
-	return max_quarters / K.HEART
 
 
 # --- Magic ------------------------------------------------------------------
@@ -1385,7 +1449,7 @@ func forge_level(track: StringName) -> int:
 	return clampi(int(upgrades.get(track, 0)), 0, K.FORGE_MAX)
 
 
-## Quarter-hearts the sword adds. Named `sword_bonus` for years; it is a
+## HP the sword adds. Named `sword_bonus` for years; it is a
 ## function now because the number has a ladder behind it.
 ##
 ## Emberblood is added HERE rather than anywhere downstream, and that is the
@@ -1403,14 +1467,14 @@ func sword_bonus() -> int:
 		+ (K.DRAUGHT_EDGE if draught_left(DRAUGHT_EDGE_ID) > 0.0 else 0)
 
 
-## Quarter-hearts subtracted from every blow taken. `Hero.hurt` floors the
+## HP subtracted from every blow taken. `Hero.hurt` floors the
 ## result at one -- armour makes you last longer, never invincible, and that
 ## floor is what stops Ironhide on a full plate ladder from being immunity.
 ## Ballast is added HERE, on top of the cap, exactly as Ironhide is: `SOAK_MAX`
 ## is the ceiling on what you can BUILD (see its note about faucets), and a
 ## window you paid a stack of merchandise for is not a build. Stacking it with a
 ## draught is allowed and is meant to be -- both are consumed, and `Hero.hurt`
-## still floors every blow at one quarter, so the two together are a very good
+## still floors every blow at 1 HP, so the two together are a very good
 ## eight seconds and never immunity.
 func armour_soak() -> int:
 	return int(floorf(armour_soak_exact())) \
@@ -1418,7 +1482,7 @@ func armour_soak() -> int:
 		+ (K.BALLAST_SOAK if draught_left(BALLAST_ID) > 0.0 else 0)
 
 
-## The permanent soak before flooring, in quarter-hearts. Public because the
+## The permanent soak before flooring, in HP. Public because the
 ## shop's before/after line and the equipment screen both want to show the
 ## fraction -- a heavy chest rung that moves 0.7 -> 1.0 has to be able to SAY so,
 ## or it reads as a purchase that did nothing (see the note over K.PLATE_HEAVY_SOAK).
@@ -1824,7 +1888,7 @@ func begin_meal(id: StringName) -> bool:
 		return false
 	match RationDb.kind_of(id):
 		RationDb.HEALS:
-			if quarters >= max_quarters:
+			if health_points >= max_health_points:
 				return false
 		RationDb.RESTORES:
 			if magic >= max_magic:
@@ -1946,6 +2010,11 @@ func clear_boss_key() -> void:
 ## bow you just found is one press of D-pad → away, which is what the auto-bind
 ## was for.
 func grant(item_id: StringName) -> void:
+	if ToolDb.has(item_id):
+		if tool_usable(item_id):
+			return
+		craft_tool(item_id)
+		return
 	if items.get(item_id, false):
 		return
 	items[item_id] = true
@@ -1977,6 +2046,51 @@ func grant(item_id: StringName) -> void:
 ## filters rather than a system.
 func has(item_id: StringName) -> bool:
 	return items.get(item_id, false)
+
+
+# --- Durable utility tools -------------------------------------------------
+
+func tool_durability(id: StringName) -> int:
+	if not ToolDb.has(id):
+		return 0
+	return clampi(int(tool_durabilities.get(id, 0)), 0,
+		ToolDb.max_durability(id))
+
+
+func tool_max_durability(id: StringName) -> int:
+	return ToolDb.max_durability(id)
+
+
+func tool_known(id: StringName) -> bool:
+	return ToolDb.has(id) and tool_durabilities.has(id)
+
+
+func tool_usable(id: StringName) -> bool:
+	return ToolDb.has(id) and tool_durability(id) > 0 and has(id)
+
+
+## First craft and reforge are the same state transition: full durability,
+## compatibility ownership restored, and the ordinary acquisition notice.
+func craft_tool(id: StringName) -> bool:
+	var maximum := tool_max_durability(id)
+	if maximum <= 0:
+		return false
+	tool_durabilities[id] = maximum
+	items[id] = true
+	Bus.item_acquired.emit(id)
+	garrison_changed.emit()
+	return true
+
+
+func spend_tool_use(id: StringName) -> bool:
+	if not tool_usable(id):
+		return false
+	var remaining := tool_durability(id) - 1
+	tool_durabilities[id] = remaining
+	if remaining <= 0:
+		items.erase(id)
+	garrison_changed.emit()
+	return true
 
 
 # --- The selected item ------------------------------------------------------

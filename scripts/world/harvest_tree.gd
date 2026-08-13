@@ -78,6 +78,7 @@ func _commit_at_impact(hero: Hero) -> void:
 		if not refusal.is_empty():
 			Bus.request_message.emit(refusal)
 		return
+	Game.spend_tool_use(ToolDb.WOODSMAN_AXE_ID)
 
 	# Both cues belong to the contact point. The utility animation can be
 	# cancelled before this frame, while this is the one frame the tree commits.
@@ -86,14 +87,21 @@ func _commit_at_impact(hero: Hero) -> void:
 	_stump.visible = true
 	_fall_away_from(hero.global_position)
 	Bus.request_sfx.emit(SFX_TREE_FALL, global_position)
-	Bus.request_message.emit("FIREWOOD CUT. TAKE THE BUNDLE TO THE GATE SUPPLY BOX.")
+	var remaining: int = Game.tool_durability(ToolDb.WOODSMAN_AXE_ID)
+	var durability: String = "AXE BROKEN — BRANNOC MUST REFORGE IT." \
+		if remaining <= 0 else "AXE %d / %d" % [remaining,
+			Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)]
+	Bus.request_message.emit("FIREWOOD CUT. TAKE IT TO THE GATE SUPPLY BOX. · " \
+		+ durability)
 
 
 func _refusal() -> String:
-	if not Game.has(ShopDb.WOODSMAN_AXE_ID):
+	if not Game.tool_known(ToolDb.WOODSMAN_AXE_ID):
 		if not Game.flag(StoryDb.told_flag(&"elder", &"timber_duty")):
 			return "YOU NEED A WOODSMAN'S AXE. SPEAK TO ALDRIC."
 		return "BRANNOC FORGES THE WOODSMAN'S AXE."
+	if not Game.tool_usable(ToolDb.WOODSMAN_AXE_ID):
+		return "THE WOODSMAN'S AXE IS BROKEN. BRANNOC MUST REFORGE IT."
 	if Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
 		return "CHOP FIREWOOD DURING DAYTIME."
 	if Game.timber_completed_day == Clock.day:

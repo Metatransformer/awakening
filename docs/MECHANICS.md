@@ -23,14 +23,14 @@ interfaces belong to [CONTRACT.md](CONTRACT.md).
 | Stamina economy | Is this run, dodge, guard action, jump, or committed attack worth the mobility it spends? | [CONTRACT.md](CONTRACT.md) |
 | Targeting and facing | Which threat do I frame, and am I facing it well enough to defend? | [CONTRACT.md](CONTRACT.md) |
 | Dodge, block, and parry | Do I evade, absorb inside the shield arc, or risk timing a punish? | [CONTRACT.md](CONTRACT.md), [BESTIARY.md](BESTIARY.md) |
-| Sword commitments | Do I stop a light chain, continue it, charge a heavy, lunge, spin, or slam? | [CONTRACT.md](CONTRACT.md) |
+| Sword commitments | Do I stop or continue the light chain, finish the two-hit Heavy combo, hold for the magic spin, or slam from the air? | [CONTRACT.md](CONTRACT.md) |
 | Ranged and item answers | Is distance, armour, a group, or room geometry worth spending a prepared tool on? | [ITEMS.md](ITEMS.md), [PUZZLES.md](PUZZLES.md) |
 | Enemy grammar | Can I read the wind-up, committed beat, recovery, formation, and disengagement route? | [BESTIARY.md](BESTIARY.md) |
 | Boss grammar | What authored fight rule must I learn, and when does mastery open a permanent route or verb? | [BOSSES.md](BOSSES.md) |
 | Heat tempo | Do I chase the next kill and cooling loot, or protect health and let the chain fall? | [METAGAME.md](METAGAME.md) |
 | Mercy | Do I enable bounded resistance after repeated deaths without changing encounters or rewards? | [GDD.md](GDD.md), [CONTRACT.md](CONTRACT.md) |
 
-Combat uses quarter-heart damage through one health path. Attacks have readable
+Combat uses integer HP damage through one health path. Attacks have readable
 commitment and recovery; defence depends on position, facing, and timing rather
 than passive equipment alone. A blow taken is readable the same way: its weight
 and the direction it came from are legible in the reaction, without reading the
@@ -51,6 +51,7 @@ mechanics in this map.
 | Arrows and charges | Do I buy, craft, find, conserve, or spend a finite trip supply? | [METAGAME.md](METAGAME.md) |
 | Bottles and draughts | Which finite heal or timed effect do I prepare, carry, and consume? | [METAGAME.md](METAGAME.md) |
 | Rations | Is the room safe enough to risk slow, interruptible recovery? | [METAGAME.md](METAGAME.md) |
+| Durable utility tools | Which work deserves a finite Axe, Pickaxe, or Fishing Rod use, and when is a full-cost reforge justified? | [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md) |
 | Relics | Is a unique, exposed, unsellable discovery worth the slot and extraction cost? | [ITEMS.md](ITEMS.md) |
 | Echoes | Which temporary rule bend is worth a bag slot for this run? | [PUZZLES.md](PUZZLES.md) |
 
@@ -92,6 +93,7 @@ health; rest and sleep are the normal garrison recovery seam.
 | Supply guarantees | Does a route that requires a consumable also provide a cold-start answer? | [PUZZLES.md](PUZZLES.md), [ITEMS.md](ITEMS.md) |
 | Map knowledge | Which rooms and useful markers have I personally revealed, and what route does that knowledge support? | [CONTRACT.md](CONTRACT.md) |
 | Guarded rewards | What must be fought, solved, or deliberately explored before a prize exists? | [CONTRACT.md](CONTRACT.md), [ITEMS.md](ITEMS.md) |
+| Mining veins | Do I rely on incidental enemy Iron Scrap, or spend Pickaxe durability now for a more efficient physical stack of existing metal? | [METAGAME.md](METAGAME.md), [CONTRACT.md](CONTRACT.md) |
 
 Puzzle atoms, combinators, prefabs, locks, and graph edges are capped content
 inside this grammar. Their counts and production status belong to
@@ -119,6 +121,13 @@ inside this grammar. Their counts and production status belong to
 The garrison is a lived place with bounded services, not a settlement-placement
 or remote-management game. Upgrade tracks, residents, currencies, interfaces,
 and home systems cannot expand beyond [SCOPE.md](SCOPE.md).
+
+Issue #184 makes one preparation chain explicit: compare incidental enemy iron
+with Pickaxe-funded mining; allocate Iron Scrap, Riveted Plate, and Tension Coil
+between Brannoc's work and the Builder's Bolt-Thrower; chop and deposit a
+Firewood bundle before asking Brannoc for a Fishing Rod; then decide when a worn
+tool's remaining work justifies paying to reforge it to full. The tools never
+enter hands, rings, the wheel, bag, locker, sale, armament, or combat decisions.
 
 ## Active proofs
 
@@ -152,3 +161,8 @@ authorised under issue #112: five first-time observations, five total debrief
 awards and three one-rank doctrines, with no repeatable faucet or new screen.
 Neither implementation proves its human hypothesis. Observation, criteria and
 eventual decisions stay in the dedicated design tests.
+
+Issue #184's separate utility-tool and mining question is pending in
+[design-tests/MINING_TOOLS_PROOF.md](design-tests/MINING_TOOLS_PROOF.md).
+Its implemented access and cost changes do not validate fishing depth; the
+near/deep hypothesis and evidence bar remain in the Fishing Provisions Proof.

@@ -217,7 +217,7 @@ func _daily_state(rig) -> void:
 		"JSON-style Connected String keys restore as typed StringName keys")
 	rig.check(not restored_saved.has("carrying_firewood"),
 		"the garrison snapshot no longer writes legacy carrying_firewood state")
-	rig.check(Saves.VERSION == 16, "the additive save contract is version 16")
+	rig.check(Saves.VERSION == 19, "the additive cargo save contract is version 19")
 
 	Game.restore_garrison({
 		"fish_caught_day": 4,

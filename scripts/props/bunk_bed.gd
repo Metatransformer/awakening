@@ -22,6 +22,7 @@ const LOCKER_Z := -1.72
 
 var bed: Bed
 var locker: Footlocker
+var field_notes_book: FieldNotesBook
 ## Compatibility/readability footprint for directors that frame the former
 ## lean-to as a room. The bunk bay is open-front, not a separate scene.
 var room := Vector2(4.2, LENGTH + 1.4)
@@ -170,6 +171,14 @@ func _build_player_props() -> void:
 	locker.position = Vector3(0.0, 0.0, LOCKER_Z)
 	locker.rotation.y = PI
 	add_child(locker)
+
+	field_notes_book = FieldNotesBook.new()
+	field_notes_book.name = "FieldNotesBook"
+	# Beside the lower berth, while the read volume itself reaches outward into
+	# the aisle (see FieldNotesBook._build_interaction_shape).
+	field_notes_book.position = Vector3(-1.18, 0.0, 0.42)
+	field_notes_book.rotation.y = -0.10
+	add_child(field_notes_book)
 
 
 func _add_box_shape(body: StaticBody3D, size: Vector3, at: Vector3) -> void:

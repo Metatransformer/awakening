@@ -26,11 +26,18 @@ func run(rig) -> void:
 		"SupplyBox stands beside and just inside the south gate")
 	rig.check(box.prompt == "DEPOSIT SUPPLIES",
 		"the gate crate owns the explicit deposit interaction")
+	var hero := rig.root.get_tree().get_first_node_in_group(&"player") as Hero
+	if hero != null:
+		hero.global_position = box.global_position + Vector3(-1.65, 0.08, 0.0)
+		hero.velocity = Vector3.ZERO
+		await rig.wait_physics_frames(5)
+		rig.check(await rig.until(func() -> bool: return Prompt.focus == box, 2.0),
+			"the south-gate approach gives the crate real interaction focus")
 
 	var cam := Camera3D.new()
 	cam.fov = 38.0
 	garrison.add_child(cam)
-	cam.global_position = box.global_position + Vector3(3.4, 2.25, 3.6)
+	cam.global_position = box.global_position + Vector3(3.4, 2.25, -3.6)
 	cam.look_at(box.global_position + Vector3(0.0, 0.72, 0.0), Vector3.UP)
 	cam.make_current()
 	await rig.wait_frames(5)

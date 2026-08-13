@@ -17,6 +17,7 @@ unauthorised.
 | New monster models | **0** |
 | Dungeon kits | **1**, used in four tints |
 | Usable items | **6** |
+| Durable utility tools | **3**: Woodsman's Axe, Pickaxe, Fishing Rod |
 | Right-hand ring stops | **6** |
 | Kit wheel slots | **8** |
 | New gameplay mechanics | **4**: working, puzzle, daily-life loop, authored raid |
@@ -60,6 +61,16 @@ slice: one pond and minigame, persistent Fish, derived Morale, and the temporary
 Well Fed state. This consumes the existing daily-life-loop count; it is not a
 fifth gameplay mechanic and does not raise any other cap.
 
+Issue #184 is the explicit owner override for the three durable utility tools
+named above and one bounded mining rule: independent deterministic vein chances
+in ordinary non-entrance, non-maze rooms, paying only existing Iron Scrap,
+Riveted Plate, or Tension Coil. Utility tools are not usable items, ring stops,
+wheel slots, bag or locker goods, armaments, currencies, or combat equipment.
+The amendment adds no room, gate, map marker, reward id, UI screen, or broader
+profession system. Its bounded resource-working extension remains inside the
+already-counted daily-life-loop mechanic and does not raise the four-mechanic
+cap.
+
 The Field Notes amendment adds one finite, non-convertible permanent currency
 and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
@@ -100,10 +111,18 @@ Its future test is
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md),
 but it does not supersede the authorised human proofs above.
 
-Raid, Field Notes, and fishing/provisions implementations are complete; their
-precommitted human tests remain pending. Floors 2–4, bosses 2–4, production
-content, another fishing location or minigame, and every expansion below remain
-frozen.
+Issue #184 is separately owner-authorised implementation sequencing debt:
+three forgeable/reforgeable durable utility tools and deterministic depletable
+veins under [design-tests/MINING_TOOLS_PROOF.md](design-tests/MINING_TOOLS_PROOF.md).
+It supersedes the prior mining and fishing-gear exclusion only for that fixed
+slice. It does not supersede the authorised human proofs above or satisfy the
+near/deep evidence bar in
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
+
+Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
+implementations are complete; their precommitted human tests remain pending.
+Floors 2–4, bosses 2–4, production content, another fishing location or
+minigame, and every expansion below remain frozen.
 
 ## Later, only if proven
 
@@ -127,8 +146,9 @@ list.
 - A second garrison, open overworld, alternate dungeon, or fifth floor.
 - Multiplayer or co-op.
 - Joinable factions, character creation, races, classes, or skill trees.
-- Farming, hunting, mining, cooking systems, mounts, romance, fishing gear or
-  collections, profession expansion, or a housing economy.
+- Farming, hunting, broader mining or cooking systems, mounts, romance, fishing
+  gear beyond #184's single durable rod, collections, profession expansion, or
+  a housing economy.
 - A spell school, spell levels, a fourth working, or a seventh ring stop.
 - Procedural bosses, a second dungeon kit, or new monster models.
 - Relics as random drops, sellable relics, or permanent loss of a unique relic.

@@ -76,7 +76,8 @@ be able to explain what happened, why, and how to put it right.
    responsibilities and provisions, choose equipment, and see what the outpost
    needs.
 2. **Delve, explore, and loot.** Fight readable encounters, solve ancient
-   mechanisms, find artifacts, and decide what deserves scarce carrying space.
+   mechanisms, find artifacts, decide whether a vein deserves Pickaxe
+   durability, and choose what deserves scarce carrying space.
 3. **Receive warning.** A raid warning may arrive while the player is safe,
    committed, or painfully close to a discovery.
 4. **Choose.** Continue the descent, retrace the stairs, or use the normal
@@ -152,6 +153,8 @@ became capable through their actions.
   stair extracts, using the ordinary priced settlement.
 - A constrained bag, ordinary extraction, recoverable loss, and distinct uses for gold, components, and artifacts.
 - Item verbs that open combat and puzzle possibilities rather than merely raising numbers.
+- Three bounded non-combat utility tools that turn ordinary metal and home work
+  into visible preparation choices without entering the combat kit.
 - One living garrison where services, upgrades, artifacts, civil time, bounded
   Firewood/Hearth and fishing/provisions routines, and visible change make
   returning a mode of play without becoming a settlement simulation.
@@ -184,6 +187,8 @@ sessions remain the active proof.
   not part of the raid slice.
 - Further home-life responsibilities only when Firewood/Hearth or a successor
   test shows that they deepen belonging without becoming chores.
+- Any mining or utility-tool expansion only after the fixed #184 slice produces
+  human evidence of explainable allocation rather than compulsory sweeping.
 
 ### Not planned
 

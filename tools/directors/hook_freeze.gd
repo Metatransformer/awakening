@@ -9,8 +9,8 @@ extends RefCounted
 ##     flew through a skeleton's ribcage and stuck in the wall behind it. That is
 ##     the beat `hook_00`..`hook_02` photograph: chain out, chain on the monster.
 ##   * It does NO damage and it does not pull. Both are asserted on numbers,
-##     because both are silent when they break — a hookshot that chips a quarter
-##     heart looks exactly like one that does not, and a hero reeled into the
+##     because both are silent when they break — a hookshot that chips 1 HP
+##     health bar looks exactly like one that does not, and a hero reeled into the
 ##     thing he just froze looks like a hookshot working.
 ##   * The body turns BLUE and thaws. This is the half that has no boolean worth
 ##     having. `_ice()` measures the albedo of the monster's own surface override
@@ -96,7 +96,7 @@ func run(rig) -> void:
 			% Game.armament(Game.HAND_RIGHT))
 		return
 
-	var hp_before: int = foe.health.quarters
+	var hp_before: int = foe.health.health_points
 	var stood: Vector3 = hero.global_position
 
 	# The monster has to be let go for the freeze itself: a body with physics off
@@ -129,8 +129,8 @@ func run(rig) -> void:
 		return
 
 	# The two numbers that are silent when they break.
-	_check("the hookshot did no damage (%d -> %d quarters)"
-		% [hp_before, foe.health.quarters], foe.health.quarters == hp_before)
+	_check("the hookshot did no damage (%d -> %d HP)"
+		% [hp_before, foe.health.health_points], foe.health.health_points == hp_before)
 	var moved := stood.distance_to(hero.global_position)
 	print("FREEZE the hero moved %.2f m during the shot" % moved)
 	_check("the hero was not reeled into the monster (%.2f m)" % moved, moved < 1.0)
@@ -209,7 +209,7 @@ func _killed_while_frozen(rig, foe, base: Dictionary) -> void:
 	await rig.capture(out.path_join("hook_05_killed_frozen.png"))
 
 
-## A blow of `amount` quarters, delivered the way the hero delivers one.
+## A blow of `amount` HP, delivered the way the hero delivers one.
 func _strike(foe: Node3D, amount: int) -> void:
 	var box := DamageArea.new()
 	box.collision_layer = K.L_PLAYER_HITBOX

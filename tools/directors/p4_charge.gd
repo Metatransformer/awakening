@@ -17,9 +17,9 @@ extends RefCounted
 ##      that did not take is the cheapest failure here and the hardest to see in
 ##      a frame.
 ##   2. A tap on `attack` still swings immediately, with no charge latency.
-##   3. A tap on `heavy` lands a BIGGER blow than the light, and LATER. Its cost
-##      is the commitment; a heavy that lands as fast as a light is free.
-##   4. A SHORT hold of `heavy` is just that heavy — ONE blow, on the release.
+##   3. A first tap on `heavy` lands the dash-spin combo opener, bigger than the
+##      light and later. Its cost is the commitment.
+##   4. A SHORT hold of `heavy` is still that opener — ONE blow, on the release.
 ##      Otherwise the spin is not a choice, it is a side effect.
 ##   5. A LONG hold arms `combat.charged`, and letting go lands ONE blow: the
 ##      spin, bigger than the heavy, INSTEAD of it and not after it. This is the
@@ -115,7 +115,7 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("h_01_after_light.png"))
 	await rig.wait_seconds(LAPSE)
 
-	# --- the heavy tap -------------------------------------------------------
+	# --- the first Heavy tap: combo opener ----------------------------------
 	_refill()
 	mark = _hits.size()
 	await rig.tap(["heavy"])
@@ -125,7 +125,7 @@ func run(rig) -> void:
 	await rig.capture(out.path_join("h_01b_after_heavy.png"))
 	await rig.wait_seconds(LAPSE)
 
-	# --- a hold too short to charge is just that heavy -----------------------
+	# --- a hold too short to charge is still the combo opener ----------------
 	# Held to 60% of the way, deliberately not "one frame under": what is being
 	# checked is that a hurried press does not accidentally charge, and a player
 	# mashing holds the button for a good fraction of the window every time.

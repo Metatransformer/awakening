@@ -26,9 +26,9 @@ const SLOTS := 3
 ## bump does not have to.
 ##
 ## The **gear split** is not additive, and it wins. A v3 slot holds
-## `{"plate": 3}` — three quarter-hearts of soak — and since `plate` became four
+## `{"plate": 3}` — 3 HP of soak — and since `plate` became four
 ## pieces × two paths (docs/GDD.md §6.6) there is no honest place to put it.
-## Spending it on one piece (`plate_chest_heavy` at rung 3) is 1.0 quarters, a
+## Spending it on one piece (`plate_chest_heavy` at rung 3) is 1.0 HP, a
 ## silent two-thirds cut to a number the player paid for. Spreading it over four
 ## pieces commits all four to heavy — the one thing §6.6 says can never be undone
 ## — on the player's behalf, without asking. Refusing reads as an empty slot,
@@ -88,16 +88,22 @@ const SLOTS := 3
 ## health and reconstruct as zero.
 ## Bumped to 15 for the additive fishing, supper, Well Fed and Connected fields
 ## inside the existing garrison payload. A v14 slot reconstructs them empty.
-## Bumped to 16 so a non-dungeon Run snapshot is restored instead of discarded.
-## This is additive: v4-v15 stay readable, and their old carrying_firewood bit
-## migrates into one firewood bundle only after the Run bag has been restored.
-const VERSION := 16
+## Bumped to 16 for the health-points vocabulary. v15 remains readable: its
+## health fields, permanent upgrade id and restorative draught id are migrated
+## at the three narrow read seams below.
+## Bumped to 17 for completed Field Notes. A v16 slot has only filed/awarded ids;
+## each of those is also completed, while no other completion can be inferred.
+## Bumped to 18 for durable utility tools. Older owned Woodsman's Axes migrate
+## to full durability; the additive tool manifest is otherwise empty.
+## Bumped to 19 so a non-dungeon Run snapshot is restored instead of discarded.
+## Legacy carrying_firewood becomes a bag bundle after Run state is restored.
+const VERSION := 19
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -148,11 +154,16 @@ func peek(slot: int) -> Dictionary:
 	var has_run := not run_data.is_empty()
 	var underground := has_run and bool(run_data.get("in_dungeon", false))
 	var saved_level := maxi(int(run_data.get("level", 1)), 1) if underground else 1
+	# v15 and earlier used these two field names. They are fallbacks only: peek's
+	# returned live header uses the health-points schema below.
+	var health_points := int(d.get("health_points", d.get("quarters", 0)))
+	var max_health_points := int(
+		d.get("max_health_points", d.get("max_quarters", 0)))
 	return {
 		"empty": false,
 		"slot": slot,
-		"hearts": float(d.get("quarters", 0)) / float(K.HEART),
-		"max_hearts": float(d.get("max_quarters", 0)) / float(K.HEART),
+		"health_points": health_points,
+		"max_health_points": max_health_points,
 		"gold": d.get("gold", 0),
 		"keys": d.get("small_keys", 0),
 		"last_played_unix": d.get("last_played_unix", 0),
@@ -178,8 +189,8 @@ func save(slot: int) -> bool:
 		"stamp": Time.get_datetime_string_from_system(false, true),
 		"played": Time.get_ticks_msec() / 1000.0,
 		"last_played_unix": Time.get_unix_time_from_system(),
-		"quarters": Game.quarters,
-		"max_quarters": Game.max_quarters,
+		"health_points": Game.health_points,
+		"max_health_points": Game.max_health_points,
 		"temporary_overhealth": Game.temporary_overhealth,
 		# A Focus amulet raises this permanently, so it is a purchase and it saves.
 		# Well Fed is carried in `garrison`; it must never become a saved purchase.
@@ -195,6 +206,7 @@ func save(slot: int) -> bool:
 		# `gold` is what survived the spending — so it has to be its own key.
 		"gold_earned": Game.gold_earned,
 		"field_notes": Game.field_notes,
+		"completed_field_observations": Game.completed_field_observations.keys(),
 		"awarded_field_observations": Game.awarded_field_observations.keys(),
 		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
@@ -233,6 +245,7 @@ func save(slot: int) -> bool:
 		"has_map": Game.has_map,
 		"has_compass": Game.has_compass,
 		"items": Game.items,
+		"tool_durability": Game.tool_durabilities,
 		"item_selected": Game.item_selected,
 		# The kit wheel's eight bindings. A flat array of ids, which is the whole
 		# reason the wheel encodes a bottle as a `bottle_N` token rather than as a
@@ -335,8 +348,11 @@ func load_slot(slot: int) -> Dictionary:
 	if d.is_empty():
 		return {}
 
-	Game.max_quarters = d.get("max_quarters", K.START_HEARTS * K.HEART)
-	Game.quarters = d.get("quarters", Game.max_quarters)
+	# v15 and earlier stored the same integer values under the old field names.
+	Game.max_health_points = int(d.get(
+		"max_health_points", d.get("max_quarters", K.START_HEALTH_POINTS)))
+	Game.health_points = int(d.get(
+		"health_points", d.get("quarters", Game.max_health_points)))
 	# Clamped rather than trusted: `K.STAMINA_MAX` is the ceiling every Focus
 	# purchase already respects, and a hand-edited slot must not out-buy the shop.
 	Game.max_stamina = minf(K.STAMINA_MAX,
@@ -369,7 +385,14 @@ func load_slot(slot: int) -> Dictionary:
 	# reloads holding the bare blade.
 	Game.upgrades.clear()
 	for k in (d.get("upgrades", {}) as Dictionary):
-		Game.upgrades[StringName(k)] = int((d["upgrades"] as Dictionary)[k])
+		var upgrade_id := StringName(k)
+		# v15 and earlier called the permanent +4 HP ladder "heart". Collapse it
+		# into the live id instead of retaining a duplicate runtime key.
+		if upgrade_id == &"heart":
+			upgrade_id = &"health"
+		Game.upgrades[upgrade_id] = maxi(
+			int(Game.upgrades.get(upgrade_id, 0)),
+			int((d["upgrades"] as Dictionary)[k]))
 	var bed_rank: int = clampi(
 		int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0)),
 		0, int(ElderUpgradeDb.LIMITS[ElderUpgradeDb.BED_ID]))
@@ -400,12 +423,27 @@ func load_slot(slot: int) -> Dictionary:
 			var observation_id: StringName = StringName(raw_id)
 			if FieldNotesDb.is_observation(observation_id):
 				Game.awarded_field_observations[observation_id] = true
+	# Completion is additive in v17. Earlier saves can prove only that every
+	# already-awarded entry was completed; missing state otherwise stays empty.
+	Game.completed_field_observations.clear()
+	var raw_completed: Variant = d.get("completed_field_observations", [])
+	if raw_completed is Array:
+		for raw_id: Variant in raw_completed:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var observation_id: StringName = StringName(raw_id)
+			if FieldNotesDb.is_observation(observation_id):
+				Game.completed_field_observations[observation_id] = true
+	for observation_id: StringName in Game.awarded_field_observations:
+		Game.completed_field_observations[observation_id] = true
 	var raw_field_notes: Variant = d.get("field_notes", 0)
 	var saved_field_notes: int = int(raw_field_notes) \
 		if raw_field_notes is int or raw_field_notes is float else 0
+	var filed_value: int = 0
+	for observation_id: StringName in Game.awarded_field_observations:
+		filed_value += FieldNotesDb.observation_note_value(observation_id)
 	var maximum_balance: int = maxi(0,
-		Game.awarded_field_observations.size() \
-		- owned_doctrines * FieldNotesDb.DOCTRINE_COST)
+		filed_value - owned_doctrines * FieldNotesDb.DOCTRINE_COST)
 	Game.field_notes = clampi(saved_field_notes, 0, maximum_balance)
 	var raw_garrison: Variant = d.get("garrison", {})
 	var legacy_carrying_firewood: bool = int(d.get("version", 0)) < VERSION \
@@ -438,6 +476,10 @@ func load_slot(slot: int) -> Dictionary:
 		if Game.bottle_contents.size() >= K.BOTTLE_MAX:
 			break
 		var potion := StringName(c)
+		# v15 and earlier used the old restorative draught id. Convert it before
+		# catalogue validation so the bottle remains full and drinkable.
+		if potion == &"heart_draught":
+			potion = &"health_draught"
 		Game.bottle_contents.append(potion if PotionDb.has(potion) else &"")
 	# Rebuilt key by key for `upgrades`' reason -- JSON has no StringName, so an
 	# assigned dictionary comes back keyed by String and `RationDb.has()` misses
@@ -466,6 +508,32 @@ func load_slot(slot: int) -> Dictionary:
 	Game.items.clear()
 	for k in (d.get("items", {}) as Dictionary):
 		Game.items[StringName(k)] = true
+	# Tool state is rebuilt through the authoritative catalogue. Keep valid zero
+	# entries (broken is known), clamp positive uses, and restore the compatibility
+	# ownership gate only for usable tools.
+	Game.tool_durabilities.clear()
+	var raw_tool_durability: Variant = d.get("tool_durability", {})
+	if raw_tool_durability is Dictionary:
+		for raw_id: Variant in raw_tool_durability:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var tool_id := StringName(raw_id)
+			if not ToolDb.has(tool_id):
+				continue
+			var uses := clampi(int((raw_tool_durability as Dictionary)[raw_id]),
+				0, ToolDb.max_durability(tool_id))
+			Game.tool_durabilities[tool_id] = uses
+	# The axe predates durability. This applies to pre-v18 slots and to a current
+	# payload missing the additive key, so legacy ownership never loads broken.
+	if Game.has(ToolDb.WOODSMAN_AXE_ID) \
+			and not Game.tool_durabilities.has(ToolDb.WOODSMAN_AXE_ID):
+		Game.tool_durabilities[ToolDb.WOODSMAN_AXE_ID] = \
+			ToolDb.max_durability(ToolDb.WOODSMAN_AXE_ID)
+	for tool_id: StringName in ToolDb.TOOL_IDS:
+		if Game.tool_durability(tool_id) > 0:
+			Game.items[tool_id] = true
+		else:
+			Game.items.erase(tool_id)
 	Game.flags.clear()
 	for k in (d.get("flags", {}) as Dictionary):
 		Game.flags[StringName(k)] = true
@@ -544,7 +612,7 @@ func load_slot(slot: int) -> Dictionary:
 	current_scene_path = d.get("scene", "")
 
 	# Push the restored state at everyone who draws it.
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	Bus.temporary_overhealth_changed.emit(Game.temporary_overhealth)
 	Bus.magic_changed.emit(Game.magic, Game.max_magic)
 	Bus.stamina_changed.emit(Game.stamina, Game.max_stamina)
@@ -558,6 +626,7 @@ func load_slot(slot: int) -> Dictionary:
 	Bus.stash_changed.emit(Game.stash)
 	Bus.loadout_changed.emit(Game.loadout_set,
 		Game.armament(Game.HAND_RIGHT), Game.armament(Game.HAND_LEFT))
+	Game.garrison_changed.emit()
 	loaded.emit(slot)
 
 	var destination := {

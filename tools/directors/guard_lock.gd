@@ -16,8 +16,8 @@ extends RefCounted
 ##   4. An R3 toggle-lock SURVIVES a guard press and release. The trigger owns
 ##      only its own lock; a deliberate toggle underneath it is the player's
 ##      standing decision.
-##   5. The trigger's own lock is enough to buy the LUNGE. That is the point of
-##      putting targeting on the guard hand: brace and leap with one finger.
+##   5. The trigger's own lock does not rewrite Heavy: it still buys the same
+##      short travelling opener as a neutral Heavy tap.
 ##   6. With nothing lockable, guarding still pins the facing. Measured against
 ##      an UNGUARDED control given identical inputs: unguarded, holding left
 ##      turns him to face left; guarded, he slides left still facing forward.
@@ -30,7 +30,7 @@ extends RefCounted
 
 ## Frames given to the GameCamera to settle after the hero is moved. The stick is
 ## read camera-relative, so this is not padding — it is what makes "left" mean
-## left. p4_lunge.gd pays the same 60 for the same reason.
+## left. Other movement directors pay the same 60 for the same reason.
 const SETTLE := 60
 
 var out := ""
@@ -126,24 +126,20 @@ func run(rig) -> void:
 	await _z_target(rig)
 	_check("R3 let go again", hero.lock_target() == null)
 
-	# --- 5. the guard is what makes the lunge reachable ----------------------
-	# `heavy` with the sword out is an overhead swing on the spot UNLESS something
-	# is locked, and then it is the leap (p4_lunge.gd owns that claim). Before
-	# this change the only way to satisfy it was an R3 toggle; the point of
-	# putting targeting on the trigger is that the guard now does it, so "brace
-	# and leap at him" is one hand. The 1.5 m of closed distance below is what
-	# tells the two apart — an overhead closes nothing.
+	# --- 5. the guard's lock does not rewrite Heavy ---------------------------
+	# Heavy step one is the same short travelling spin with LT up or down and
+	# with or without a target. The guard still acquires the post; that target is
+	# useful for facing, but it no longer selects a separate leap attack.
 	#
-	# PostA has to be the only lockable thing for the same reason p4_lunge.gd
-	# clears the room: acquisition is scored in SCREEN space, so from the middle
-	# of the floor a different post wins and the leap is measured at a target
-	# this director is not watching.
+	# PostA has to be the only lockable thing because acquisition is scored in
+	# SCREEN space, so from the middle of the floor a different post can win and
+	# this director would measure travel at a target it is not watching.
 	for other in ["PostB", "PostC"]:
 		var n: Node = scene.get_node_or_null(NodePath(other))
 		if n != null:
 			n.remove_from_group(&"targetable")
 	post.connect(&"struck", _on_struck)
-	_stand(hero, post, 4.2)
+	_stand(hero, post, 2.6)
 	await rig.wait_frames(SETTLE)
 	Input.action_press(&"shield")
 	# Given a second rather than a fixed 24 frames. The guard re-scans every
@@ -162,12 +158,13 @@ func run(rig) -> void:
 	var dmg := 0
 	for h in _hits:
 		dmg += h
-	print("GUARD lunge from behind the guard: %.2f m -> %.2f m (closed %.2f m) dmg=%d"
+	print("GUARD Heavy opener behind the guard: %.2f m -> %.2f m (closed %.2f m) dmg=%d"
 		% [gap_before, gap_after, gap_before - gap_after, dmg])
-	_check("the trigger's own lock buys the lunge — it closed %.2f m"
-		% (gap_before - gap_after), gap_before - gap_after > 1.5)
+	_check("guard + Heavy kept the short travelling opener (closed %.2f m)"
+		% (gap_before - gap_after),
+		gap_before - gap_after > 0.3 and gap_before - gap_after < 2.2)
 	_check("...and landed the blow (dmg=%d)" % dmg, dmg > 0)
-	await rig.capture(out.path_join("g_03_guard_lunge.png"))
+	await rig.capture(out.path_join("g_03_guard_heavy_opener.png"))
 	await rig.wait_frames(30)
 
 	# --- 6. with nothing lockable, the guard still pins the facing -----------
@@ -359,8 +356,7 @@ func _wait_for_state(rig, hero, want: int, cap: int) -> void:
 
 ## Stand the hero `range_m` out from the post, facing it. Along the line toward
 ## the middle of the room, not along +Z: straight +Z from PostA is the far wall,
-## and a hero shoved out of geometry can neither walk nor dodge (p4_lunge.gd
-## learned this the expensive way).
+## and a hero shoved out of geometry can neither walk nor dodge.
 func _stand(hero, post: Node3D, range_m: float) -> void:
 	var post_pos := post.global_position
 	var inward := Vector3(-post_pos.x, 0.0, -post_pos.z)

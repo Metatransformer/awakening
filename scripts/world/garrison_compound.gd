@@ -12,6 +12,8 @@ const MAT_FLOOR := preload("res://assets/materials/mat_floor.tres")
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
+const MAT_PROP := preload("res://assets/materials/mat_prop.tres")
+const MAT_EMBER := preload("res://assets/materials/mat_ember.tres")
 
 const COMPOUND_SIZE := Vector2(45.0, 36.0)
 const HALF_X := COMPOUND_SIZE.x * 0.5
@@ -19,38 +21,35 @@ const HALF_Z := COMPOUND_SIZE.y * 0.5
 const WALL_HEIGHT := 6.6
 const ROOF_HEIGHT := 3.45
 const ROOF_THICKNESS := 0.24
-const CLEAR_CIRCULATION := 4.0
-const PARADE_SIZE := Vector2(17.0, 15.0)
-const PARADE_AT := Vector3(0.0, 0.0, -0.5)
-const WEST_WALK_SIZE := Vector2(CLEAR_CIRCULATION, 25.0)
-const WEST_WALK_AT := Vector3(-11.8, 0.0, 1.0)
-const EAST_WALK_SIZE := Vector2(CLEAR_CIRCULATION, 27.0)
-const EAST_WALK_AT := Vector3(11.0, 0.0, 0.5)
-const NORTH_WALK_SIZE := Vector2(27.0, CLEAR_CIRCULATION)
-const NORTH_WALK_AT := Vector3(-0.5, 0.0, -10.1)
-const SOUTH_WALK_SIZE := Vector2(27.0, CLEAR_CIRCULATION)
-const SOUTH_WALK_AT := Vector3(-0.5, 0.0, 9.3)
+const DOOR_CLEARANCE := 2.55
+const PARADE_SIZE := Vector2(16.0, 15.0)
+const PARADE_AT := Vector3(1.0, 0.0, 0.0)
+const GATE_WALK_SIZE := Vector2(5.0, 27.0)
+const GATE_WALK_AT := Vector3(0.0, 0.0, 4.0)
 
-const BARRACKS_FRONT_X := -14.0
-const BARRACKS_BACK_X := -22.1
-const BARRACKS_NORTH_Z := -9.2
-const BARRACKS_SOUTH_Z := 13.6
+const BARRACKS_AT := Vector3(-17.8, 0.0, -12.4)
+const BARRACKS_SIZE := Vector2(8.2, 10.6)
 const BUNK_X := -19.3
+const BUNK_ZS: Array[float] = [-16.75, -14.60, -12.45, -10.30, -8.15]
 
-const ELDER_QUARTERS_AT := Vector3(-18.2, 0.0, -13.8)
-const ELDER_QUARTERS_SIZE := Vector2(8.0, 7.7)
-const MESS_HALL_AT := Vector3(-9.0, 0.0, -14.4)
-const MESS_HALL_SIZE := Vector2(9.0, 6.2)
-const BUILDER_TRAINING_AT := Vector3(-0.4, 0.0, -14.2)
-const BUILDER_TRAINING_SIZE := Vector2(6.8, 5.0)
-const QUARTERMASTER_NOOK_AT := Vector3(17.3, 0.0, 9.5)
-const QUARTERMASTER_NOOK_SIZE := Vector2(7.0, 5.8)
-const JEWELCRAFTER_NOOK_AT := Vector3(17.4, 0.0, 1.5)
-const JEWELCRAFTER_NOOK_SIZE := Vector2(6.4, 4.8)
-const SMITH_NOOK_AT := Vector3(17.6, 0.0, -7.0)
-const SMITH_NOOK_SIZE := Vector2(7.8, 7.8)
-const ALCHEMIST_NOOK_AT := Vector3(7.5, 0.0, -13.3)
-const ALCHEMIST_NOOK_SIZE := Vector2(7.0, 5.4)
+const MESS_HALL_AT := Vector3(-6.9, 0.0, -14.3)
+const MESS_HALL_SIZE := Vector2(9.0, 6.4)
+const LEADER_QUARTERS_AT := Vector3(12.7, 0.0, -13.6)
+const LEADER_QUARTERS_SIZE := Vector2(8.2, 8.0)
+const SMITHY_AT := Vector3(-18.2, 0.0, -4.6)
+const SMITHY_SIZE := Vector2(7.5, 6.5)
+const JEWELCRAFTER_AT := Vector3(-18.2, 0.0, 3.2)
+const JEWELCRAFTER_SIZE := Vector2(7.5, 6.3)
+const BUILDER_WORKSHOP_AT := Vector3(-17.4, 0.0, 11.1)
+const BUILDER_WORKSHOP_SIZE := Vector2(8.8, 6.5)
+const QUARTERMASTER_AT := Vector3(17.4, 0.0, 4.3)
+const QUARTERMASTER_SIZE := Vector2(9.0, 9.0)
+const WEST_SUPPLY_AT := Vector3(-9.2, 0.0, 14.8)
+const WEST_SUPPLY_SIZE := Vector2(7.6, 5.8)
+const EAST_SUPPLY_AT := Vector3(9.2, 0.0, 14.8)
+const EAST_SUPPLY_SIZE := Vector2(7.6, 5.8)
+const GARDEN_AT := Vector3(-7.7, 0.0, 0.0)
+const GARDEN_SIZE := Vector2(7.5, 8.5)
 
 var player_bunk: BunkBed
 var bunk_room: Node3D
@@ -69,11 +68,8 @@ func _ready() -> void:
 	_build_curtain()
 	_build_gatehouse()
 	_build_parade_yard()
-	_build_barracks()
-	_build_elder_quarters()
-	_build_service_nooks()
-	_build_north_wing()
-	_build_cross_corridors()
+	_build_buildings()
+	_build_garden()
 
 
 func port(id: StringName) -> Transform3D:
@@ -92,26 +88,27 @@ func has_port(id: StringName) -> bool:
 ## fort; the HUD never carries a shadow copy of this layout.
 func surface_map_plan() -> Dictionary:
 	var paths: Array[Dictionary] = [
-		_surface_path(_walk_line(WEST_WALK_AT, WEST_WALK_SIZE, false)),
-		_surface_path(_walk_line(EAST_WALK_AT, EAST_WALK_SIZE, false)),
-		_surface_path(_walk_line(NORTH_WALK_AT, NORTH_WALK_SIZE, true)),
-		_surface_path(_walk_line(SOUTH_WALK_AT, SOUTH_WALK_SIZE, true)),
+		_surface_path([Vector3(0.0, 0.0, 15.4), Vector3(0.0, 0.0, -9.8)]),
+		_surface_path([Vector3(-13.7, 0.0, -10.0), Vector3(0.0, 0.0, -9.8),
+			Vector3(12.7, 0.0, -9.6)]),
+		_surface_path([Vector3(-14.45, 0.0, -4.6), Vector3(-12.0, 0.0, -4.6),
+			Vector3(-12.0, 0.0, 11.1), Vector3(-13.0, 0.0, 11.1)]),
+		_surface_path([Vector3(0.0, 0.0, 8.8), Vector3(12.9, 0.0, 8.8),
+			Vector3(12.9, 0.0, 4.3)]),
 	]
-	var barracks_size := Vector2(BARRACKS_FRONT_X - BARRACKS_BACK_X,
-		BARRACKS_SOUTH_Z - BARRACKS_NORTH_Z)
-	var barracks_at := Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5,
-		0.0, (BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5)
 	var areas: Array[Dictionary] = [
 		_surface_rect(Vector3.ZERO, COMPOUND_SIZE, &"ground"),
 		_surface_rect(PARADE_AT, PARADE_SIZE, &"ground"),
-		_surface_rect(barracks_at, barracks_size, &"footprint"),
-		_surface_rect(ELDER_QUARTERS_AT, ELDER_QUARTERS_SIZE, &"footprint"),
+		_surface_rect(BARRACKS_AT, BARRACKS_SIZE, &"footprint"),
 		_surface_rect(MESS_HALL_AT, MESS_HALL_SIZE, &"footprint"),
-		_surface_rect(BUILDER_TRAINING_AT, BUILDER_TRAINING_SIZE, &"footprint"),
-		_surface_rect(QUARTERMASTER_NOOK_AT, QUARTERMASTER_NOOK_SIZE, &"footprint"),
-		_surface_rect(JEWELCRAFTER_NOOK_AT, JEWELCRAFTER_NOOK_SIZE, &"footprint"),
-		_surface_rect(SMITH_NOOK_AT, SMITH_NOOK_SIZE, &"footprint"),
-		_surface_rect(ALCHEMIST_NOOK_AT, ALCHEMIST_NOOK_SIZE, &"footprint"),
+		_surface_rect(LEADER_QUARTERS_AT, LEADER_QUARTERS_SIZE, &"footprint"),
+		_surface_rect(SMITHY_AT, SMITHY_SIZE, &"footprint"),
+		_surface_rect(JEWELCRAFTER_AT, JEWELCRAFTER_SIZE, &"footprint"),
+		_surface_rect(BUILDER_WORKSHOP_AT, BUILDER_WORKSHOP_SIZE, &"footprint"),
+		_surface_rect(QUARTERMASTER_AT, QUARTERMASTER_SIZE, &"footprint"),
+		_surface_rect(WEST_SUPPLY_AT, WEST_SUPPLY_SIZE, &"footprint"),
+		_surface_rect(EAST_SUPPLY_AT, EAST_SUPPLY_SIZE, &"footprint"),
+		_surface_rect(GARDEN_AT, GARDEN_SIZE, &"garden"),
 	]
 	var landmarks: Array[Dictionary] = []
 	paths.make_read_only()
@@ -132,12 +129,12 @@ func _define_ports() -> void:
 	_ports = {
 		&"arrival": _port_at(Vector3(0.0, 0.05, 10.2), 0.0),
 		&"gate": _port_at(Vector3(0.0, 0.05, 15.4), 0.0),
-		&"quartermaster_day": _port_at(Vector3(15.3, 0.05, 9.5), -PI * 0.5),
-		&"jewelcrafter_day": _port_at(Vector3(15.3, 0.05, 1.5), -PI * 0.5),
-		&"smith_day": _port_at(Vector3(15.0, 0.05, -7.0), -PI * 0.5),
-		&"alchemist_day": _port_at(Vector3(7.5, 0.05, -12.5), 0.0),
+		&"quartermaster_day": _port_at(Vector3(15.0, 0.05, 4.3), -PI * 0.5),
+		&"jewelcrafter_day": _port_at(Vector3(-16.0, 0.05, 3.2), PI * 0.5),
+		&"smith_day": _port_at(Vector3(-16.0, 0.05, -4.6), PI * 0.5),
+		&"alchemist_day": _port_at(Vector3(-7.2, 0.05, -2.0), 0.0),
 		&"elder_day": _port_at(Vector3(-0.9, 0.05, 8.0), 0.0),
-		&"builder_day": _port_at(Vector3(-0.4, 0.05, -13.2), 0.0),
+		&"builder_day": _port_at(Vector3(-15.6, 0.05, 11.1), PI * 0.5),
 		&"hearth": _port_at(hearth_at, 0.0),
 		&"quartermaster_bonfire": _facing_port(
 			hearth_at + Vector3(-3.0, 0.0, 0.8), hearth_at),
@@ -152,17 +149,19 @@ func _define_ports() -> void:
 		&"builder_bonfire": _facing_port(
 			hearth_at + Vector3(0.0, 0.0, -3.2), hearth_at),
 		&"quartermaster_sleep": _sleep_port(
-			Vector3(BUNK_X, 0.58, -6.6), PI * 0.5, 1.72),
-		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, -2.3), PI * 0.5, 1.44),
+			Vector3(BUNK_X, 0.58, BUNK_ZS[0]), PI * 0.5, 1.72),
+		&"smith_sleep": _sleep_port(Vector3(BUNK_X, 0.58, BUNK_ZS[1]),
+			PI * 0.5, 1.44),
 		&"alchemist_sleep": _sleep_port(
-			Vector3(BUNK_X, 0.58, 2.0), PI * 0.5, 1.82),
+			Vector3(BUNK_X, 0.58, BUNK_ZS[2]), PI * 0.5, 1.82),
 		&"jewelcrafter_sleep": _sleep_port(
-			Vector3(BUNK_X, 0.58, 6.3), PI * 0.5, 1.63),
-		&"player_bunk": _port_at(Vector3(-16.0, 0.05, 10.6), PI * 0.5),
-		&"elder_sleep": _sleep_port(Vector3(-19.4, 0.58, -14.8), 0.0, 1.74),
-		&"builder_sleep": _sleep_port(Vector3(-12.6, 0.58, -16.3), 0.0, 1.82),
+			Vector3(BUNK_X, 0.58, BUNK_ZS[3]), PI * 0.5, 1.63),
+		&"player_bunk": _port_at(Vector3(-17.25, 0.05, BUNK_ZS[4]), PI * 0.5),
+		&"elder_sleep": _sleep_port(Vector3(11.3, 0.58, -14.8), 0.0, 1.74),
+		&"builder_sleep": _sleep_port(Vector3(-16.0, 0.58, -16.2),
+			-PI * 0.5, 1.82),
 		&"elder_room_camera": _camera_port(
-			Vector3(-14.7, 2.25, -10.2), Vector3(-18.6, 1.0, -14.4)
+			Vector3(12.7, 2.15, -9.9), Vector3(12.2, 1.0, -14.3)
 		),
 	}
 
@@ -177,20 +176,8 @@ func _build_ground() -> void:
 		PARADE_AT + Vector3.UP * 0.008, MAT_FLOOR, false
 	)
 	_floor_slab(
-		ground, "WestWalk", WEST_WALK_SIZE,
-		WEST_WALK_AT + Vector3.UP * 0.009, MAT_FLOOR, false
-	)
-	_floor_slab(
-		ground, "EastWalk", EAST_WALK_SIZE,
-		EAST_WALK_AT + Vector3.UP * 0.009, MAT_FLOOR, false
-	)
-	_floor_slab(
-		ground, "NorthWalk", NORTH_WALK_SIZE,
-		NORTH_WALK_AT + Vector3.UP * 0.010, MAT_FLOOR, false
-	)
-	_floor_slab(
-		ground, "SouthWalk", SOUTH_WALK_SIZE,
-		SOUTH_WALK_AT + Vector3.UP * 0.010, MAT_FLOOR, false
+		ground, "GateWalk", GATE_WALK_SIZE,
+		GATE_WALK_AT + Vector3.UP * 0.009, MAT_FLOOR, false
 	)
 
 
@@ -296,217 +283,380 @@ func _build_parade_yard() -> void:
 		)
 
 
-func _build_barracks() -> void:
-	bunk_room = _group(self, "BunkRoom")
-	var width := BARRACKS_FRONT_X - BARRACKS_BACK_X
-	var length := BARRACKS_SOUTH_Z - BARRACKS_NORTH_Z
-	_floor_slab(
-		bunk_room, "BarracksDeck", Vector2(width, length),
-		Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5, 0.012,
-			(BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5), MAT_FLOOR, false
-	)
-	_solid_box(
-		bunk_room, "BarracksRoof", Vector3(width + 0.35, ROOF_THICKNESS, length + 0.4),
-		Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5, ROOF_HEIGHT,
-			(BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5), MAT_WOOD
-	)
-	_wall(bunk_room, "BarracksNorthWall", width,
-		Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5, 0.0,
-			BARRACKS_NORTH_Z), 0.0, 7311, ROOF_HEIGHT)
-	_wall(bunk_room, "BarracksSouthWall", width,
-		Vector3((BARRACKS_FRONT_X + BARRACKS_BACK_X) * 0.5, 0.0,
-			BARRACKS_SOUTH_Z), PI, 7312, ROOF_HEIGHT)
-	_wall(bunk_room, "BarracksWestWall", length,
-		Vector3(BARRACKS_BACK_X, 0.0,
-			(BARRACKS_NORTH_Z + BARRACKS_SOUTH_Z) * 0.5), PI * 0.5,
-		7313, ROOF_HEIGHT)
-	# The east wall stops around one 2.8 m opening aligned with the player bunk.
-	_wall(bunk_room, "BarracksEastNorthReturn", 18.2,
-		Vector3(BARRACKS_FRONT_X, 0.0, -0.1), -PI * 0.5, 7314, ROOF_HEIGHT)
-	_wall(bunk_room, "BarracksEastSouthReturn", 1.8,
-		Vector3(BARRACKS_FRONT_X, 0.0, 12.7), -PI * 0.5, 7315, ROOF_HEIGHT)
-	_solid_box(
-		bunk_room, "BarracksDoorLintel", Vector3(0.28, 0.65, 2.8),
-		Vector3(BARRACKS_FRONT_X, 3.125, 10.4), MAT_WALL
-	)
+func _build_buildings() -> void:
+	var buildings := _group(self, "Buildings")
+	_build_barracks(buildings)
+	_build_mess_hall(buildings)
+	_build_leader_quarters(buildings)
+	_build_smithy(buildings)
+	_build_jewelcrafter(buildings)
+	_build_builder_workshop(buildings)
+	_build_quartermaster(buildings)
+	_build_supply_rooms(buildings)
 
-	var bunk_zs: Array[float] = [-6.6, -2.3, 2.0, 6.3, 10.6]
-	for index: int in bunk_zs.size():
+
+func _build_barracks(buildings: Node3D) -> void:
+	bunk_room = _group(buildings, "Barracks")
+	_room_shell(bunk_room, "Barracks", BARRACKS_AT, BARRACKS_SIZE,
+		&"east", 2.2, 7310, ROOF_HEIGHT, 2.8)
+	_gabled_roof(bunk_room, "Barracks", BARRACKS_AT, BARRACKS_SIZE,
+		ROOF_HEIGHT + 0.16, deg_to_rad(20.0))
+	for index: int in BUNK_ZS.size():
 		var bunk := BunkBed.new()
-		bunk.name = "PlayerBunk" if index == bunk_zs.size() - 1 else "Bunk%02d" % (index + 1)
-		bunk.player_bunk = index == bunk_zs.size() - 1
-		bunk.position = Vector3(BUNK_X, 0.02, bunk_zs[index])
+		bunk.name = "PlayerBunk" if index == BUNK_ZS.size() - 1 \
+			else "Bunk%02d" % (index + 1)
+		bunk.player_bunk = index == BUNK_ZS.size() - 1
+		bunk.position = Vector3(BUNK_X, 0.02, BUNK_ZS[index])
 		bunk.rotation.y = PI * 0.5
 		bunk_room.add_child(bunk)
 		if bunk.player_bunk:
 			player_bunk = bunk
-	_warm_light(bunk_room, Vector3(-17.2, 2.35, 1.8), 12.0)
-	_warm_light(bunk_room, Vector3(-17.2, 2.35, 9.8), 8.0)
+	_solid_box(bunk_room, "WeaponLocker", Vector3(0.70, 1.85, 1.55),
+		Vector3(-14.35, 0.925, -15.75), MAT_WOOD)
+	_visual_box(bunk_room, "WeaponRack", Vector3(0.18, 1.35, 1.75),
+		Vector3(-14.0, 1.35, -13.8), MAT_IRON)
+	_solid_box(bunk_room, "BuilderBunk", Vector3(2.2, 0.42, 1.15),
+		Vector3(-16.0, 0.23, -16.2), MAT_WOOD)
+	_visual_box(bunk_room, "BuilderBlanket", Vector3(2.0, 0.14, 1.02),
+		Vector3(-16.0, 0.51, -16.2), MAT_FLOOR)
+	_visual_box(bunk_room, "BarracksRunner", Vector3(0.9, 0.035, 7.4),
+		Vector3(-16.6, 0.055, -12.0), MAT_PROP)
+	_interior_light(bunk_room, "InteriorLightNorth",
+		Vector3(-17.2, 2.35, -14.9), 7.0)
+	_interior_light(bunk_room, "InteriorLightSouth",
+		Vector3(-17.2, 2.35, -9.0), 6.5)
 
 
-func _build_elder_quarters() -> void:
-	elder_quarters = _group(self, "ElderQuarters")
-	var room_center := ELDER_QUARTERS_AT
-	var room_size := ELDER_QUARTERS_SIZE
-	_floor_slab(elder_quarters, "ElderDeck", room_size,
-		room_center + Vector3(0.0, 0.013, 0.0), MAT_FLOOR, false)
-	_solid_box(
-		elder_quarters, "ElderRoof", Vector3(room_size.x + 0.3, ROOF_THICKNESS,
-			room_size.y + 0.3),
-		room_center + Vector3(0.0, ROOF_HEIGHT, 0.0), MAT_WOOD
-	)
-	_wall(elder_quarters, "ElderEastWall", room_size.y,
-		Vector3(-14.2, 0.0, room_center.z), -PI * 0.5, 7321, ROOF_HEIGHT)
-	_wall(elder_quarters, "ElderWestWall", room_size.y,
-		Vector3(-22.2, 0.0, room_center.z), PI * 0.5, 7322, ROOF_HEIGHT)
-	_wall(elder_quarters, "ElderNorthWall", room_size.x,
-		Vector3(room_center.x, 0.0, -17.65), 0.0, 7323, ROOF_HEIGHT)
-	# Equal returns keep the 2.6 m south doorway centered on the room and map table.
-	_wall(elder_quarters, "ElderSouthWestReturn", 2.7,
-		Vector3(-20.85, 0.0, -9.95), PI, 7324, ROOF_HEIGHT)
-	_wall(elder_quarters, "ElderSouthEastReturn", 2.7,
-		Vector3(-15.55, 0.0, -9.95), PI, 7325, ROOF_HEIGHT)
-	_solid_box(
-		elder_quarters, "ElderDoorLintel", Vector3(2.6, 0.65, 0.28),
-		Vector3(-18.2, 3.125, -9.95), MAT_WALL
-	)
-	_solid_box(
-		elder_quarters, "ElderBedFrame", Vector3(1.2, 0.38, 2.25),
-		Vector3(-19.4, 0.19, -14.8), MAT_WOOD
-	)
-	_visual_box(
-		elder_quarters, "ElderMattress", Vector3(1.08, 0.16, 2.12),
-		Vector3(-19.4, 0.46, -14.8), MAT_FLOOR
-	)
-	_solid_box(
-		elder_quarters, "MapTable", Vector3(1.8, 0.86, 0.82),
-		Vector3(-16.1, 0.43, -15.4), MAT_WOOD
-	)
-	_visual_box(
-		elder_quarters, "MapWeight", Vector3(0.28, 0.18, 0.28),
-		Vector3(-16.1, 0.95, -15.4), MAT_IRON
-	)
-	_warm_light(elder_quarters, Vector3(-18.0, 2.2, -13.4), 7.0)
-
-
-func _build_service_nooks() -> void:
-	var services := _group(self, "ServiceNooks")
-
-	var quartermaster := _group(services, "QuartermasterNook")
-	_floor_slab(quartermaster, "QuartermasterDeck", QUARTERMASTER_NOOK_SIZE,
-		QUARTERMASTER_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
-	_solid_box(quartermaster, "QuartermasterRoof",
-		Vector3(QUARTERMASTER_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
-			QUARTERMASTER_NOOK_SIZE.y + 0.3),
-		QUARTERMASTER_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
-	_wall(quartermaster, "QuartermasterBackWall", QUARTERMASTER_NOOK_SIZE.y,
-		Vector3(20.8, 0.0, QUARTERMASTER_NOOK_AT.z), -PI * 0.5, 7401, ROOF_HEIGHT)
-	_wall(quartermaster, "QuartermasterNorthWall", QUARTERMASTER_NOOK_SIZE.x,
-		Vector3(QUARTERMASTER_NOOK_AT.x, 0.0, 6.6), 0.0, 7402, ROOF_HEIGHT)
-	_wall(quartermaster, "QuartermasterSouthWall", QUARTERMASTER_NOOK_SIZE.x,
-		Vector3(QUARTERMASTER_NOOK_AT.x, 0.0, 12.4), PI, 7403, ROOF_HEIGHT)
-
-	var jeweller := _group(services, "JewelcrafterNook")
-	_floor_slab(jeweller, "JewelcrafterDeck", JEWELCRAFTER_NOOK_SIZE,
-		JEWELCRAFTER_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
-	_solid_box(jeweller, "JewelcrafterRoof",
-		Vector3(JEWELCRAFTER_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
-			JEWELCRAFTER_NOOK_SIZE.y + 0.3),
-		JEWELCRAFTER_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
-	_wall(jeweller, "JewelcrafterBackWall", JEWELCRAFTER_NOOK_SIZE.y,
-		Vector3(20.6, 0.0, JEWELCRAFTER_NOOK_AT.z), -PI * 0.5, 7411, ROOF_HEIGHT)
-	# Short returns and front posts make this a lighter display pavilion.
-	_wall(jeweller, "JewelcrafterNorthReturn", 3.5,
-		Vector3(18.85, 0.0, -0.9), 0.0, 7412, ROOF_HEIGHT)
-	_wall(jeweller, "JewelcrafterSouthReturn", 3.5,
-		Vector3(18.85, 0.0, 3.9), PI, 7413, ROOF_HEIGHT)
-	for z: float in [-0.75, 3.75]:
-		_solid_box(jeweller, "JewelcrafterFrontPost", Vector3(0.24, ROOF_HEIGHT, 0.24),
-			Vector3(14.35, ROOF_HEIGHT * 0.5, z), MAT_WOOD)
-
-	var smithy := _group(services, "SmithNook")
-	_floor_slab(smithy, "SmithDeck", SMITH_NOOK_SIZE,
-		SMITH_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
-	_solid_box(smithy, "SmithRoof",
-		Vector3(SMITH_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
-			SMITH_NOOK_SIZE.y + 0.3),
-		SMITH_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
-	_wall(smithy, "SmithBackWall", SMITH_NOOK_SIZE.y,
-		Vector3(21.5, 0.0, SMITH_NOOK_AT.z), -PI * 0.5, 7421, ROOF_HEIGHT)
-	_wall(smithy, "SmithNorthWall", SMITH_NOOK_SIZE.x,
-		Vector3(SMITH_NOOK_AT.x, 0.0, -10.9), 0.0, 7422, ROOF_HEIGHT)
-	_wall(smithy, "SmithSouthWall", SMITH_NOOK_SIZE.x,
-		Vector3(SMITH_NOOK_AT.x, 0.0, -3.1), PI, 7423, ROOF_HEIGHT)
-
-	var apothecary := _group(services, "AlchemistNook")
-	_floor_slab(apothecary, "AlchemistDeck", ALCHEMIST_NOOK_SIZE,
-		ALCHEMIST_NOOK_AT + Vector3.UP * 0.014, MAT_FLOOR, false)
-	_solid_box(apothecary, "AlchemistRoof",
-		Vector3(ALCHEMIST_NOOK_SIZE.x + 0.3, ROOF_THICKNESS,
-			ALCHEMIST_NOOK_SIZE.y + 0.3),
-		ALCHEMIST_NOOK_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
-	_wall(apothecary, "AlchemistBackWall", ALCHEMIST_NOOK_SIZE.x,
-		Vector3(ALCHEMIST_NOOK_AT.x, 0.0, -16.0), 0.0, 7431, ROOF_HEIGHT)
-	_wall(apothecary, "AlchemistWestWall", ALCHEMIST_NOOK_SIZE.y,
-		Vector3(4.0, 0.0, ALCHEMIST_NOOK_AT.z), PI * 0.5, 7432, ROOF_HEIGHT)
-	_wall(apothecary, "AlchemistEastWall", ALCHEMIST_NOOK_SIZE.y,
-		Vector3(11.0, 0.0, ALCHEMIST_NOOK_AT.z), -PI * 0.5, 7433, ROOF_HEIGHT)
-
-
-func _build_north_wing() -> void:
-	var north := _group(self, "NorthCommunalAndWork")
-	var mess := _group(north, "MessHall")
-	_floor_slab(mess, "MessHallDeck", MESS_HALL_SIZE,
-		MESS_HALL_AT + Vector3.UP * 0.015, MAT_FLOOR, false)
-	_solid_box(mess, "MessHallRoof",
-		Vector3(MESS_HALL_SIZE.x + 0.3, ROOF_THICKNESS, MESS_HALL_SIZE.y + 0.3),
-		MESS_HALL_AT + Vector3.UP * ROOF_HEIGHT, MAT_WOOD)
-	_wall(mess, "MessHallWestWall", MESS_HALL_SIZE.y,
-		Vector3(-13.5, 0.0, MESS_HALL_AT.z), PI * 0.5, 7501, ROOF_HEIGHT)
-	_wall(mess, "MessHallEastWall", MESS_HALL_SIZE.y,
-		Vector3(-4.5, 0.0, MESS_HALL_AT.z), -PI * 0.5, 7502, ROOF_HEIGHT)
-	_wall(mess, "MessHallNorthWall", MESS_HALL_SIZE.x,
-		Vector3(MESS_HALL_AT.x, 0.0, -17.5), 0.0, 7503, ROOF_HEIGHT)
-	_wall(mess, "MessHallSouthWestReturn", 2.5,
-		Vector3(-12.25, 0.0, -11.3), PI, 7504, ROOF_HEIGHT)
-	_wall(mess, "MessHallSouthEastReturn", 2.5,
-		Vector3(-5.75, 0.0, -11.3), PI, 7505, ROOF_HEIGHT)
-	_solid_box(mess, "MessHallDoorLintel", Vector3(4.0, 0.65, 0.28),
-		Vector3(-9.0, 3.125, -11.3), MAT_WALL)
-	_solid_box(mess, "MessTable", Vector3(4.8, 0.82, 1.1),
-		Vector3(-9.0, 0.41, -14.4), MAT_WOOD)
-	for z: float in [-13.3, -15.5]:
-		_solid_box(mess, "MessBench", Vector3(4.6, 0.46, 0.42),
-			Vector3(-9.0, 0.23, z), MAT_WOOD)
+func _build_mess_hall(buildings: Node3D) -> void:
+	var mess := _group(buildings, "MessHall")
+	_room_shell(mess, "MessHall", MESS_HALL_AT, MESS_HALL_SIZE,
+		&"south", 0.0, 7340, ROOF_HEIGHT, 3.0)
+	_gabled_roof(mess, "MessHall", MESS_HALL_AT, MESS_HALL_SIZE,
+		ROOF_HEIGHT + 0.16, deg_to_rad(17.0))
+	_door_canopy(mess, "MessHall", Vector3(-6.9, 2.85, -10.85),
+		Vector3(3.8, 0.16, 1.5), 0.0)
+	_solid_box(mess, "MessTable", Vector3(5.2, 0.82, 1.05),
+		Vector3(-6.9, 0.41, -14.4), MAT_WOOD)
+	_solid_box(mess, "MessBenchNorth", Vector3(5.0, 0.46, 0.40),
+		Vector3(-6.9, 0.23, -15.35), MAT_WOOD)
+	_solid_box(mess, "MessBenchSouth", Vector3(5.0, 0.46, 0.40),
+		Vector3(-6.9, 0.23, -13.45), MAT_WOOD)
 	_solid_box(mess, "ServingSideboard", Vector3(2.8, 1.0, 0.55),
-		Vector3(-9.0, 0.5, -16.9), MAT_WOOD)
-	_warm_light(mess, Vector3(-9.0, 2.3, -14.2), 8.0)
-
-	var training := _group(north, "BuilderTrainingPocket")
-	_floor_slab(training, "TrainingDeck", BUILDER_TRAINING_SIZE,
-		BUILDER_TRAINING_AT + Vector3.UP * 0.015, MAT_FLOOR, false)
-	for x: float in [-2.7, -0.4, 1.9]:
-		_solid_box(training, "TrainingPost", Vector3(0.34, 2.25, 0.34),
-			Vector3(x, 1.125, -16.0), MAT_WOOD)
-		_visual_box(training, "TrainingCrossbar", Vector3(1.35, 0.20, 0.24),
-			Vector3(x, 1.72, -16.0), MAT_IRON)
+		Vector3(-9.2, 0.5, -17.05), MAT_WOOD)
+	_solid_box(mess, "PantryBarrels", Vector3(1.15, 1.15, 1.15),
+		Vector3(-3.25, 0.575, -16.75), MAT_WOOD)
+	for x: float in [-8.6, -6.9, -5.2]:
+		_visual_box(mess, "TableSetting", Vector3(0.42, 0.06, 0.42),
+			Vector3(x, 0.86, -14.4), MAT_PROP)
+	_visual_box(mess, "HearthGlow", Vector3(1.1, 0.12, 0.45),
+		Vector3(-10.75, 0.15, -15.8), MAT_EMBER)
+	_interior_light(mess, "InteriorLight", Vector3(-6.9, 2.3, -14.2), 7.0)
 
 
-func _build_cross_corridors() -> void:
-	var corridors := _group(self, "CrossCorridors")
-	# These two roof runs close the perimeter route south of the parade yard while
-	# keeping the gatehouse axis and every square metre over the yard open to sky.
-	for sx: float in [-1.0, 1.0]:
-		var x := sx * 8.5
-		_solid_box(
-			corridors, "SouthGalleryRoof", Vector3(11.0, ROOF_THICKNESS, 3.4),
-			Vector3(x, ROOF_HEIGHT, 11.8), MAT_WOOD
-		)
-		for post_x: float in [x - 5.2, x + 5.2]:
-			_solid_box(
-				corridors, "SouthGalleryPost", Vector3(0.24, ROOF_HEIGHT, 0.24),
-				Vector3(post_x, ROOF_HEIGHT * 0.5, 10.2), MAT_WOOD
-			)
+func _build_leader_quarters(buildings: Node3D) -> void:
+	elder_quarters = _group(buildings, "LeaderQuarters")
+	_room_shell(elder_quarters, "Leader", LEADER_QUARTERS_AT,
+		LEADER_QUARTERS_SIZE, &"south", 0.0, 7370, ROOF_HEIGHT, 2.8)
+	_gabled_roof(elder_quarters, "Leader", LEADER_QUARTERS_AT,
+		LEADER_QUARTERS_SIZE, ROOF_HEIGHT + 0.16, deg_to_rad(24.0))
+	_door_canopy(elder_quarters, "Leader", Vector3(12.7, 2.85, -9.45),
+		Vector3(3.5, 0.16, 1.55), 0.0)
+	_solid_box(elder_quarters, "LeaderBedFrame", Vector3(1.2, 0.38, 2.25),
+		Vector3(11.3, 0.19, -14.8), MAT_WOOD)
+	_visual_box(elder_quarters, "LeaderMattress", Vector3(1.08, 0.16, 2.12),
+		Vector3(11.3, 0.46, -14.8), MAT_FLOOR)
+	_solid_box(elder_quarters, "MapDesk", Vector3(2.0, 0.86, 0.82),
+		Vector3(14.3, 0.43, -15.2), MAT_WOOD)
+	_visual_box(elder_quarters, "MapWeight", Vector3(0.28, 0.18, 0.28),
+		Vector3(14.3, 0.95, -15.2), MAT_IRON)
+	_solid_box(elder_quarters, "Bookcase", Vector3(0.55, 2.0, 2.25),
+		Vector3(16.35, 1.0, -12.8), MAT_WOOD)
+	_floor_slab(elder_quarters, "LeaderRug", Vector2(3.0, 2.2),
+		Vector3(13.1, 0.035, -12.5), MAT_PROP, false)
+	_visual_box(elder_quarters, "WallMap", Vector3(2.4, 1.45, 0.05),
+		Vector3(12.9, 1.65, -17.56), MAT_PROP)
+	_solid_box(elder_quarters, "LeaderChest", Vector3(1.45, 0.72, 0.72),
+		Vector3(14.8, 0.36, -10.15), MAT_WOOD)
+	_interior_light(elder_quarters, "InteriorLight",
+		Vector3(12.8, 2.25, -13.6), 7.0)
+
+
+func _build_smithy(buildings: Node3D) -> void:
+	var smithy := _group(buildings, "Smithy")
+	_room_shell(smithy, "Smith", SMITHY_AT, SMITHY_SIZE,
+		&"east", 0.0, 7400, ROOF_HEIGHT, 3.0)
+	_gabled_roof(smithy, "Smith", SMITHY_AT, SMITHY_SIZE,
+		ROOF_HEIGHT + 0.16, deg_to_rad(19.0))
+	_door_canopy(smithy, "Smith", Vector3(-14.3, 2.82, -4.6),
+		Vector3(1.5, 0.16, 3.7), PI * 0.5)
+	_solid_box(smithy, "SmithChimney", Vector3(1.15, 6.0, 1.15),
+		Vector3(-20.7, 3.0, -6.6), MAT_WALL)
+	_visual_box(smithy, "SmithChimneyCap", Vector3(1.45, 0.30, 1.45),
+		Vector3(-20.7, 6.05, -6.6), MAT_IRON)
+	_solid_box(smithy, "CoalBin", Vector3(1.25, 0.72, 1.35),
+		Vector3(-20.55, 0.36, -2.25), MAT_WOOD)
+	_solid_box(smithy, "ForgeBasin", Vector3(1.9, 0.82, 1.55),
+		Vector3(-19.2, 0.41, -6.5), MAT_PROP)
+	_visual_box(smithy, "ForgeCoals", Vector3(1.45, 0.12, 1.05),
+		Vector3(-19.2, 0.88, -6.5), MAT_EMBER)
+	_visual_box(smithy, "ToolRack", Vector3(0.12, 1.35, 2.2),
+		Vector3(-21.91, 1.35, -4.15), MAT_IRON)
+	_interior_light(smithy, "InteriorLight",
+		Vector3(-18.4, 2.25, -4.6), 7.5, Color(1.0, 0.43, 0.16), 4.2)
+
+
+func _build_jewelcrafter(buildings: Node3D) -> void:
+	var jeweller := _group(buildings, "Jewelcrafter")
+	const JEWEL_ROOF := 3.18
+	_room_shell(jeweller, "Jewel", JEWELCRAFTER_AT, JEWELCRAFTER_SIZE,
+		&"east", -0.45, 7430, JEWEL_ROOF, 2.7)
+	_solid_box(jeweller, "JewelDisplayPlinth", Vector3(1.1, 0.82, 1.1),
+		Vector3(-20.35, 0.41, 1.0), MAT_WALL)
+	_solid_box(jeweller, "JewelDisplayPlinthTall", Vector3(0.85, 1.10, 0.85),
+		Vector3(-20.6, 0.55, 5.2), MAT_WALL)
+	_solid_box(jeweller, "JewelStorageShelf", Vector3(0.50, 1.85, 2.3),
+		Vector3(-21.55, 0.925, 3.1), MAT_WOOD)
+	_visual_box(jeweller, "DisplayCloth", Vector3(1.0, 0.06, 1.0),
+		Vector3(-20.35, 0.85, 1.0), MAT_PROP)
+	# An off-centre grille makes the small display frontage read differently
+	# from every other courtyard door without turning it into an open shed.
+	for z: float in [4.65, 5.25, 5.85]:
+		_visual_box(jeweller, "JewelDisplayPost", Vector3(0.18, 2.15, 0.18),
+			Vector3(-14.38, 1.15, z), MAT_IRON)
+	_interior_light(jeweller, "InteriorLight", Vector3(-18.3, 2.15, 3.2),
+		6.2, Color(1.0, 0.62, 0.42), 3.8)
+	_interior_light(jeweller, "DisplayLight", Vector3(-20.2, 1.55, 4.6),
+		3.5, Color(0.82, 0.55, 0.90), 1.5)
+
+
+func _build_builder_workshop(buildings: Node3D) -> void:
+	var workshop := _group(buildings, "BuilderWorkshop")
+	_room_shell(workshop, "Builder", BUILDER_WORKSHOP_AT,
+		BUILDER_WORKSHOP_SIZE, &"east", 0.0, 7460, ROOF_HEIGHT, 2.8)
+	_gabled_roof(workshop, "Builder", BUILDER_WORKSHOP_AT,
+		BUILDER_WORKSHOP_SIZE, ROOF_HEIGHT + 0.16, deg_to_rad(16.0))
+	_solid_box(workshop, "BuilderWorktable", Vector3(3.2, 0.88, 1.15),
+		Vector3(-17.8, 0.44, 10.4), MAT_WOOD)
+	_solid_box(workshop, "TimberStack", Vector3(3.3, 0.65, 0.85),
+		Vector3(-17.4, 0.325, 13.65), MAT_WOOD)
+	for x: float in [-20.7, -18.8]:
+		_solid_box(workshop, "WorkPost", Vector3(0.32, 2.2, 0.32),
+			Vector3(x, 1.1, 9.0), MAT_WOOD)
+		_visual_box(workshop, "WorkCrossbar", Vector3(1.25, 0.18, 0.22),
+			Vector3(x, 1.7, 9.0), MAT_IRON)
+	for offset: float in [-0.9, 0.0, 0.9]:
+		_visual_box(workshop, "TimberBeam", Vector3(3.6, 0.20, 0.20),
+			Vector3(-19.2, 0.78 + offset * 0.16, 12.8 + offset), MAT_WOOD,
+			deg_to_rad(8.0))
+	_interior_light(workshop, "InteriorLight",
+		Vector3(-17.1, 2.3, 11.0), 7.0)
+
+
+func _build_quartermaster(buildings: Node3D) -> void:
+	var depot := _group(buildings, "Quartermaster")
+	_room_shell(depot, "Quartermaster", QUARTERMASTER_AT, QUARTERMASTER_SIZE,
+		&"west", 0.0, 7490, 3.25, 3.1)
+	_door_canopy(depot, "Quartermaster", Vector3(12.75, 2.75, 4.3),
+		Vector3(1.55, 0.16, 3.9), PI * 0.5)
+	_solid_box(depot, "CargoStackNorth", Vector3(2.2, 1.5, 1.6),
+		Vector3(19.7, 0.75, 1.5), MAT_WOOD)
+	_solid_box(depot, "CargoStackSouth", Vector3(2.6, 1.1, 1.8),
+		Vector3(19.4, 0.55, 7.2), MAT_WOOD)
+	_solid_box(depot, "DepotShelves", Vector3(0.55, 1.9, 4.0),
+		Vector3(21.45, 0.95, 4.3), MAT_WOOD)
+	_solid_box(depot, "BarrelStack", Vector3(1.4, 1.2, 1.4),
+		Vector3(16.7, 0.6, 7.7), MAT_WOOD)
+	_solid_box(depot, "LedgerDesk", Vector3(2.2, 0.86, 0.85),
+		Vector3(16.8, 0.43, 1.4), MAT_WOOD)
+	_visual_box(depot, "Ledger", Vector3(0.72, 0.06, 0.48),
+		Vector3(16.8, 0.9, 1.4), MAT_PROP)
+	_interior_light(depot, "InteriorLight", Vector3(17.5, 2.15, 4.3), 8.0)
+
+
+func _build_supply_rooms(buildings: Node3D) -> void:
+	var west := _group(buildings, "WestSupplyRoom")
+	_room_shell(west, "WestSupply", WEST_SUPPLY_AT, WEST_SUPPLY_SIZE,
+		&"north", -0.75, 7520, 3.15, 2.7)
+	_solid_box(west, "SupplyCrates", Vector3(2.2, 1.3, 1.45),
+		Vector3(-10.9, 0.65, 15.4), MAT_WOOD)
+	_solid_box(west, "SupplyBarrels", Vector3(1.25, 1.15, 1.25),
+		Vector3(-7.2, 0.575, 16.1), MAT_WOOD)
+	_visual_box(west, "SupplySacks", Vector3(1.8, 0.52, 1.1),
+		Vector3(-10.7, 0.27, 13.2), MAT_PROP)
+	_interior_light(west, "InteriorLight", Vector3(-9.2, 1.9, 15.2), 5.0,
+		Color(1.0, 0.58, 0.28), 2.5)
+
+	var east := _group(buildings, "EastSupplyRoom")
+	_room_shell(east, "EastSupply", EAST_SUPPLY_AT, EAST_SUPPLY_SIZE,
+		&"north", 0.85, 7550, 3.28, 3.0)
+	_solid_box(east, "CargoStack", Vector3(2.6, 1.0, 1.6),
+		Vector3(10.8, 0.5, 16.25), MAT_WOOD)
+	_solid_box(east, "TallCrate", Vector3(1.15, 1.75, 1.15),
+		Vector3(6.8, 0.875, 15.5), MAT_WOOD)
+	_visual_box(east, "HangingRack", Vector3(2.1, 0.18, 0.55),
+		Vector3(9.1, 2.15, 17.3), MAT_IRON)
+	_visual_box(east, "SupplyBundles", Vector3(1.65, 0.48, 1.3),
+		Vector3(7.2, 0.25, 13.2), MAT_PROP)
+	_interior_light(east, "InteriorLight", Vector3(9.2, 1.95, 15.0), 5.0,
+		Color(1.0, 0.65, 0.32), 2.4)
+
+
+func _build_garden() -> void:
+	var garden := _group(self, "Garden")
+	_floor_slab(garden, "GardenGround", GARDEN_SIZE,
+		GARDEN_AT + Vector3.UP * 0.012, MAT_GRASS, false)
+	# Low perimeter rails stop at a north gate and an east gate. Both openings
+	# are obvious from the court, and neither turns the garden into a collision
+	# pocket around the alchemist's customer side.
+	_solid_box(garden, "GardenFenceWest", Vector3(0.16, 0.62, GARDEN_SIZE.y),
+		Vector3(-11.45, 0.31, 0.0), MAT_WOOD)
+	_solid_box(garden, "GardenFenceSouth", Vector3(GARDEN_SIZE.x, 0.62, 0.16),
+		Vector3(-7.7, 0.31, 4.25), MAT_WOOD)
+	_solid_box(garden, "GardenFenceNorthWest", Vector3(2.85, 0.62, 0.16),
+		Vector3(-10.025, 0.31, -4.25), MAT_WOOD)
+	_solid_box(garden, "GardenFenceNorthEast", Vector3(2.85, 0.62, 0.16),
+		Vector3(-5.375, 0.31, -4.25), MAT_WOOD)
+	_solid_box(garden, "GardenFenceEastNorth", Vector3(0.16, 0.62, 3.35),
+		Vector3(-3.95, 0.31, -2.575), MAT_WOOD)
+	_solid_box(garden, "GardenFenceEastSouth", Vector3(0.16, 0.62, 3.35),
+		Vector3(-3.95, 0.31, 2.575), MAT_WOOD)
+
+	for row: int in 3:
+		var x := -10.55 + float(row) * 1.0
+		_visual_box(garden, "GardenCropRow%02d" % (row + 1),
+			Vector3(0.78, 0.10, 5.0), Vector3(x, 0.10, 1.2), MAT_WOOD)
+		for plant: int in 4:
+			_visual_box(garden, "GardenPlantMass%02d_%02d" % [row + 1, plant + 1],
+				Vector3(0.62, 0.38 + 0.06 * float((row + plant) % 2), 0.55),
+				Vector3(x, 0.29, -0.45 + float(plant) * 1.1), MAT_GRASS)
+
+	_solid_box(garden, "GardenWaterButt", Vector3(1.15, 0.82, 1.15),
+		Vector3(-5.2, 0.41, 2.85), MAT_WOOD)
+	_visual_box(garden, "GardenWaterRim", Vector3(1.35, 0.16, 1.35),
+		Vector3(-5.2, 0.88, 2.85), MAT_IRON)
+	for index: int in 4:
+		_visual_box(garden, "GardenPathBoard%02d" % (index + 1),
+			Vector3(0.85, 0.08, 1.3), Vector3(-4.55 - float(index) * 0.9,
+				0.08, 0.05), MAT_WOOD, PI * 0.5)
+
+	for x: float in [-8.9, -5.5]:
+		for z: float in [-3.75, -1.75]:
+			_solid_box(garden, "AlchemistTrellisPost", Vector3(0.16, 2.5, 0.16),
+				Vector3(x, 1.25, z), MAT_WOOD)
+	_visual_box(garden, "AlchemistTrellisCanopy", Vector3(3.7, 0.16, 2.3),
+		Vector3(-7.2, 2.55, -2.75), MAT_WOOD)
+	_interior_light(garden, "GardenTaskLight", Vector3(-7.2, 2.1, -2.2), 3.6,
+		Color(0.78, 0.86, 0.48), 1.15)
+
+
+func _room_shell(
+		parent: Node3D,
+		label: String,
+		at: Vector3,
+		size: Vector2,
+		door_side: StringName,
+		door_offset: float,
+		seed: int,
+		roof_height: float,
+		door_width: float
+	) -> void:
+	_floor_slab(parent, "%sDeck" % label, size,
+		at + Vector3.UP * 0.014, MAT_FLOOR, false)
+	_solid_box(parent, "%sRoof" % label,
+		Vector3(size.x + 0.30, ROOF_THICKNESS, size.y + 0.30),
+		at + Vector3.UP * roof_height, MAT_WOOD)
+
+	var west_x := at.x - size.x * 0.5
+	var east_x := at.x + size.x * 0.5
+	var north_z := at.z - size.y * 0.5
+	var south_z := at.z + size.y * 0.5
+	var lintel_height := roof_height - DOOR_CLEARANCE
+	var lintel_y := DOOR_CLEARANCE + lintel_height * 0.5
+	match door_side:
+		&"north", &"south":
+			_wall(parent, "%sWestWall" % label, size.y,
+				Vector3(west_x, 0.0, at.z), PI * 0.5, seed, roof_height)
+			_wall(parent, "%sEastWall" % label, size.y,
+				Vector3(east_x, 0.0, at.z), -PI * 0.5, seed + 1, roof_height)
+			var door_x := at.x + door_offset
+			var door_left := door_x - door_width * 0.5
+			var door_right := door_x + door_width * 0.5
+			var west_return := door_left - west_x
+			var east_return := east_x - door_right
+			var door_z := north_z if door_side == &"north" else south_z
+			var opposite_z := south_z if door_side == &"north" else north_z
+			var door_yaw := 0.0 if door_side == &"north" else PI
+			var opposite_yaw := PI if door_side == &"north" else 0.0
+			var side_word := "North" if door_side == &"north" else "South"
+			var opposite_word := "South" if door_side == &"north" else "North"
+			_wall(parent, "%s%sWall" % [label, opposite_word], size.x,
+				Vector3(at.x, 0.0, opposite_z), opposite_yaw, seed + 2, roof_height)
+			_wall(parent, "%s%sWestReturn" % [label, side_word], west_return,
+				Vector3(west_x + west_return * 0.5, 0.0, door_z),
+				door_yaw, seed + 3, roof_height)
+			_wall(parent, "%s%sEastReturn" % [label, side_word], east_return,
+				Vector3(door_right + east_return * 0.5, 0.0, door_z),
+				door_yaw, seed + 4, roof_height)
+			_solid_box(parent, "%sDoorLintel" % label,
+				Vector3(door_width, lintel_height, 0.28),
+				Vector3(door_x, lintel_y, door_z), MAT_WALL)
+		&"east", &"west":
+			_wall(parent, "%sNorthWall" % label, size.x,
+				Vector3(at.x, 0.0, north_z), 0.0, seed, roof_height)
+			_wall(parent, "%sSouthWall" % label, size.x,
+				Vector3(at.x, 0.0, south_z), PI, seed + 1, roof_height)
+			var door_z := at.z + door_offset
+			var door_north := door_z - door_width * 0.5
+			var door_south := door_z + door_width * 0.5
+			var north_return := door_north - north_z
+			var south_return := south_z - door_south
+			var door_x := east_x if door_side == &"east" else west_x
+			var opposite_x := west_x if door_side == &"east" else east_x
+			var door_yaw := -PI * 0.5 if door_side == &"east" else PI * 0.5
+			var opposite_yaw := PI * 0.5 if door_side == &"east" else -PI * 0.5
+			var side_word := "East" if door_side == &"east" else "West"
+			var opposite_word := "West" if door_side == &"east" else "East"
+			_wall(parent, "%s%sWall" % [label, opposite_word], size.y,
+				Vector3(opposite_x, 0.0, at.z), opposite_yaw, seed + 2, roof_height)
+			_wall(parent, "%s%sNorthReturn" % [label, side_word], north_return,
+				Vector3(door_x, 0.0, north_z + north_return * 0.5),
+				door_yaw, seed + 3, roof_height)
+			_wall(parent, "%s%sSouthReturn" % [label, side_word], south_return,
+				Vector3(door_x, 0.0, door_south + south_return * 0.5),
+				door_yaw, seed + 4, roof_height)
+			_solid_box(parent, "%sDoorLintel" % label,
+				Vector3(0.28, lintel_height, door_width),
+				Vector3(door_x, lintel_y, door_z), MAT_WALL)
+		_:
+			push_error("GarrisonCompound: unsupported room door side '%s'." % door_side)
+
+
+func _gabled_roof(parent: Node3D, label: String, at: Vector3,
+		size: Vector2, base_y: float, pitch: float) -> void:
+	# The flat collider below remains a reliable ceiling; these lightweight roof
+	# planes create distinct civic silhouettes without adding snaggy collision.
+	var half_run := size.x * 0.5
+	var panel_run := half_run / cos(pitch)
+	var rise := tan(pitch) * half_run
+	for side: float in [-1.0, 1.0]:
+		var panel := _visual_box(parent, "%sRoofPitch" % label,
+			Vector3(panel_run + 0.35, 0.18, size.y + 0.55),
+			at + Vector3(side * size.x * 0.25, base_y + rise * 0.5, 0.0),
+			MAT_WOOD)
+		panel.rotation.z = -side * pitch
+	_visual_box(parent, "%sRoofRidge" % label, Vector3(0.24, 0.28, size.y + 0.7),
+		at + Vector3(0.0, base_y + rise + 0.05, 0.0), MAT_IRON)
+
+
+func _door_canopy(parent: Node3D, label: String, at: Vector3,
+		size: Vector3, yaw: float) -> void:
+	_visual_box(parent, "%sDoorCanopy" % label, size, at, MAT_WOOD, yaw)
+	for side: float in [-1.0, 1.0]:
+		var offset := Vector3(side * size.x * 0.42, -0.65, 0.0)
+		if absf(yaw) > 0.1:
+			offset = Vector3(0.0, -0.65, side * size.z * 0.42)
+		_visual_box(parent, "%sCanopyPost" % label, Vector3(0.14, 1.3, 0.14),
+			at + offset, MAT_WOOD)
 
 
 func _floor_slab(
@@ -622,11 +772,18 @@ func _group(parent: Node3D, node_name: String) -> Node3D:
 	return group
 
 
-func _warm_light(parent: Node3D, at: Vector3, reach: float) -> void:
+func _interior_light(
+		parent: Node3D,
+		node_name: String,
+		at: Vector3,
+		reach: float,
+		color: Color = Color(1.0, 0.62, 0.30),
+		energy: float = 3.6
+	) -> void:
 	var light := OmniLight3D.new()
-	light.name = &"NightLantern"
-	light.light_color = Color(1.0, 0.62, 0.30)
-	light.light_energy = 3.6
+	light.name = node_name
+	light.light_color = color
+	light.light_energy = energy
 	light.omni_range = reach
 	light.position = at
 	parent.add_child(light)

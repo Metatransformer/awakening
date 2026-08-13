@@ -14,6 +14,9 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 9.0)
 	Game.restore_garrison({})
+	Game.tool_durabilities.erase(ToolDb.FISHING_ROD_ID)
+	Game.items.erase(ToolDb.FISHING_ROD_ID)
+	Game.grant(ToolDb.FISHING_ROD_ID)
 	Run.reset()
 	await rig.wait_frames(6)
 
@@ -115,8 +118,8 @@ func _check_direct_start_and_cancel(rig, fishing: FishingHole) -> void:
 	rig.check(fishing.state_name() == &"casting" and Prompt.blocked,
 		"begin enters CASTING directly and owns input")
 	rig.check(fishing.feedback_mode_name() == &"casting"
-		and fishing.feedback_visual_text() == "CAST",
-		"direct CASTING presents only the compact cast instrument")
+		and fishing.feedback_visual_text().begins_with("CAST ROD "),
+		"direct CASTING presents the compact cast instrument and Rod condition")
 	await rig.wait_frames(3)
 	await rig.capture("fishing_01_casting.png")
 	await rig.tap([&"ui_cancel"])
@@ -160,6 +163,7 @@ func _check_named_catch(rig, fishing: FishingHole,
 	rig.check(Run.collect(fish_id, 1) == 1,
 		"one Crown Pike seeds the real bag stack")
 	var before := _civil_minute()
+	var durability_before := Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var catch_before := fishing_sfx_events.count(&"fishing_catch")
 	if not await _cast_named(rig, fishing, fish_id):
 		return
@@ -222,8 +226,10 @@ func _check_named_catch(rig, fishing: FishingHole,
 		"catch records daily yield without teleporting food into garrison stock")
 	rig.check(_civil_minute() == before + 10,
 		"successful named catch advances exactly ten civil minutes")
-	rig.check(fishing.feedback_visual_text() == "CROWN PIKE • • • •",
+	rig.check(fishing.feedback_visual_text().begins_with("CROWN PIKE • • • • ROD "),
 		"success card names Crown Pike and shows its four tier pips")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID) == durability_before - 1,
+		"a resolved catch spends exactly one Rod use")
 	rig.check(fishing_sfx_events.count(&"fishing_catch") == catch_before + 1,
 		"named success emits exactly one catch cue")
 	await rig.wait_frames(4)
@@ -249,6 +255,7 @@ func _check_missed_window(rig, fishing: FishingHole,
 	Game.restore_garrison({})
 	Clock.set_time(3, 12.0)
 	var before := _civil_minute()
+	var durability_before := Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var fail_before := fishing_sfx_events.count(&"fishing_fail")
 	if not await _cast_named(rig, fishing, SupplyCargoDb.POND_SHINER_ID):
 		return
@@ -266,6 +273,8 @@ func _check_missed_window(rig, fishing: FishingHole,
 		"missed hook reaches failure and adds no fish cargo")
 	rig.check(_civil_minute() == before + 10,
 		"missed hook advances exactly ten civil minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID) == durability_before - 1,
+		"a missed hook spends exactly one Rod use")
 	rig.check(fishing_sfx_events.count(&"fishing_fail") == fail_before + 1,
 		"missed hook emits exactly one fail cue")
 	await rig.wait_frames(4)

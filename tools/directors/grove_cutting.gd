@@ -17,6 +17,7 @@ func run(rig) -> void:
 	Run.reset()
 	Game.set_flag(StoryDb.told_flag(&"elder", &"timber_duty"))
 	Game.grant(ShopDb.WOODSMAN_AXE_ID)
+	var axe_maximum := Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
 
 	await rig.wait_physics_frames(4)
@@ -62,6 +63,8 @@ func run(rig) -> void:
 		return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1, 2.0)
 	rig.release(&"interact")
 	rig.check(harvested, "the axe impact awards exact Firewood cargo to the Run bag")
+	rig.check(Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == axe_maximum - 1,
+		"the successful tree impact spends exactly one Axe use")
 	rig.check(heard_cues == [HarvestTree.SFX_AXE_HIT, HarvestTree.SFX_TREE_FALL],
 		"the committed impact requests one axe hit and one tree-fall cue")
 	rig.check(_positional_voice_playing(HarvestTree.SFX_AXE_HIT)
@@ -86,10 +89,13 @@ func run(rig) -> void:
 
 	var second: HarvestTree = outskirts.harvest_trees[1]
 	second.activate(hero)
+	var before_refusal := Game.tool_durability(ToolDb.WOODSMAN_AXE_ID)
 	await rig.wait_seconds(0.1)
 	rig.check(not hero.woodsman_chopping()
 		and int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1,
 		"a second tree refuses because today's chop is complete, not because cargo is held")
+	rig.check(Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == before_refusal,
+		"the same-day refusal spends no Axe use")
 	Clock.set_time(2, 10.0)
 	await rig.wait_physics_frames(3)
 	rig.check(not stump.visible and tree.enabled

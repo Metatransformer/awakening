@@ -110,8 +110,8 @@ func _catalogue() -> void:
 # --- P. The armour split ----------------------------------------------------
 ## docs/GDD.md §6.6, and the beat that would have caught the tuning trap the GDD
 ## warns about by name: four pieces each carrying `[0, 1, 2, 3]` is TWELVE
-## quarter-hearts against a bestiary tuned for three, which would put every blow
-## in the game on `Hero.hurt`'s one-quarter floor.
+## HP against a bestiary tuned for three, which would put every blow
+## in the game on `Hero.hurt`'s 1 HP floor.
 ##
 ## Run on a scratch `upgrades` and put back afterwards, because every later beat
 ## in this file is written against the rungs it buys itself.
@@ -140,7 +140,7 @@ func _plate_split() -> void:
 		Game.upgrades[Game.plate_track(piece, Game.PLATE_HEAVY)] = K.FORGE_MAX
 	print("PLATE full-heavy soak=%.2f speed=%.4f" % [
 		Game.armour_soak_exact(), Game.speed_mult()])
-	_ck("P1 four heavy pieces soak 4 quarters",
+	_ck("P1 four heavy pieces soak 4 HP",
 		is_equal_approx(Game.armour_soak_exact(), 4.0))
 	_ck("P2 and cost exactly 8% of the run (never K.RUN_SPEED itself)",
 		is_equal_approx(snappedf(Game.speed_mult(), 0.0001), 0.92))
@@ -150,7 +150,7 @@ func _plate_split() -> void:
 		Game.upgrades[Game.plate_track(piece, Game.PLATE_LIGHT)] = K.FORGE_MAX
 	print("PLATE full-light soak=%.2f speed=%.4f" % [
 		Game.armour_soak_exact(), Game.speed_mult()])
-	_ck("P3 four light pieces soak 2 quarters",
+	_ck("P3 four light pieces soak 2 HP",
 		is_equal_approx(Game.armour_soak_exact(), 2.0))
 	_ck("P4 and cost nothing at all", is_equal_approx(Game.speed_mult(), 1.0))
 
@@ -237,17 +237,19 @@ func _pouch(rig) -> void:
 # --- C and D. The smith -----------------------------------------------------
 
 func _smith(rig) -> void:
-	# THE COUNTER IS THIRTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
+	# THE COUNTER IS FIFTEEN LINES ONLY IF YOU OWN THE BOW AND THE HOOKSHOT AND
 	# HAVE COMMITTED NO ARMOUR PIECE.
 	# `ShopDb.GATED_BY` hides the `string` and `chain` ladders until the weapon
 	# they sharpen is owned (docs/SCOPE.md M1), and `Game.STARTER_KIT` is empty
-	# now -- so a cold boot stands at this counter and sees TEN rows, not twelve.
+	# now -- so a cold boot stands at this counter and sees TWELVE rows, not
+	# fifteen. Pickaxe and Fishing Rod are always stocked; the Woodsman's Axe
+	# retains Aldric's assignment gate.
 	# From the other end, each of the four armour pieces drops its losing path the
-	# moment it commits (GDD §6.6), so a finished hero sees eight. The count
+	# moment it commits (GDD §6.6). The count
 	# asserted below is the widest the board ever gets, which is also the one the
 	# panel has to be able to draw.
 	#
-	# **It was fifteen until card #91.** Arrows, bag slots and hearts left the
+	# **It was fifteen until card #91.** Arrows, bag slots and max-health upgrades left the
 	# forge for the quartermaster's Trade and Upgrades services (`SupplyDb`) when the smith went behind
 	# the floor 1 miniboss -- with him gone for the whole first hour, those three
 	# were the lines a new save could not otherwise reach.
@@ -274,9 +276,9 @@ func _smith(rig) -> void:
 	if screen == null:
 		print("FORGE FAIL the smith did not open")
 		return
-	_ck("C0 the smith lists thirteen lines (4 + armour's 4x2 + fletching), got %d"
-		% screen._rows.size(), screen._rows.size() == 13)
-	# Thirteen rows against a panel that fits about thirteen. The window is the
+	_ck("C0 the smith lists fifteen lines (4 + armour's 4x2 + 2 tools + fletching), got %d"
+		% screen._rows.size(), screen._rows.size() == 15)
+	# Fifteen rows against a panel that fits about thirteen. The window is the
 	# only reason the boots are reachable at all, and a list that silently ran
 	# off the bottom would look exactly like a list that was complete.
 	_ck("C0b the panel windows rather than overflowing",
@@ -575,6 +577,11 @@ func _descend(rig) -> void:
 	for _i in 12:
 		await rig.wait_frames(8)
 		if Run.in_dungeon:
+			break
+		# The scene can be freed one frame before Run publishes the destination.
+		# At that point the held gate has already succeeded; wait for the new scene
+		# instead of dereferencing the old garrison during the hand-off.
+		if not is_instance_valid(garrison):
 			break
 		if Prompt.focus != garrison.gate:
 			_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))

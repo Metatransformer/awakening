@@ -78,8 +78,9 @@ active proof and not a prerequisite for the raid.
   It is a utility tool, not a weapon or hand slot.
 - The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
   a visible side grove of individually harvestable trees. Holding at one with
-  the axe plays the work, fells that trunk to a stump, and yields at most one
-  exact **Firewood Bundle** per campaign day during Daytime. The bundle enters
+  the axe plays the work, fells that trunk to a stump, spends one use only at
+  the successful impact, and yields at most one exact **Firewood Bundle** per
+  campaign day during Daytime. The bundle enters
   the Run bag, stacks to **five per slot**, and is carried to the supply box just
   inside the south gate.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
@@ -107,9 +108,10 @@ The exact item, service, and economy contracts remain with
 
 Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
 garrison outskirts. Its dock, rod rack, creel, and water make the opportunity
-readable while the route beyond remains physically closed. The rod belongs to
-this location; it is not a weapon, tool-manifest entry, bag item, wheel item, or
-shop good.
+readable while the route beyond remains physically closed. Brannoc forges or
+fully reforges its durable Fishing Rod for 45 gold, one Iron Scrap, and one
+deposited Firewood Bundle. It has ten uses, remains known and **BROKEN** at zero,
+and is not a weapon, hand slot, bag item, wheel item, sale good, or combat verb.
 
 Interacting enters **CASTING** directly; there is no target or species selection.
 Releasing the cast rolls one named fish from the pond's spot-level table, then
@@ -149,8 +151,9 @@ exact:
 - Stored reserve capacity never prevents fishing while the bag has room. A
   deposit fills only the remaining reserve capacity and leaves every overflow
   species and count exact in the bag.
-- A successful or failed attempt advances the civil clock by **ten minutes**.
-  Cancelling exits lawfully and advances no time.
+- A successful or failed attempt advances the civil clock by **ten minutes**
+  and spends one Rod use. Cancelling exits lawfully, advances no time, and
+  spends no durability.
 - At **20:00**, supper consumes at most one stored Fish. A served supper makes
   the current Fed cause active and prepares Well Fed. An empty supper clears
   the current Fed cause but does not erase a previously prepared, unused Well

@@ -79,10 +79,9 @@ var _rows: Array[Dictionary] = []
 ## an extraction brings the whole bag home and splitting it in two would be the
 ## screen inventing a distinction the ending did not make.
 var _kept: Array[Dictionary] = []
-## Only the newly awarded, known observations named on this receipt. This is
-## deliberately not derived from the database or the saved awarded set: either
-## would turn the debrief into a checklist of observations the player has not
-## seen.
+## Only the newly completed, known observations named on this receipt. This is
+## deliberately not derived from the database or the full completed set: either
+## would make an old entry look newly learned on every return.
 var _field_notes: Array[StringName] = []
 var _age: float = 0.0
 var _armed: bool = false
@@ -180,7 +179,7 @@ func _valid_field_notes() -> Array[StringName]:
 		if not value is StringName and not value is String:
 			continue
 		var id: StringName = StringName(value)
-		if Game.has_field_observation(id) and not out.has(id) \
+		if Game.has_completed_field_observation(id) and not out.has(id) \
 				and not FieldNotesDb.display_text(id).is_empty():
 			out.append(id)
 	return out
@@ -367,7 +366,7 @@ func _build_body(parent: Node, dead: bool, accent: Color) -> void:
 	_build_total(col, dead)
 
 
-## The observations awarded by this debrief, and no others. Two compact columns
+## The observations completed by this debrief, and no others. Two compact columns
 ## keep the worst case (all five observations) to three short rows at 720p.
 func _build_field_notes(parent: Node) -> void:
 	if _field_notes.is_empty():
@@ -387,15 +386,15 @@ func _build_field_notes(parent: Node) -> void:
 	col.add_child(header)
 
 	var title_label := Label.new()
-	title_label.text = "FIELD NOTES"
+	title_label.text = "FIELD NOTES READY"
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	UITheme.apply_text_style(title_label, UITheme.TYPE_H3)
 	header.add_child(title_label)
 
-	var total := Label.new()
-	total.text = "New total: %s" % FieldNotesDb.format_currency(Game.field_notes)
-	UITheme.apply_text_style(total, UITheme.TYPE_PARAGRAPH_2, UITheme.SUCCESS)
-	header.add_child(total)
+	var filing_hint := Label.new()
+	filing_hint.text = "FILE THEM IN THE BOOK BY THE BED"
+	UITheme.apply_text_style(filing_hint, UITheme.TYPE_PARAGRAPH_2, UITheme.SUCCESS)
+	header.add_child(filing_hint)
 
 	var awards := GridContainer.new()
 	awards.columns = 2
@@ -414,10 +413,10 @@ func _build_field_notes(parent: Node) -> void:
 		UITheme.apply_text_style(observed, UITheme.TYPE_CAPTION, UITheme.TEXT)
 		line.add_child(observed)
 
-		var award := Label.new()
-		award.text = "+1 Field Note"
-		UITheme.apply_text_style(award, UITheme.TYPE_CAPTION, UITheme.SUCCESS)
-		line.add_child(award)
+		var status := Label.new()
+		status.text = "READY TO FILE"
+		UITheme.apply_text_style(status, UITheme.TYPE_CAPTION, UITheme.SUCCESS)
+		line.add_child(status)
 
 
 ## The bag, and the cross through it.

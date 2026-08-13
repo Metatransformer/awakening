@@ -113,7 +113,7 @@ func _corpse_launch(rig, scene: Node, out: String) -> void:
 	foe.global_position = FOE_AT
 	await rig.wait_physics_frames(4)
 
-	var hit := Hit.make(foe.health.max_quarters + K.HEART,
+	var hit := Hit.make(foe.health.max_health_points + 4,
 		foe.global_position + Vector3.LEFT * 1.2 + Vector3.UP * 0.8,
 		&"sword", K.KNOCKBACK_HEAVY, K.STUN_LIGHT)
 	foe.health.apply_hit(hit)

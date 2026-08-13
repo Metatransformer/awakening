@@ -21,15 +21,15 @@ extends RefCounted
 
 ## Every draught, in the order the alchemist lists them.
 const IDS: Array[StringName] = [
-	&"heart_draught", &"ironhide_draught", &"emberblood_draught",
+	&"health_draught", &"ironhide_draught", &"emberblood_draught",
 ]
 
 const DEFS := {
-	&"heart_draught": {
-		"name": "Heart Draught",
-		"short": "HEART",
+	&"health_draught": {
+		"name": "Health Draught",
+		"short": "HP",
 		"tint": Color(0.88, 0.25, 0.22),
-		"blurb": "Thick, and warm going down. Two hearts, and it does not ask "
+		"blurb": "Thick, and warm going down. Eight HP, and it does not ask "
 			+ "where you are standing.",
 	},
 	&"ironhide_draught": {
@@ -90,12 +90,12 @@ static func blurb_of(id: StringName) -> String:
 ## worse than no line at all.
 static func effect_of(id: StringName) -> String:
 	match id:
-		&"heart_draught":
-			return "+%.1f hearts, at once" % (float(K.DRAUGHT_HEAL) / float(K.HEART))
+		&"health_draught":
+			return "+%d HP, at once" % K.DRAUGHT_HEAL
 		&"ironhide_draught":
-			return "-%d quarters off every blow, %ds" % [K.DRAUGHT_PLATE, int(K.DRAUGHT_TIME)]
+			return "-%d HP off every blow, %ds" % [K.DRAUGHT_PLATE, int(K.DRAUGHT_TIME)]
 		&"emberblood_draught":
-			return "+%d quarters a swing, %ds" % [K.DRAUGHT_EDGE, int(K.DRAUGHT_TIME)]
+			return "+%d HP a swing, %ds" % [K.DRAUGHT_EDGE, int(K.DRAUGHT_TIME)]
 	return ""
 
 
@@ -107,7 +107,7 @@ static func effect_of(id: StringName) -> String:
 ## a second one would be a second thing to pause wrongly.
 static func apply(id: StringName) -> bool:
 	match id:
-		&"heart_draught":
+		&"health_draught":
 			Game.heal(K.DRAUGHT_HEAL)
 		&"ironhide_draught", &"emberblood_draught":
 			# Re-drinking REPLACES the clock rather than stacking it. Stacking

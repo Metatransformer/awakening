@@ -173,7 +173,7 @@ func _owned_board() -> void:
 	var saved_upgrades: Dictionary[StringName, int] = Game.upgrades.duplicate()
 	var saved_gold := Game.gold
 	Game.upgrades[&"bag_slot"] = int(SupplyDb.LIMITS[&"bag_slot"])
-	Game.upgrades[&"heart"] = int(SupplyDb.LIMITS[&"heart"])
+	Game.upgrades[&"health"] = int(SupplyDb.LIMITS[&"health"])
 
 	var screen := _open(TradeScreen.Mode.PROGRESSION, "THE QUARTERMASTER",
 		SupplyDb, &"quartermaster", "Upgrades")
@@ -212,9 +212,9 @@ func _owned_board() -> void:
 	await _key(KEY_UP)
 	_ck(screen._ladder.focus_is_tab(), "D8 UP enters the upgrade tab strip")
 	await _key(KEY_RIGHT)
-	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"heart"])
+	_ck(screen.line_count() == int(SupplyDb.LIMITS[&"health"])
 			and screen._detail._title.text == screen.cursor_label(),
-		"D9 RIGHT changes to Vitality and refreshes its inspector")
+		"D9 RIGHT changes to Health and refreshes its inspector")
 	await _rig.capture(_out.path_join("d_owned_read_only.png"))
 
 	screen.close()

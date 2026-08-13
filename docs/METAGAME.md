@@ -100,7 +100,9 @@ banked Heat premium and is also the value used by extraction.
 The ten ingredients are saleable merchandise. They occupy bag cells, can be
 lost, and become gold only when sold at the quartermaster. Selling is a choice:
 some common ingredients can instead be consumed by a named supply recipe such
-as fletching.
+as fletching. Iron Scrap retains that ordinary sale-good lane, but Brannoc's
+three utility-tool recipes may consume it directly from the returned bag; this
+is the explicit reason not to sell every unmarked stack automatically.
 
 ### Components
 
@@ -112,6 +114,54 @@ Forge, alchemy, and jewellery components remain separate recipe families. A
 component has one bench and does not appear in another counter's recipes. Exact
 component identities, stack sizes, and catalogue roles belong to
 [ITEMS.md](ITEMS.md).
+
+Riveted Plate feeds Brannoc's forge and, together with Tension Coil, the
+Builder's already-authored West Gate Bolt-Thrower. Those shared metal demands
+create allocation; mining does not create a new material family or currency.
+
+### Durable utility tools and mining
+
+Brannoc's utility-tool transactions are fixed:
+
+| Tool | Full durability | First forge or full reforge |
+|---|---:|---|
+| Woodsman's Axe | **8 uses** | **60 gold + 3 Iron Scrap** |
+| Pickaxe | **12 uses** | **75 gold + 3 Iron Scrap** |
+| Fishing Rod | **10 uses** | **45 gold + 1 Iron Scrap + 1 stored Firewood bundle** |
+
+A reforge is the same full bill and restores the maximum; there is no prorated
+repair. A known zero-use tool remains **BROKEN** and eligible for reforge.
+Positive durability mirrors into ordinary item ownership only for compatibility,
+and utility tools never become carried stock, bag value, sale goods, armaments,
+or combat equipment.
+
+The three durability spends occur only at the work's commitment point: a
+successful daily tree impact for the Axe, every resolved success or failure for
+the Rod with no spend on cancel, and a committed intact-vein impact for the
+Pickaxe. The Rod's Firewood is removed from the stored hearth, so the player
+must complete the ordinary daily grove-to-hearth loop before forging or
+reforging it.
+
+Every ordinary non-entrance, non-maze room independently has a deterministic
+**65%** vein chance. Mining pays one physical existing-item stack:
+
+| Payout | Chance within a placed vein | Yield |
+|---|---:|---:|
+| Iron Scrap | **65%** | **3** |
+| Riveted Plate | **22%** | **2** |
+| Tension Coil | **13%** | **1** |
+
+Enemy Iron Scrap drops remain unchanged and are the less-efficient fallback.
+A vein becomes rubble and throws a physical LootMote stack, so bag room, case
+protection, extraction, and loss stay ordinary decisions. Stable floor/cell
+depletion survives room and floor rebuilds and resumable Run v3 saves, then
+clears on a new run. Mining adds no map marker, gate, room, currency, item id,
+or automatic banking.
+
+The resulting chain is deliberate: choose incidental enemy iron or Pickaxe
+durability for efficient mining; allocate metals between tool forging,
+Brannoc's forge, and Bolt-Thrower construction; chop and deposit wood before a
+Rod transaction; and decide when a worn tool warrants a full-cost reforge.
 
 ### Relics and the Artifacts service
 
@@ -202,7 +252,7 @@ preparation.
 
 | Ration | Trade bundle | Effect | Carry cap |
 |---|---:|---|---:|
-| Hardtack | 5 for **25 gold** | Restores **1 heart** over 12 seconds | 20 |
+| Hardtack | 5 for **25 gold** | Restores **4 HP** over 12 seconds | 20 |
 | Small Beer | 5 for **45 gold** | Restores **12 magic**, exactly one spin, over 12 seconds | 20 |
 
 Eating roots the player in a seated channel with four ticks, one every three
@@ -221,9 +271,9 @@ Bottles and their contents persist until used; descending does not refill them.
 
 | Draught | Gold | Materials | Effect |
 |---|---:|---|---|
-| Heart | 55 | 3 Bitter Root | Restore **2 hearts** immediately |
-| Ironhide | 85 | 2 Ash Resin + 2 Bitter Root | Reduce each blow by **2 quarters** for **45 s** |
-| Emberblood | 95 | 3 Ash Resin | Add **2 quarters** per swing for **45 s** |
+| Health Draught | 55 | 3 Bitter Root | Restore **8 HP** immediately |
+| Ironhide | 85 | 2 Ash Resin + 2 Bitter Root | Reduce each blow by **2 HP** for **45 s** |
+| Emberblood | 95 | 3 Ash Resin | Add **2 HP** per swing for **45 s** |
 
 The three added bottles cost gold on a **110 x 2.4** ladder and require,
 respectively, **4 Fired Cullet**; **8 Cullet + 2 Resin**; and
@@ -261,7 +311,7 @@ The rope always works. If the calculated toll exceeds the purse, extraction
 takes all current gold and still brings the haul home. Extraction banks the
 whole bag by item kind and preserves current health. Rest and sleep are the
 normal garrison recovery seam: every completed sleep restores real health to
-maximum, and purchased bed ranks grant one temporary quarter-heart each on top.
+maximum, and purchased bed ranks grant 1 temporary HP each on top.
 
 Death loses the exposed bag, banks the document case, preserves gold and
 permanent progression, and returns the player to the garrison at full health.
@@ -340,8 +390,8 @@ the ordinary death-loss outcome and never becomes free extraction.
 | Service | Role | Player-facing contract |
 |---|---|---|
 | Trade | Quartermaster | Buy expendables; sell ingredients and sale goods; never buy components or relics |
-| Upgrades | Quartermaster | Four bag cells and three heart containers |
-| Smithing | Brannoc | Gold-plus-component forge ladders and fletching |
+| Upgrades | Quartermaster | Four bag cells and three +4 HP health upgrades |
+| Smithing | Brannoc | Gold-plus-component forge ladders, three utility-tool forge/reforge lines, and fletching |
 | Alchemy | Ysolt | Bottle capacity and three draught recipes |
 | Artifacts | Lanternkeeper | Repair/read and donate the twelve relics |
 | Field Notes | Aldric | Review awarded observations and spend the finite note balance on one-rank doctrines |
@@ -359,7 +409,7 @@ ordinary purchases and single-stack sales are taps.
 | Line | Base cost | Growth | Purchases |
 |---|---:|---:|---:|
 | Bag cell | 140 | x1.6 | 4 |
-| Heart container | 320 | x1.5 | 3 |
+| Health upgrade (+4 HP) | 320 | x1.5 | 3 |
 
 Trade also carries arrows, charges, Hardtack, and Small Beer at the prices in
 §6. **Sell Unmarked** protects components, relics, and stacks needed by current
@@ -367,22 +417,27 @@ or pinned recipes.
 
 ### Forge ladders
 
+The three utility-tool lines above share Brannoc's counter but are not upgrade
+tracks: each is either ready, known and **BROKEN**, or never forged, and a
+transaction always returns it to full durability. They therefore do not change
+the 12-track forge-ladder or 26-track total caps.
+
 Each forge track begins at rung 0 and has **three purchasable rungs**. Every
 rung costs gold and forge components.
 
 | Track | Base cost | Growth | Rank-3 effect |
 |---|---:|---:|---|
-| Sword edge | 120 | x2.1 | +3 quarters per hit |
+| Sword edge | 120 | x2.1 | +3 HP per hit |
 | Shield guard | 110 | x2.2 | 115-degree block arc, from 70 degrees |
 | Bow string | 130 | x2.1 | 0.26-second draw, from 0.44 |
 | Hookshot chain | 150 | x2.1 | 18.20 m reach, from 8.74 m |
-| Each heavy armour piece | 65 | x1.9 | +1 soak quarter and x0.97937 speed per piece |
-| Each light armour piece | 35 | x1.8 | +0.5 soak quarter and no speed cost per piece |
+| Each heavy armour piece | 65 | x1.9 | +1 HP soak and x0.97937 speed per piece |
+| Each light armour piece | 35 | x1.8 | +0.5 HP soak and no speed cost per piece |
 
 Chest, legs, arms, and boots each choose heavy or light independently, creating
 eight armour tracks and **12 forge tracks** total. Four maxed heavy pieces give
-**4.00 quarters** of soak at **0.9200 speed**; four maxed light pieces give
-**2.00 quarters** at full speed. Choosing one path closes its sibling for that
+**4.00 HP** of soak at **0.9200 speed**; four maxed light pieces give
+**2.00 HP** at full speed. Choosing one path closes its sibling for that
 piece.
 
 Every third forge rung requires a chest-only **Cold Iron Core**. **Reforge**
@@ -396,22 +451,25 @@ paths with **four purchasable rungs**:
 
 | Slot | Blank | Path A | Path B |
 |---|---:|---|---|
-| Amulet | 220 | Vigor: +0.5 heart per rung | Focus: +15 stamina per rung |
-| First Ring | 150 | Edge: +0.25 quarters per swing | Swift: x1.0101 speed per rung |
-| Second Ring | 150 | Edge: +0.25 quarters per swing | Swift: x1.0101 speed per rung |
-| Bracelet | 190 | Ward: +0.5 soak quarters per rung | Wind: +0.1 stamina regeneration per rung |
+| Amulet | 220 | Vigor: +2 HP per rung | Focus: +15 stamina per rung |
+| First Ring | 150 | Edge: +0.25 HP per swing | Swift: x1.0101 speed per rung |
+| Second Ring | 150 | Edge: +0.25 HP per swing | Swift: x1.0101 speed per rung |
+| Bracelet | 190 | Ward: +0.5 HP soak per rung | Wind: +0.1 stamina regeneration per rung |
 
 Rungs cost **90 / 180 / 340 / 620 gold** and use
 **2 / 4 / 6 + 1 gem / 8 + 2 gems** from the jewellery bench. **Recut** removes
 one rung without refunding its stone.
 
 All sources share their final stat ceilings: total added edge caps at **+5**,
-soak at **4.0 quarters**, speed at **1.0**, and maximum stamina at **160**. The
-equipment screen reports only damage, speed, maximum health, stamina, and soak.
+soak at **4.0 HP**, speed at **1.0**, and maximum stamina at **160**. Health
+starts at **12 HP**; each of the quartermaster's three health upgrades adds
+**4 HP**, each Vigor rung adds **2 HP**, and maximum health is capped at
+**32 HP**. The equipment screen reports only damage, speed, maximum health,
+stamina, and soak.
 
 ### Home convenience ladders
 
-- **Better Bed:** three ranks, one temporary quarter-heart granted per rank when
+- **Better Bed:** three ranks, 1 temporary HP granted per rank when
   sleeping; this overhealth absorbs damage before real health and does not raise
   maximum health.
 - **Locker shelves:** starts at **24 cells**; two ranks add six each, for a hard

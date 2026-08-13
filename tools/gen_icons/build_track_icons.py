@@ -112,7 +112,6 @@ TRACKS = {
 
     # --- the quartermaster (`SupplyDb.groups`) -------------------------------
     "bag": "a bulging buckled leather satchel with a shoulder strap",
-    "hearts": "a heavy iron heart-shaped locket, closed",
 
     # --- the alchemist (`AlchemyDb.groups`) ----------------------------------
     "glass": "an empty corked round-bottomed glass bottle",
@@ -137,7 +136,6 @@ GAIN = {
     "chain": 1.8,
     "reforge": 1.4,
     "tools": 1.3,
-    "hearts": 1.5,
     "recut": 1.3,
 }
 

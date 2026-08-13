@@ -156,7 +156,7 @@ func _fight(rig, n: int, boss_id: StringName, beat_id: StringName) -> void:
 	if b.is_empty():
 		_ck("%d.0 %s has a beat called %s" % [n, boss_id, beat_id], false)
 		return
-	print("ARC --- %d. %s / %s: %.1f deg to %.2f m, %d q ---"
+	print("ARC --- %d. %s / %s: %.1f deg to %.2f m, %d HP ---"
 		% [n, boss_id, beat_id, float(b["arc_deg"]), float(b["reach"]),
 			int(b["damage"])])
 
@@ -297,7 +297,7 @@ func _probe(rig, arena: Node3D, boss: Node, n: int, b: Dictionary,
 	# degrees of the one asked for -- inside `PROBE_MARGIN` either way. And it is
 	# never assumed: what gets asserted below is the bearing that was MEASURED on
 	# the frame the blow resolved.
-	_before = Game.quarters
+	_before = Game.health_points
 	var ran := await _until(rig, func() -> bool:
 		# The commit is checked FIRST and returns before anything else runs. It
 		# used to be the last line, under the heal -- and the heal fired on the
@@ -317,7 +317,7 @@ func _probe(rig, arena: Node3D, boss: Node, n: int, b: Dictionary,
 		_teleport(rig, at, park_at)
 		if boss.current_beat() != bid or boss.state != Enemy.State.WINDUP:
 			Game.heal(999)
-			_before = Game.quarters
+			_before = Game.health_points
 		return false, 900)
 	if not ran:
 		_ck("%s the boss threw %s %s the mark" % [tag, bid, side], false)
@@ -332,16 +332,16 @@ func _probe(rig, arena: Node3D, boss: Node, n: int, b: Dictionary,
 	var got_deg := rad_to_deg(absf(to.normalized().signed_angle_to(fwd, Vector3.UP)))
 	# Past the commit and the hit-stop, so the health has settled.
 	await rig.wait_seconds(0.5)
-	var took := _before - Game.quarters
-	print("ARC   %s at %.1f deg off the drawn %.1f deg edge, %.2f m out: %d -> %d quarters (took %d, the row says %d)"
-		% [side, got_deg, edge_deg, to.length(), _before, Game.quarters, took,
+	var took := _before - Game.health_points
+	print("ARC   %s at %.1f deg off the drawn %.1f deg edge, %.2f m out: %d -> %d HP (took %d, the row says %d)"
+		% [side, got_deg, edge_deg, to.length(), _before, Game.health_points, took,
 			int(b["damage"])])
 	# Inconclusive rather than passing: if the tracking swung the hero back inside
 	# the mark, the probe never asked the question and must not report an answer.
 	_ck("%sa the %s probe really is %s the drawn edge (%.1f vs %.1f deg)"
 		% [tag, bid, side, got_deg, edge_deg],
 		(got_deg < edge_deg) == expect_hit)
-	_ck("%s %s %s the drawn edge takes %d quarters (took %d)"
+	_ck("%s %s %s the drawn edge takes %d HP (took %d)"
 		% [tag, bid, side, want, took], took == want)
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 600)
 	Game.heal(999)

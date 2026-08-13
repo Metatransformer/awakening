@@ -1226,7 +1226,7 @@ func _the_boss(rig, d: Node, hero: Node3D) -> void:
 	# healed between blows -- he is standing in a live boss fight and dying here
 	# would end the run in the middle of a measurement.
 	var swings := 0
-	while boss.health.quarters > 0 and swings < 40:
+	while boss.health.health_points > 0 and swings < 40:
 		if boss.health.apply_hit(Hit.make(12, hero.global_position, &"sword",
 				0.0, 0.0, &"director")):
 			swings += 1
@@ -1235,7 +1235,7 @@ func _the_boss(rig, d: Node, hero: Node3D) -> void:
 	await rig.wait_frames(60)
 	_ck("G8 %s died (%d landed blows)" % [_boss_title(), swings],
 		boss == null or not is_instance_valid(boss)
-		or boss.health.quarters == 0)
+		or boss.health.health_points == 0)
 	_ck("G9 the seal came down", not arena.is_sealed())
 	_ck("G10 the arena is spent", arena.is_spent())
 	_ck("G11 the Boss Door stayed open", door.is_open())

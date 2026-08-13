@@ -55,9 +55,24 @@ evidence, does not change or satisfy the Raid Loop Proof criteria, and does not
 become the active human test unless that test resolves or the owner changes this
 document again.
 
+Issue #184 is a second explicit owner override alongside the freeze. It
+authorises exactly three durable, non-combat utility tools forged and reforged
+by Brannoc—the Woodsman's Axe, Pickaxe, and Fishing Rod—plus deterministic,
+depletable mining veins in ordinary non-entrance, non-maze dungeon rooms. The
+fixed player contract is owned by [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md),
+and [CONTRACT.md](CONTRACT.md); its future human question is precommitted in
+[design-tests/MINING_TOOLS_PROOF.md](design-tests/MINING_TOOLS_PROOF.md).
+
+This override supersedes only the former exclusions for mining and fishing
+gear. It authorises no broader profession, collection, map marker, gate, room,
+currency, reward id, combat use, inventory expansion, or additional fishing
+location. It changes access and cost around fishing but is not evidence that
+the near/deep fishing choice is deep; that hypothesis remains open in
+[design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
+
 ## Authorized Field Notes implementation
 
-> Do players connect awarded notes to observed Cistern events, compare finite
+> Do players connect filed notes to observed Cistern events, compare finite
 > doctrines, notice the chosen effect, and name another observation or doctrine
 > as a reason to descend again?
 
@@ -69,11 +84,14 @@ The canonical bounded system is [FIELD_NOTES.md](FIELD_NOTES.md); the
 precommitted human gate is
 [design-tests/FIELD_NOTES_PROOF.md](design-tests/FIELD_NOTES_PROOF.md).
 
-Implement exactly five fixed first-time Cistern observations, debrief awards on
-extraction or death, five total permanent notes and three one-rank doctrines at
-Aldric costing two notes each. Reuse the existing receipt, service and save
-surfaces. This authorises no production floors, additional observations,
-additional doctrines, repeatable faucet, checklist, item or new screen.
+Implement exactly five fixed first-time Cistern observations, all visible in the
+bedside book, and three one-rank doctrines at Aldric costing two notes each.
+Extraction or death records completion without awarding currency; the receipt
+names entries ready to file and directs the player to the book. A yellow marker
+identifies ready entries there, A/interact files the selected entry and awards
+its authored note value, and filed entries remain readable. Aldric still spends
+the resulting five-note finite balance. This authorises no production floors,
+additional observations, additional doctrines, repeatable faucet or item.
 
 ## Frozen
 
@@ -84,6 +102,8 @@ additional doctrines, repeatable faucet, checklist, item or new screen.
 - Freeform construction or placement.
 - Destructible buildings.
 - The explosive-barrel and hanging-lantern interaction system.
+- Mining expansion beyond #184's one deterministic vein rule, additional ore
+  or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy
   model.
 - Floors, bosses, production content, broad lore, or unrelated polish.

@@ -16,18 +16,18 @@ func run(rig) -> void:
 	var summary_before: Dictionary = Run.summary.duplicate(true)
 	var last_attacker_before: StringName = Run.last_attacker
 	var flags_before: Dictionary[StringName, bool] = Game.flags.duplicate()
-	var quarters_before: int = Game.quarters
+	var quarters_before: int = Game.health_points
 	var gold_before: int = Game.gold
 	var flow_busy_before: bool = Flow.busy
 
 	Run.seed_next = 0
 	Run.enter(0)
 	var first_seed: int = Run.seed_used
-	Game.heal(Game.max_quarters)
-	Game.damage(K.HEART)
-	var damaged_quarters: int = Game.quarters
+	Game.heal(Game.max_health_points)
+	Game.damage(4)
+	var damaged_quarters: int = Game.health_points
 	rig.check(first_seed > 0, "the first fresh run receives a nonzero seed")
-	rig.check(damaged_quarters > 0 and damaged_quarters < Game.max_quarters,
+	rig.check(damaged_quarters > 0 and damaged_quarters < Game.max_health_points,
 		"the extraction fixture carries live damage")
 	# Extraction normally opens the receipt and pauses the tree synchronously.
 	# Flow's own transition guard suppresses only that presentation here; the
@@ -35,7 +35,7 @@ func run(rig) -> void:
 	Flow.busy = true
 	rig.check(Run.extract(), "the first run extracts successfully")
 	Flow.busy = flow_busy_before
-	rig.check(Game.quarters == damaged_quarters,
+	rig.check(Game.health_points == damaged_quarters,
 		"ordinary extraction preserves damaged health")
 
 	Run.enter(0)
@@ -59,7 +59,7 @@ func run(rig) -> void:
 	Flow.busy = flow_busy_before
 	Game.flags.clear()
 	Game.flags.merge(flags_before)
-	Game.quarters = quarters_before
+	Game.health_points = quarters_before
 	Game.gold = gold_before
-	Bus.player_health_changed.emit(Game.quarters, Game.max_quarters)
+	Bus.player_health_changed.emit(Game.health_points, Game.max_health_points)
 	Bus.gold_changed.emit(Game.gold)

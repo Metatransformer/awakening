@@ -7,10 +7,9 @@ extends Node
 
 # --- Player state -----------------------------------------------------------
 signal player_spawned(player: Node3D)
-## Health is in QUARTER hearts. See K.HEART.
-signal player_health_changed(quarters: int, max_quarters: int)
-## Temporary health above the real maximum, also in quarter-hearts.
-signal temporary_overhealth_changed(quarters: int)
+## Health and temporary overhealth are integer HP.
+signal player_health_changed(health_points: int, max_health_points: int)
+signal temporary_overhealth_changed(health_points: int)
 ## A blow landed on the hero, and WHERE IT CAME FROM -- the world position of the
 ## thing that threw it, straight off `Hit.from`.
 ##
@@ -316,5 +315,6 @@ signal request_global_sfx(id: StringName)
 
 # --- Field Notes ------------------------------------------------------------
 signal field_observation_recorded(observation_id: StringName)
+signal field_observations_completed(observation_ids: Array[StringName])
 signal field_notes_awarded(observation_ids: Array[StringName], balance: int)
 signal doctrine_purchased(doctrine_id: StringName, balance: int)

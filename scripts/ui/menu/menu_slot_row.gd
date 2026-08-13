@@ -2,7 +2,7 @@ class_name MenuSlotRow
 extends Button
 ## One save slot card, filled entirely from `Saves.peek(slot)`.
 ##
-## A used slot shows hearts, gold, keys, room and timestamp. An empty one says
+## A used slot shows health, gold, keys, room and timestamp. An empty one says
 ## "Empty" and — in Load mode — disables itself, so loading nothing is
 ## impossible rather than merely discouraged.
 ##
@@ -110,8 +110,8 @@ func refresh() -> void:
 	_stats.visible = true
 	_empty_label.visible = false
 	_stamp.text = String(header.get("stamp", ""))
-	_add_stat("HEARTS", MenuUtil.hearts_text(
-		float(header.get("hearts", 0.0)), float(header.get("max_hearts", 0.0))))
+	_add_stat("HEALTH", MenuUtil.health_points_text(
+		int(header.get("health_points", 0)), int(header.get("max_health_points", 0))))
 	# JSON hands every number back as a float; gold and keys are counters.
 	_add_stat("GOLD", "%d" % int(header.get("gold", 0)))
 	_add_stat("KEYS", "%d" % int(header.get("keys", 0)))

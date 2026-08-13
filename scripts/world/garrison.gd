@@ -167,9 +167,9 @@ func _ready() -> void:
 	_apply_staffing()
 	_place_dawn_wake()
 	_open_the_game()
-	# Join only after the compound and every live landmark the plan may expose
-	# exist. The HUD discovers this provider; it does not know garrison geometry.
-	add_to_group(&"surface_map")
+	# Publish only after the compound and every live landmark the plan may expose
+	# exist. Atlas owns discovery; neither map surface knows garrison geometry.
+	Atlas.register_surface(self)
 
 
 ## The compound supplies structure. This scene adds only landmarks represented
@@ -208,6 +208,7 @@ func surface_map_plan() -> Dictionary:
 	areas.make_read_only()
 	landmarks.make_read_only()
 	var plan: Dictionary = {
+		&"title": "Highbridge Garrison",
 		&"view_range": float(base[&"view_range"]),
 		&"paths": paths,
 		&"areas": areas,
@@ -321,7 +322,7 @@ func _open_the_game() -> void:
 ## maker's mark in your pack and the smith in the yard (`StoryDb.UNLOCKS`), but a
 ## new shopkeeper who simply APPEARS between one run and the next is a change the
 ## player has to notice on their own -- and the person most likely to miss it is
-## the one who came home with three hearts left and walked straight to their bed.
+## the one who came home with 3 HP left and walked straight to their bed.
 ## So the elder introduces them, once, the first time you are back in the yard
 ## after they arrive.
 ##
@@ -638,11 +639,12 @@ const STATUE_YAW := -45.0
 
 
 ## Build the existing roster into the generated compound's named destinations.
-## The four traders occupy separate service nooks instead of one counter line;
-## the Lanternkeeper has no stall and waits on the arrival axis to greet Kael.
-## The generator owns those spatial decisions while this scene owns who has
-## arrived and every gameplay node. `StoryDb.UNLOCKS` still controls the roster,
-## so unrecruited traders leave genuinely empty nooks rather than closed shops.
+## The traders occupy their own buildings around the compound, with the
+## alchemist working beneath the garden trellis. The Lanternkeeper has no stall
+## and waits on the arrival axis to greet Kael. The generator owns those spatial
+## decisions while this scene owns who has arrived and every gameplay node.
+## `StoryDb.UNLOCKS` still controls the roster, so unrecruited traders leave
+## genuinely empty workshops rather than closed shops.
 func _build_compound_people() -> void:
 	vendor = _compound_counter(Npc.Role.VENDOR, &"quartermaster",
 		&"quartermaster_day", Pal.GOLD)
@@ -673,9 +675,10 @@ func _build_hearth() -> void:
 func _build_supply_box() -> void:
 	supply_box = SupplyBox.new()
 	supply_box.name = &"SupplyBox"
-	# (5, 12) is inside the east gatehouse tower. This clears its west edge and
-	# sits under the south gallery, facing the arrival axis without blocking it.
-	supply_box.position = Vector3(8.3, 0.05, 11.5)
+	# The tower begins at z=11.8 and the passage occupies x=-3..3. This sits just
+	# inside and east of the arrival threshold: visible from the road, clear of
+	# both tower collision and the six-metre route through the gatehouse.
+	supply_box.position = Vector3(4.2, 0.05, 10.2)
 	supply_box.rotation.y = -PI * 0.5
 	add_child(supply_box)
 
@@ -843,6 +846,7 @@ func _raid_route(lane_index: int) -> Array[Vector3]:
 
 
 func _exit_tree() -> void:
+	Atlas.unregister_surface(self)
 	for raider: RaidRaider in raid_raiders:
 		if is_instance_valid(raider):
 			raider.sync_now()

@@ -47,6 +47,25 @@ understanding the action-to-supper-to-bonus chain. Adding catches, gear,
 professions, or stronger rewards would intensify that failure rather than repair
 it.
 
+Issue #184 changes the pond's access and cost by making the Fishing Rod one of
+Brannoc's durable utility tools. That implementation fact does not establish
+that near and deep water create a meaningful choice; the evidence bar in the
+Fishing Provisions Proof is unchanged.
+
+## Utility tools and mining hypothesis
+
+The dedicated test is
+[design-tests/MINING_TOOLS_PROOF.md](design-tests/MINING_TOOLS_PROOF.md).
+
+| Intended aesthetic | Observable dynamics | Minimum mechanics under test |
+|---|---|---|
+| **Resourceful preparation:** ordinary salvage becomes a set of explainable tradeoffs between present expedition value and future home capability. | The player compares incidental enemy Iron Scrap with spending Pickaxe durability for a larger deterministic vein payout; allocates Iron Scrap, Riveted Plate, and Tension Coil between tools, forge work, and the Bolt-Thrower; completes the grove-to-hearth prerequisite before forging a rod; and reforges a worn tool when its next use justifies the full cost. | Three fixed-durability utility tools at Brannoc; one successful-impact Axe spend, one resolved-attempt Rod spend, and one committed-impact Pickaxe spend; private deterministic 65% vein placement with three existing payouts; stable per-run depletion and physical loot. |
+
+The failure dynamics are compulsory sweeping, opaque durability loss, or a
+single dominant allocation that turns tools and metals into upkeep rather than
+a preparation choice. Automated proof can establish the fixed mechanics; only
+future player sessions can establish the intended dynamic.
+
 ## Field Notes proof map
 
 The dedicated test is

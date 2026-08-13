@@ -12,7 +12,7 @@ extends RefCounted
 ##
 ##   A  The table is sound. `BossDb.validate()` returns nothing, and `troll` and
 ##      `knight_iron` -- named by floor 4's roster and until now missing from
-##      `Enemy.DEFS` -- have rows, so nothing spawns a troll-shaped six-quarter
+##      `Enemy.DEFS` -- have rows, so nothing spawns a troll-shaped 6 HP
 ##      skeleton any more.
 ##   B  Before the fight: the arena is open, the boss is asleep and fitted to the
 ##      height the table authored, and the door refuses BY NAME. Photographed.
@@ -22,7 +22,7 @@ extends RefCounted
 ##      the distance a player fights from. Three photographs, and the pose is
 ##      asserted as well as shot -- "the three beats look different" is a claim
 ##      about pixels, and a `pose` StringName is only an input to it.
-##   E  Each commit LANDS, for the quarter-hearts the table authored. Measured on
+##   E  Each commit LANDS, for the HP the table authored. Measured on
 ##      the hero's health, not on the animation.
 ##   F  The donut. Standing INSIDE `safe_inner` takes nothing from the slam that
 ##      hurts at 4.4 m. This is the Warden's whole teaching value and it is one
@@ -98,7 +98,7 @@ extends RefCounted
 ##                   its knockback all cancelled -- "the blast bought nothing",
 ##                   reproduced from the outside. **O3g and O4d must go red**, and
 ##                   O3a, O3e, O3f and O4b must not: the blast still landed, it
-##                   still took its two quarters off both bodies, and only the
+##                   still took its two HP off both bodies, and only the
 ##                   relief it bought is gone. Card #73.
 ##
 ##   `burst-endless`  The same two checks from the other side: hold every blasted
@@ -210,7 +210,7 @@ func _table() -> void:
 
 	# The silent-fallback trap floor 4 was sitting on: `Enemy._resolve_def` swaps
 	# an unknown kind for skeleton's STATS while keeping the requested MODEL, so a
-	# missing row is a troll-shaped six-quarter skeleton and nothing logs it.
+	# missing row is a troll-shaped 6 HP skeleton and nothing logs it.
 	for kind: StringName in [&"troll", &"knight_iron"]:
 		_ck("A1 %s has a row in Enemy.DEFS" % kind, Enemy.DEFS.has(kind))
 	if not (Enemy.DEFS.has(&"troll") and Enemy.DEFS.has(&"knight_iron")):
@@ -219,13 +219,13 @@ func _table() -> void:
 	var knight: Dictionary = Enemy.DEFS[&"knight_iron"]
 	var orc: Dictionary = Enemy.DEFS[&"orc"]
 	# The arithmetic the rows' own comment shows, checked rather than asserted in
-	# prose. `Prog.health_mult(4)` is 1.75; a light swing is 2 quarters at blade
+	# prose. `Prog.health_mult(4)` is 1.75; a light swing is 2 HP at blade
 	# rung 0 and 2 + K.EDGE_DAMAGE[3] = 5 at rung 3.
 	var t4 := int(roundf(float(troll["health"]) * Prog.health_mult(4)))
 	var k4 := int(roundf(float(knight["health"]) * Prog.health_mult(4)))
-	print("BOSS floor-4 health: troll %d q = %d swings at rung 0, %d at rung 3"
+	print("BOSS floor-4 health: troll %d HP = %d swings at rung 0, %d at rung 3"
 		% [t4, ceili(t4 / 2.0), ceili(t4 / 5.0)])
-	print("BOSS floor-4 health: knight_iron %d q = %d swings at rung 0, %d at rung 3"
+	print("BOSS floor-4 health: knight_iron %d HP = %d swings at rung 0, %d at rung 3"
 		% [k4, ceili(k4 / 2.0), ceili(k4 / 5.0)])
 	_ck("A2 they are heavier than the orc (%d/%d vs %d)"
 		% [int(troll["health"]), int(knight["health"]), int(orc["health"])],
@@ -249,7 +249,7 @@ func _before(rig, arena: Node, door: Node) -> void:
 	if boss != null:
 		_ck("B1 it is asleep until the room seals", not boss.is_awake())
 		print("BOSS built \"%s\" model=%s hp=%d arena_r=%.1f"
-			% [boss.title(), boss.kind, boss.health.max_quarters,
+			% [boss.title(), boss.kind, boss.health.max_health_points,
 				boss.arena_radius()])
 		# Contract §1b: the fit is MEASURED, never a magic factor. Proving the
 		# NUMBER and not the code path -- the rendered mesh has to actually be
@@ -420,8 +420,8 @@ func _tells(rig, arena: Node, boss: Node) -> void:
 
 # --- E and F. The commits -----------------------------------------------------
 
-## Every beat lands for the quarter-hearts the table authored, measured on the
-## hero's health. `Game.quarters` and not the animation: the whole reason
+## Every beat lands for the HP the table authored, measured on the
+## hero's health. `Game.health_points` and not the animation: the whole reason
 ## `DamageArea._deliver` exists is that a swing can play perfectly and never move
 ## the number -- every GLB monster in the game was harmless for weeks under a
 ## correct-looking attack.
@@ -464,17 +464,17 @@ func _commit_beat(rig, arena: Node, boss: Node, id: StringName, dist: float,
 	# Healed here and not earlier: a stray beat thrown while we were waiting for
 	# this one would otherwise be counted as this one's damage.
 	Game.heal(999)
-	var before := Game.quarters
+	var before := Game.health_points
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.STRIKE, 300)
 	await rig.capture(out.path_join("b_06_commit_%s_%s.png" % [tag.to_lower(), id]))
 	# Past the fuse, so a zone's discs have had their say. The pool's fuse is
 	# 1.10 s against a 0.55 s recovery, so waiting for RECOVER alone would read
 	# the health before the water arrived.
 	await rig.wait_seconds(float(b.get("fuse", 0.0)) + 0.7)
-	var took := before - Game.quarters
-	print("BOSS %s %s at %.1f m: %d -> %d quarters (took %d, the row says %d)"
-		% [tag, id, dist, before, Game.quarters, took, int(b["damage"])])
-	_ck("%s %s at %.1f m takes %d quarters (took %d)"
+	var took := before - Game.health_points
+	print("BOSS %s %s at %.1f m: %d -> %d HP (took %d, the row says %d)"
+		% [tag, id, dist, before, Game.health_points, took, int(b["damage"])])
+	_ck("%s %s at %.1f m takes %d HP (took %d)"
 		% [tag, id, dist, expect, took], took == expect)
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 500)
 
@@ -512,12 +512,12 @@ func _windows(rig, arena: Node, boss: Node) -> void:
 	var at: Vector3 = boss.global_position + K.flat(-boss.global_transform.basis.z) * 1.7
 	at.y = 0.05
 	await _stand_at(rig, at, boss.global_position, false)
-	var hp_before: int = boss.health.quarters
+	var hp_before: int = boss.health.health_points
 	await rig.tap(["attack"])
 	await rig.wait_seconds(0.9)
-	print("BOSS punish swing: %d -> %d quarters" % [hp_before, boss.health.quarters])
+	print("BOSS punish swing: %d -> %d HP" % [hp_before, boss.health.health_points])
 	_ck("G5 a sword swing inside the window takes health off it",
-		boss.health.quarters < hp_before)
+		boss.health.health_points < hp_before)
 	await rig.capture(out.path_join("b_07_punish.png"))
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.CHASE, 500)
 
@@ -533,11 +533,11 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 	# Fought from the middle of the room, so the corpse -- and the mote it drops
 	# -- land where the arena can be photographed around them.
 	await _mark_up(rig, arena, boss)
-	# Back to full, because G5 already took two quarters off it and the claim
+	# Back to full, because G5 already took two HP off it and the claim
 	# below is about the row's number rather than about whatever is left.
-	boss.health.quarters = boss.health.max_quarters
-	var start_q: int = boss.health.quarters
-	# Rung-3 swings, 5 quarters each, straight down the real damage path. 48 / 5
+	boss.health.health_points = boss.health.max_health_points
+	var start_hp: int = boss.health.health_points
+	# Rung-3 swings, 5 HP each, straight down the real damage path. 48 / 5
 	# rounds up to ten, and the row's comment says ten. Paced past
 	# `HealthComponent.iframe_time`, because a boss that could be hit twice in a
 	# frame makes any count meaningless -- and only LANDED blows are counted, so a
@@ -546,21 +546,21 @@ func _kill(rig, arena: Node, boss: Node, door: Node) -> void:
 	var swings := 0
 	var tries := 0
 	var hero: Node3D = _hero(rig)
-	while boss.health.quarters > 0 and tries < 40:
+	while boss.health.health_points > 0 and tries < 40:
 		tries += 1
 		if boss.health.apply_hit(Hit.make(5, hero.global_position, &"sword",
 				0.0, 0.0, &"director")):
 			swings += 1
-		if boss.health.quarters == 0:
+		if boss.health.health_points == 0:
 			break
 		# The hero is standing in a live boss fight for the ten seconds this
 		# takes. Killing him would end the run in the middle of a measurement.
 		Game.heal(999)
 		await rig.wait_seconds(K.IFRAME_TIME + 0.06)
-	print("BOSS killed with %d landed swings of 5 quarters (%d max)"
-		% [swings, start_q])
-	_ck("H1 %d quarters is %d rung-3 swings (took %d)"
-		% [start_q, ceili(start_q / 5.0), swings], swings == ceili(start_q / 5.0))
+	print("BOSS killed with %d landed swings of 5 HP (%d max)"
+		% [swings, start_hp])
+	_ck("H1 %d HP is %d rung-3 swings (took %d)"
+		% [start_hp, ceili(start_hp / 5.0), swings], swings == ceili(start_hp / 5.0))
 	_ck("H2 the boss is dead", boss.health.dead)
 	_ck("H3 Bus.boss_defeated fired once (%d)" % _defeated, _defeated == 1)
 	_ck("H4 the %s is not silently granted by the kill" % item, not Game.has(item))
@@ -810,7 +810,7 @@ func _reentry(rig, arena: Node, door: Node) -> void:
 ## `CLAUDE.md` §4 with a different actor in it: facing is measured, not derived.
 ## Both parkers set `_facing` now. With that fixed the shape is sound: an
 ## unanswered charge runs 10.83 m of its authored 11.0 and takes the hero's four
-## quarters off him on the way through.
+## HP off him on the way through.
 const OGRE_BOSS_Z := -3.5
 const OGRE_HERO_Z := 4.0
 ## Where the punish frame is taken from, every time, and it is BROADSIDE to the
@@ -864,7 +864,7 @@ func _receptacle(rig) -> void:
 	if boss == null:
 		return
 	print("BOSS built \"%s\" model=%s hp=%d arena_r=%.1f"
-		% [boss.title(), boss.kind, boss.health.max_quarters, boss.arena_radius()])
+		% [boss.title(), boss.kind, boss.health.max_health_points, boss.arena_radius()])
 
 	# Kept as a handle so it can be DISCONNECTED at the bottom of this section.
 	# It captures `boss`, and section L frees that Ogre to stand the next fight
@@ -976,8 +976,8 @@ func _charge_shot(rig, arena: Node, boss: Node, when: String) -> void:
 	# this one's.
 	_landed.clear()
 	_opened.clear()
-	var hp_before: int = boss.health.quarters
-	var hero_q := Game.quarters
+	var hp_before: int = boss.health.health_points
+	var hero_hp := Game.health_points
 	# The pull can be lost while the beat is being waited for -- a stray beat that
 	# stuns him drops it (`HeroRanged._can_hold`) -- and a lost pull is an arrow
 	# that never leaves, which would read downstream as the branch not firing.
@@ -1031,10 +1031,10 @@ func _charge_shot(rig, arena: Node, boss: Node, when: String) -> void:
 	# every commit, so this is not the fight's own clock. `went` is.
 	var wall := (Time.get_ticks_msec() - _commit_ms) / 1000.0
 	print(("BOSS %s (%s): the plate went %.2f m of %.1f (%.2f s of travel authored)"
-		+ " in %.2f s wall, closest approach %.2f m; boss %d -> %d q,"
-		+ " hero %d -> %d q; landed=%s")
+		+ " in %.2f s wall, closest approach %.2f m; boss %d -> %d HP,"
+		+ " hero %d -> %d HP; landed=%s")
 		% [tag, when, went, reach, travel, wall, near, hp_before,
-			boss.health.quarters, hero_q, Game.quarters, _landed])
+			boss.health.health_points, hero_hp, Game.health_points, _landed])
 
 	var stopped := float(_went.get("travel", 0.0))
 	match when:
@@ -1044,16 +1044,16 @@ func _charge_shot(rig, arena: Node, boss: Node, when: String) -> void:
 				and int(_landed[0]["state"]) == int(Enemy.State.STRIKE))
 			_ck("K3 and the charge stopped dead -- %.2f m of %.1f" % [went, reach],
 				went < reach * 0.5)
-			_ck("K4 the hero never wore it -- %.2f m short, %d -> %d q"
-				% [reach - went, hero_q, Game.quarters],
-				Game.quarters == hero_q and near > 2.0)
+			_ck("K4 the hero never wore it -- %.2f m short, %d -> %d HP"
+				% [reach - went, hero_hp, Game.health_points],
+				Game.health_points == hero_hp and near > 2.0)
 		"windup":
 			_ck("K6 the arrow landed during the TELL",
 				_landed.size() == 1
 				and int(_landed[0]["state"]) == int(Enemy.State.WINDUP))
-			_ck("K7 and it took health off it (%d -> %d q)"
-				% [hp_before, boss.health.quarters],
-				boss.health.quarters < hp_before)
+			_ck("K7 and it took health off it (%d -> %d HP)"
+				% [hp_before, boss.health.health_points],
+				boss.health.health_points < hp_before)
 			# **The claim is comparative and it has to be**: an unanswered charge
 			# does not always reach its authored 11 m, because the hero is standing
 			# in the lane and the Ogre's own capsule shoulders past him -- see the
@@ -1509,7 +1509,7 @@ func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> voi
 	var r0: float = arena.radius()
 	var t := BossDb.turn(id)
 	print("BOSS %s \"%s\" hp=%d r=%.1f turn=%s at=%.2f"
-		% [tag, boss.title(), hp.max_quarters, r0, t.get("kind", "-"),
+		% [tag, boss.title(), hp.max_health_points, r0, t.get("kind", "-"),
 			float(t.get("at", -1.0))])
 
 	# Walked in, so the room shuts the way a room shuts -- and then, for the
@@ -1530,12 +1530,12 @@ func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> voi
 	_eye(rig, arena, kite_r > 0.0)
 	await rig.wait_frames(4)
 
-	# Down to one quarter ABOVE the threshold in a single blow, so the "before"
+	# Down to 1 HP ABOVE the threshold in a single blow, so the "before"
 	# frame is a fight that is one hit away from turning rather than a fight at
 	# full health. One blow and not several: `HealthComponent` holds 0.20 s of
 	# i-frames after every hit and a burst would be one landed hit and a swallow.
-	var half := hp.max_quarters / 2
-	_bleed(boss, hp.max_quarters - (half + 1))
+	var half := hp.max_health_points / 2
+	_bleed(boss, hp.max_health_points - (half + 1))
 	await rig.wait_frames(4)
 
 	var before := _turn_state(arena, boss, hero)
@@ -1545,7 +1545,7 @@ func _turn_of(rig, id: StringName, tag: String, shot: int, kite_r: float) -> voi
 		not arena.has_turned() and _phases.is_empty())
 	await rig.capture(out.path_join("b_%02d_%s_before.png" % [shot, id]))
 
-	# THE BLOW. One quarter, and everything after this line is on the other side
+	# THE BLOW. 1 HP, and everything after this line is on the other side
 	# of the `Bus.boss_phase_changed` emit.
 	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
 	_bleed(boss, 1)
@@ -1733,11 +1733,11 @@ func _hooks(arena: Node) -> int:
 ## row's fraction, and driving a sword through eleven punish windows to get a
 ## boss to half health would be section G's proof done twice and a fight's worth
 ## of frames to reach one signal.
-func _bleed(boss: Node, quarters: int) -> void:
-	if quarters <= 0:
+func _bleed(boss: Node, health_points: int) -> void:
+	if health_points <= 0:
 		return
 	var hp: HealthComponent = boss.get(&"health")
-	hp.apply_hit(Hit.make(quarters, (boss as Node3D).global_position
+	hp.apply_hit(Hit.make(health_points, (boss as Node3D).global_position
 		+ Vector3(0.0, 0.0, 3.0), &"sword"))
 
 
@@ -1804,7 +1804,7 @@ func _motes(arena: Node) -> Array[LootMote]:
 ## **`docs/BOSSES.md` §6.1 and §9's last open line on the shrink. Board card 47.**
 ##
 ## Section F above proves the donut at the **11.0 m** arena and only there:
-## `cistern_drop` takes its four quarters at 4.4 m and takes NOTHING under the
+## `cistern_drop` takes its four HP at 4.4 m and takes NOTHING under the
 ## chin at 1.4 m, which is floor 1's whole fight shape — the answer to the
 ## biggest, loudest attack in the fight is to walk toward it. Card 41 then moved
 ## the fence to **8.5 m** at half health and nobody re-ran F on the other side of
@@ -1819,7 +1819,7 @@ func _motes(arena: Node) -> Array[LootMote]:
 ##       stands on that this section is about and not the number.
 ##   M2  The turn fires and the fence's inner face moves with it.
 ##   M3  **The hole still works.** Section F's own measurement — `cistern_drop`,
-##       1.4 m, zero quarters — after the shrink.
+##       1.4 m, zero HP — after the shrink.
 ##   M4  **And it is still a donut.** The same beat at 4.4 m still lands its four.
 ##       A slam whose safe hole had swallowed the ring would pass M3 and be a
 ##       fight with no attack in it, which is the failure M3 alone cannot see.
@@ -1878,11 +1878,11 @@ func _warden_floor(rig) -> void:
 		+ "donut %.1f..%.1f m -> %.2f m of floor outside the ring"
 		% [inner, outer, face0.x - K.HERO_RADIUS - outer])
 
-	# One blow to a quarter above the threshold, one more to cross it. The same
+	# One blow to 1 HP above the threshold, one more to cross it. The same
 	# two-step section L uses, and for the same reason: `HealthComponent` holds
 	# 0.20 s of i-frames and a burst would be one landed hit and a swallow.
-	var half := hp.max_quarters / 2
-	_bleed(boss, hp.max_quarters - (half + 1))
+	var half := hp.max_health_points / 2
+	_bleed(boss, hp.max_health_points - (half + 1))
 	await rig.wait_frames(4)
 	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
 	_bleed(boss, 1)
@@ -1902,7 +1902,7 @@ func _warden_floor(rig) -> void:
 		% [band0, band1] + "floor; the hole is 0.00 -> %.2f m either way" % inner)
 
 	# **Section F, re-run, on the other side of the turn.** Same function, same
-	# two distances, same expected quarters -- the only thing that has changed
+	# two distances, same expected HP -- the only thing that has changed
 	# between F and this is the fence, which is the whole question.
 	await _commit_beat(rig, arena, boss, &"cistern_drop", 1.4, false, "M3", 0)
 	await _commit_beat(rig, arena, boss, &"cistern_drop", 4.4, false, "M4", 4)
@@ -1942,13 +1942,13 @@ func _band_stand(rig, arena: Node, boss: Node, b: Dictionary) -> void:
 	var hero := _hero(rig)
 	var stand := K.plane(hero.global_position - here).length()
 	var gap := K.plane(hero.global_position - (boss as Node3D).global_position).length()
-	var before := Game.quarters
+	var before := Game.health_points
 	await _until(rig, func() -> bool: return boss.state == Enemy.State.STRIKE, 300)
 	await rig.capture(out.path_join("b_22_cistern_warden_band.png"))
 	await rig.wait_seconds(0.7)
-	var took := before - Game.quarters
-	print("BOSS M5 standing at %.2f m of the pivot, %.2f m of the boss: %d -> %d q"
-		% [stand, gap, before, Game.quarters])
+	var took := before - Game.health_points
+	print("BOSS M5 standing at %.2f m of the pivot, %.2f m of the boss: %d -> %d HP"
+		% [stand, gap, before, Game.health_points])
 	_ck("M5 the band outside the ring is inside the fence (%.2f m of %.2f)"
 		% [stand, _fence_face(arena).x], stand < _fence_face(arena).x - K.HERO_RADIUS)
 	_ck("M5b and the slam does not reach it (took %d, ring ends at %.1f m)"
@@ -2021,7 +2021,7 @@ func _park_centre(arena: Node, boss: Node, look_at: Vector3) -> void:
 ## L4 counts the hookables either side of the turn -- nought before, one after --
 ## and a count is not the player's experience of it. §6.4 asks for the FAILED
 ## press as a picture, because floor 4's fight shape is *"the item is both the way
-## across and the way back"* and the first sixty-four quarters of the fight are
+## across and the way back"* and the first sixty-four HP of the fight are
 ## the half where the item has nothing in the room to attach to. That claim is a
 ## photograph or it is a sentence.
 ##
@@ -2108,10 +2108,10 @@ func _keystone_press(rig) -> void:
 
 	await _press_of(rig, arena, boss, at, "N1", 44, false)
 
-	# THE TURN, exactly as section L fires it: one blow to a quarter above the
+	# THE TURN, exactly as section L fires it: one blow to 1 HP above the
 	# threshold and one more across it.
-	var half := hp.max_quarters / 2
-	_bleed(boss, hp.max_quarters - (half + 1))
+	var half := hp.max_health_points / 2
+	_bleed(boss, hp.max_health_points - (half + 1))
 	await rig.wait_frames(4)
 	await _until(rig, func() -> bool: return not hp.is_invulnerable(), 60)
 	_bleed(boss, 1)
@@ -2336,8 +2336,8 @@ func _first_hook(arena: Node) -> HookTarget:
 ##   f    **`level` is the BOSS's floor**, and `Run.level` is deliberately left at
 ##        1 for the whole of this section, so a body reading 3 or 4 here can only
 ##        have read it off the row.
-##   g    **`health.max_quarters` is that band's number**, which is the claim that
-##        actually matters: `level` is an input and the quarter-hearts are what
+##   g    **`health.max_health_points` is that band's number**, which is the claim that
+##        actually matters: `level` is an input and the HP are what
 ##        the player fights. `Enemy._build_combat` latches it, so a `level`
 ##        written a line too late leaves this at the floor-1 value with a
 ##        perfectly correct `level` sitting beside it -- which is exactly what
@@ -2370,7 +2370,7 @@ func _summon_band(rig) -> void:
 	await _burst_bank(rig)
 
 
-## One fight's summon, from the seal to the quarter-hearts on the bodies.
+## One fight's summon, from the seal to the HP on the bodies.
 func _summon_of(rig, id: StringName, tag: String, shot: int) -> void:
 	var row := BossDb.get_boss(id)
 	var beat_id := _summon_beat(id)
@@ -2455,16 +2455,16 @@ func _summon_of(rig, id: StringName, tag: String, shot: int) -> void:
 		# this section photographed an empty ring and the numbers are what said
 		# why: bodies placed past the fence. It is a reading about the FIXTURE and
 		# not a claim about the game, which is why it prints rather than asserts.
-		lines.append("level=%d %dq at %.1f m" % [e.level, e.health.max_quarters,
+		lines.append("level=%d %dq at %.1f m" % [e.level, e.health.max_health_points,
 			K.plane(e.global_position - centre).length()])
 		ok_level = ok_level and e.level == deep
-		ok_health = ok_health and e.health.max_quarters == want
-	print("BOSS %s %s/%s summons %d %s: floor %d wants %d q, floor 1 would be %d q -- got %s"
+		ok_health = ok_health and e.health.max_health_points == want
+	print("BOSS %s %s/%s summons %d %s: floor %d wants %d HP, floor 1 would be %d HP -- got %s"
 		% [tag, id, beat_id, boss._summons.size(), kind, deep, want, shallow,
 			", ".join(lines)])
 	_ck("%sf every add is levelled for floor %d, with Run.level still %d"
 		% [tag, deep, Run.level], ok_level)
-	_ck("%sg and carries the band's health: %d q, not floor 1's %d"
+	_ck("%sg and carries the band's health: %d HP, not floor 1's %d"
 		% [tag, want, shallow], ok_health)
 	# The null guard on the check above. See the header.
 	_ck("%sh the two bands are different numbers (%d vs %d)" % [tag, want, shallow],
@@ -2531,7 +2531,7 @@ func _summon_beat(id: StringName) -> StringName:
 ## only one thing in the kit does both"*.
 ##
 ## **The KILL reading is settled on paper and O3a re-derives it here** rather
-## than repeating the card's arithmetic: `K.BOMB_DAMAGE` is 2 quarters against a
+## than repeating the card's arithmetic: `K.BOMB_DAMAGE` is 2 HP against a
 ## floor-3 skeleton's 9, so "one blast" is five, twice, out of a stock of twelve.
 ## Nothing had to be run to know that; it is asserted anyway because a sentence
 ## nobody re-checks is how the old "one blast" survived card #22 rewriting the
@@ -2628,19 +2628,19 @@ func _choir_and_the_burst(rig) -> void:
 	var kind: StringName = b["kind"]
 	var deep := int(BossDb.get_boss(&"bellwake").get("floor", 1))
 	var base := int((Enemy.DEFS[kind] as Dictionary)["health"])
-	var chorister_q := maxi(int(roundf(float(base) * Prog.health_mult(deep))), 1)
-	var blasts := int(ceilf(float(chorister_q) / float(K.BOMB_DAMAGE)))
+	var chorister_hp := maxi(int(roundf(float(base) * Prog.health_mult(deep))), 1)
+	var blasts := int(ceilf(float(chorister_hp) / float(K.BOMB_DAMAGE)))
 
 	# The kill reading, re-derived from the two tables rather than restated. Both
 	# halves are printed because a bare pass/fail here would hide the number that
 	# moved under §9 in the first place.
-	print("BOSS O3 the kill reading: a %s chorister is %d q on floor %d, "
-		% [kind, chorister_q, deep]
+	print("BOSS O3 the kill reading: a %s chorister is %d HP on floor %d, "
+		% [kind, chorister_hp, deep]
 		+ "K.BOMB_DAMAGE is %d, so one body is %d blasts and the pair is %d "
 		% [K.BOMB_DAMAGE, blasts, blasts * 2]
 		+ "of a stock of %d" % K.BURST_CHARGES_MAX)
-	_ck("O3a one blast does NOT kill a chorister (%d q of %d)"
-		% [K.BOMB_DAMAGE, chorister_q], K.BOMB_DAMAGE < chorister_q)
+	_ck("O3a one blast does NOT kill a chorister (%d HP of %d)"
+		% [K.BOMB_DAMAGE, chorister_hp], K.BOMB_DAMAGE < chorister_hp)
 
 	var arena := await _fresh_arena(rig, &"bellwake", Vector3(0.0, 0.0, -5.0))
 	var boss: Node = arena.boss()
@@ -2667,7 +2667,7 @@ func _choir_and_the_burst(rig) -> void:
 		return
 
 	# **The boss is stood down for the rest of O3, and that is a fixture decision
-	# with a reason.** `first_toll` is a 7.5 m ring for 5 quarters on a hero with
+	# with a reason.** `first_toll` is a 7.5 m ring for 5 HP on a hero with
 	# 12, and this section leaves him standing still for the better part of ten
 	# seconds while two skeletons walk at him; a fight that killed him mid-beat
 	# would change the scene out from under the run. It costs nothing that is
@@ -2727,14 +2727,14 @@ func _choir_and_the_burst(rig) -> void:
 	# **The pair AFTER the clock has run out, not on the frame of the blast**, and
 	# that is the picture the design turns on: a second and a half later both
 	# choristers are upright and back on the hero and the only thing on screen
-	# that changed is the hero's own health bar, two quarters down.
+	# that changed is the hero's own health bar, two HP down.
 	await rig.capture(out.path_join("b_63_bellwake_choir_one_blast_later.png"))
 
 	var caught := 0
 	var relief := INF
 	var longest := 0.0
 	for r in rows:
-		print("BOSS O3 chorister seed=%d: %s, %d q lost, walking again after "
+		print("BOSS O3 chorister seed=%d: %s, %d HP lost, walking again after "
 			% [r["seed"], "LAUNCHED" if r["launched"] else "staggered",
 				r["lost"]]
 			+ "%.2f s, thrown %.2f m, back inside its reach of the hero after "
@@ -2744,7 +2744,7 @@ func _choir_and_the_burst(rig) -> void:
 			caught += 1
 		relief = minf(relief, float(r["t_back"]))
 		longest = maxf(longest, float(r["t_back"]))
-	_ck("O3f the one blast caught both (%d of 2, %d q each)"
+	_ck("O3f the one blast caught both (%d of 2, %d HP each)"
 		% [caught, K.BOMB_DAMAGE], caught == 2)
 	# **The two checks card 73 exists to settle, and they run in opposite
 	# directions on purpose.** `t_back` and not `t_move`: the question is how
@@ -2903,7 +2903,7 @@ func _blast_and_clock(rig, where: Array, bodies: Array[Enemy], hero: Node3D,
 	var from: Array[Vector3] = []
 	for e in bodies:
 		rows.append({
-			"seed": e.drop_seed, "q0": e.health.quarters, "lost": 0,
+			"seed": e.drop_seed, "q0": e.health.health_points, "lost": 0,
 			"launched": false, "t_move": -1.0, "t_back": -1.0, "t_swing": -1.0,
 			"out": 0.0,
 		})
@@ -2950,7 +2950,7 @@ func _blast_and_clock(rig, where: Array, bodies: Array[Enemy], hero: Node3D,
 			var r: Dictionary = rows[i]
 			if not is_instance_valid(e):
 				continue
-			r["lost"] = int(r["q0"]) - e.health.quarters
+			r["lost"] = int(r["q0"]) - e.health.health_points
 			if e.state == Enemy.State.LAUNCHED:
 				r["launched"] = true
 			if _sabotage == "burst-endless":

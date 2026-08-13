@@ -27,8 +27,8 @@ extends Catalogue
 ##  * **Fletch** -- one repeatable named row, zero gold, ordinary bag ingredients.
 ##    It is explicitly a tap and delegates every rule to `Fletching`.
 ##
-## **There used to be a third shape -- STOCK: arrows, a bag slot, a heart
-## container, gold only.** They went to `SupplyDb` and the quartermaster's counter
+## **There used to be a third shape -- STOCK: arrows, a bag slot, a health
+## upgrade, gold only.** They went to `SupplyDb` and the quartermaster's counter
 ## on 2026-08-11 (card #91), when the smith stopped being in the yard on the first
 ## frame: with Brannoc held back until the floor 1 miniboss is down, three
 ## purchases every first-hour player needs were behind a counter that did not
@@ -44,6 +44,8 @@ extends Catalogue
 ## Gear is permanent and lives on `Game`. Fletching is the deliberate exception:
 ## its input is the live saleable bag and its output is the persistent quiver.
 
+## Compatibility spelling for existing callers. Tool ids and tuning are owned
+## by ToolDb so the smith and every consumer read the same definition.
 const WOODSMAN_AXE_ID := &"woodsman_axe"
 
 ## Lines that DO NOT EXIST until the player owns the thing they are about.
@@ -82,10 +84,9 @@ const GATED_BY := {
 ## smith will sell that one forever"; `forge_loop.gd` beat P0 asserts every id in
 ## `Game.PLATE_TRACKS` appears here, which is where that typo gets caught.
 ##
-## `bag_slot` and `heart` were here and are `SupplyDb.LIMITS` now. Every ceiling
+## `bag_slot` and `health` were here and are `SupplyDb.LIMITS` now. Every ceiling
 ## lives beside the counter that sells the thing.
 const LIMITS := {
-	WOODSMAN_AXE_ID: 1,
 	&"edge": K.FORGE_MAX,
 	&"guard": K.FORGE_MAX,
 	&"string": K.FORGE_MAX,
@@ -248,7 +249,7 @@ static func groups() -> Array[Dictionary]:
 		_armour_row(out, at, piece)
 	_forge_row(out, at, &"string", "THE BOW", "bow")
 	_forge_row(out, at, &"chain", "THE CHAIN", "chain")
-	_axe_row(out, at)
+	_tool_row(out, at)
 	_fletch_row(out, at)
 	_reforge_row(out, at)
 	return out
@@ -265,19 +266,25 @@ static func _forge_row(out: Array[Dictionary], at: Dictionary,
 		"tracks": [_track(at, id, "", K.FORGE_MAX)]})
 
 
-## The axe is permanent ownership rather than an upgrade track. Its completed
-## one-rung row stays on the board, but no line remains focusable after crafting.
-static func _axe_row(out: Array[Dictionary], at: Dictionary) -> void:
-	if not stocked(WOODSMAN_AXE_ID):
-		return
-	var owned: int = 1 if Game.has(WOODSMAN_AXE_ID) else 0
-	out.append({"title": "TOOLS", "tab": "WORKSHOP", "icon": "tools", "tracks": [{
-		"name": "WOODSMAN'S AXE",
-		"line": -1 if owned > 0 else int(at.get(WOODSMAN_AXE_ID, -1)),
-		"owned": owned,
-		"rungs": 1,
-		"rung_names": _one_rung("Woodsman's Axe"),
-	}]})
+## All durable tools share one group. Positive durability makes a track
+## inspection-only; a broken or never-crafted tool points at its forge line.
+static func _tool_row(out: Array[Dictionary], at: Dictionary) -> void:
+	var tracks: Array = []
+	for id: StringName in ToolDb.TOOL_IDS:
+		if not stocked(id):
+			continue
+		var definition: Dictionary = ToolDb.definition(id)
+		var usable: bool = Game.tool_usable(id)
+		tracks.append({
+			"name": String(definition.get("display_name", String(id))),
+			"line": -1 if usable else int(at.get(id, -1)),
+			"owned": 1 if usable else 0,
+			"rungs": 1,
+			"rung_names": _one_rung(String(definition.get("display_name", String(id))).capitalize()),
+		})
+	if not tracks.is_empty():
+		out.append({"title": "TOOLS", "tab": "WORKSHOP", "icon": "tools",
+			"tracks": tracks})
 
 
 ## The ordinary one-cell named row used for repeatables. Its line owns an
@@ -442,6 +449,8 @@ static func _one_rung(name: String) -> Array[String]:
 static func stocked(id: StringName) -> bool:
 	if id == WOODSMAN_AXE_ID:
 		return Game.flag(StoryDb.told_flag(&"elder", &"timber_duty"))
+	if ToolDb.has(id):
+		return true
 	# A committed piece's losing path. Hidden rather than greyed, which is the
 	# OPPOSITE of the call made for the bow above, and on purpose: a greyed bow
 	# ladder is a spoiler for something you might still find, while a greyed
@@ -463,8 +472,8 @@ static func stocked(id: StringName) -> bool:
 static func _board() -> Array[Dictionary]:
 	return [
 		_forge(&"edge", "SHARPEN THE BLADE", 120, 2.1,
-			"Takes a quarter-heart more off whatever it meets.",
-			K.EDGE_DAMAGE, "+%d", "quarters"),
+			"Takes 1 HP more off whatever it meets.",
+			K.EDGE_DAMAGE, "+%d", "HP"),
 		# The armour, eight rows deep on a fresh save and four once every piece
 		# has committed. Grouped piece by piece rather than all-heavy-then-all-
 		# light, because the choice the player is making is "what do I do about my
@@ -482,21 +491,42 @@ static func _board() -> Array[Dictionary]:
 		_forge(&"chain", "LENGTHEN THE CHAIN", 150, 2.1,
 			"More chain on the drum. The far side gets closer.",
 			K.CHAIN_REACH, "%.1f", "m reach"),
-		_woodsman_axe(),
+		_tool(ToolDb.WOODSMAN_AXE_ID),
+		_tool(ToolDb.PICKAXE_ID),
+		_tool(ToolDb.FISHING_ROD_ID),
 		_fletch(),
 	]
 
 
-static func _woodsman_axe() -> Dictionary:
-	var owned: bool = Game.has(WOODSMAN_AXE_ID)
+static func _tool(id: StringName) -> Dictionary:
+	var definition: Dictionary = ToolDb.definition(id)
+	var known: bool = Game.tool_known(id)
+	var usable: bool = Game.tool_usable(id)
+	var durability: int = Game.tool_durability(id)
+	var maximum: int = Game.tool_max_durability(id)
+	var blurb := String(definition.get("blurb", ""))
+	var detail: String
+	if usable:
+		detail = "Durability %d / %d. Ready for work." % [durability, maximum]
+		# Finished tracks are described through `owned_blurb`, which the shared
+		# progression screen derives from this field rather than from `detail`.
+		blurb = "%s  %s" % [blurb, detail]
+	elif known:
+		detail = "BROKEN · durability 0 / %d. Reforge to full durability." % maximum
+	else:
+		detail = "Durability 0 / %d. Forge to full durability." % maximum
+	var firewood_cost := int(definition.get("stored_firewood", 0))
+	if not usable and firewood_cost > 0:
+		detail += " Requires %d stored firewood bundle%s." % [
+			firewood_cost, "" if firewood_cost == 1 else "s"]
 	return {
-		"id": WOODSMAN_AXE_ID,
-		"label": "WOODSMAN'S AXE",
-		"cost": 0 if owned else 60,
-		"parts": {} if owned else {&"iron_scrap": 3},
-		"blurb": "Camp work, balanced for splitting rounds rather than armour.",
-		"detail": "Owned. Fells one tree each day in the outskirts grove."
-			if owned else "Fells one tree each day in the outskirts grove.",
+		"id": id,
+		"label": String(definition.get("display_name", String(id))),
+		"cost": 0 if usable else int(definition.get("gold", 0)),
+		"parts": {} if usable else (definition.get("parts", {}) as Dictionary).duplicate(),
+		"stored_firewood": 0 if usable else firewood_cost,
+		"blurb": blurb,
+		"detail": detail,
 	}
 
 
@@ -518,7 +548,7 @@ static func _fletch() -> Dictionary:
 
 ## Build a forge line. `ladder` is the K array the track reads and `unit` is a
 ## format string for ONE of its entries, so the detail text is generated from the
-## same table the gear obeys -- a screen that hardcoded "+3 quarters" would be
+## same table the gear obeys -- a screen that hardcoded "+3 HP" would be
 ## the next thing to drift when the tuning moves.
 ## `fmt` formats one rung's number and `noun` names the unit ONCE, at the end:
 ## "8.7 -> 11.9 m reach", not "8.7 m reach -> 11.9 m reach". The unit on both
@@ -554,7 +584,7 @@ static func _forge(id: StringName, label: String, base: int, growth: float,
 ## about one boot while the player had three other pieces on would be arithmetic
 ## the player has to do in their head. It is printed to one decimal on purpose --
 ## `armour_soak()` floors, so a rung that moves 0.7 to 1.0 is the one that
-## actually pays, and a row rounded to whole quarters would show three purchases
+## actually pays, and a row rounded to whole HP would show three purchases
 ## in a row doing nothing and then a fourth doing everything (see the note over
 ## `K.PLATE_HEAVY_SOAK`).
 static func _plate(piece: StringName, path: StringName) -> Dictionary:
@@ -568,7 +598,7 @@ static func _plate(piece: StringName, path: StringName) -> Dictionary:
 	if lvl < K.FORGE_MAX:
 		var after := minf(soak + (float(ladder[lvl + 1]) - float(ladder[lvl])),
 			K.SOAK_MAX)
-		detail = "%.1f -> %.1f quarters soaked" % [soak, after]
+		detail = "%.1f -> %.1f HP soaked" % [soak, after]
 		if heavy:
 			# Clamped from the RAW product, not from `speed_mult()`. Two Swift
 			# rings can be holding the hero at the 1.0 ceiling with headroom to
@@ -580,7 +610,7 @@ static func _plate(piece: StringName, path: StringName) -> Dictionary:
 			detail += ",  speed %.1f%% -> %.1f%%" % [
 				clampf(raw, 0.5, 1.0) * 100.0, clampf(raw * step, 0.5, 1.0) * 100.0]
 	else:
-		detail = "%.1f quarters soaked  (finished)" % soak
+		detail = "%.1f HP soaked  (finished)" % soak
 
 	return {
 		"id": id,
@@ -616,20 +646,20 @@ static func _scaled(base: int, id: StringName, factor: float) -> int:
 
 ## How many more of `id` the player may buy. -1 means unlimited.
 static func remaining(id: StringName) -> int:
-	if id == WOODSMAN_AXE_ID:
-		return 0 if Game.has(id) else 1
+	if ToolDb.has(id):
+		return 0 if Game.tool_usable(id) else 1
 	if not LIMITS.has(id):
 		return -1
 	return maxi(0, cap_of(id) - int(Game.upgrades.get(id, 0)))
 
 
-## Fletching and the one-time axe recipe are paid from the saleable run bag.
+## Fletching and durable-tool recipes are paid from the saleable run bag.
 ## Every upgrade ladder keeps the catalogue default and reads the persistent
 ## workbench. Making the axe consume ordinary Iron Scrap is deliberate: it is
 ## the first reason not to flatten a returned bag with Sell All.
 static func part_count(line: Dictionary, id: StringName) -> int:
 	var line_id := StringName(line.get("id", &""))
-	if line_id == FLETCH or line_id == WOODSMAN_AXE_ID:
+	if line_id == FLETCH or ToolDb.has(line_id):
 		return int(Run.bag.get(id, 0))
 	return Game.component_count(id)
 
@@ -646,7 +676,7 @@ static func part_count(line: Dictionary, id: StringName) -> int:
 ## Public so `refusal()` can tell the two ceilings apart, and so a director can
 ## ask without re-deriving it.
 static func cap_of(id: StringName) -> int:
-	if id == WOODSMAN_AXE_ID:
+	if ToolDb.has(id):
 		return 1
 	# A committed piece's other path. Zero, not "hidden": `lines()` already drops
 	# the row, and this is the answer for everything that does not go through
@@ -665,14 +695,16 @@ static func can_buy(line: Dictionary) -> bool:
 	var id: StringName = line["id"]
 	if id == FLETCH:
 		return Fletching.can_fletch()
-	if id == WOODSMAN_AXE_ID and not stocked(id):
+	if ToolDb.has(id) and not stocked(id):
 		return false
 	if remaining(id) == 0:
 		return false
-	if id == WOODSMAN_AXE_ID:
+	if ToolDb.has(id):
 		for pid: StringName in line.get("parts", {}):
 			if int(Run.bag.get(pid, 0)) < int((line["parts"] as Dictionary)[pid]):
 				return false
+		if Game.firewood_stock < int(line.get("stored_firewood", 0)):
+			return false
 		return Game.gold >= int(line["cost"])
 	if not Game.can_afford_parts(line.get("parts", {})):
 		return false
@@ -687,7 +719,7 @@ static func refusal(line: Dictionary) -> String:
 	var id: StringName = line["id"]
 	if id == FLETCH:
 		return Fletching.refusal()
-	if id == WOODSMAN_AXE_ID and not stocked(id):
+	if ToolDb.has(id) and not stocked(id):
 		return "SPEAK TO ALDRIC FIRST"
 	if remaining(id) == 0:
 		# THREE different ceilings now, and telling the player the wrong one sends
@@ -702,12 +734,15 @@ static func refusal(line: Dictionary) -> String:
 		return "NOTHING LEFT TO DO THERE"
 	var parts: Dictionary = line.get("parts", {})
 	for pid: StringName in parts:
-		var have: int = int(Run.bag.get(pid, 0)) if id == WOODSMAN_AXE_ID \
+		var have: int = int(Run.bag.get(pid, 0)) if ToolDb.has(id) \
 			else Game.component_count(pid)
 		if have < int(parts[pid]):
 			var def := ItemDb.get_def(pid)
 			var what: String = def.display_name if def != null else String(pid)
 			return "NOT ENOUGH %s" % what.to_upper()
+	if ToolDb.has(id) \
+			and Game.firewood_stock < int(line.get("stored_firewood", 0)):
+		return "NOT ENOUGH STORED FIREWOOD"
 	if Game.gold < int(line["cost"]):
 		return "NOT ENOUGH GOLD"
 	return ""
@@ -733,11 +768,12 @@ static func buy(line: Dictionary) -> bool:
 	var parts: Dictionary = line.get("parts", {})
 	if not Game.spend_gold(int(line["cost"])):
 		return false
-	if id == WOODSMAN_AXE_ID:
+	if ToolDb.has(id):
 		for pid: StringName in parts:
 			Run.consume(pid, int(parts[pid]))
-		Game.grant(WOODSMAN_AXE_ID)
-		return true
+		if not Game.consume_stored_firewood(int(line.get("stored_firewood", 0))):
+			return false
+		return Game.craft_tool(id)
 	for pid: StringName in parts:
 		Game.spend_component(pid, int(parts[pid]))
 
@@ -748,7 +784,7 @@ static func buy(line: Dictionary) -> bool:
 	# ladders, and it would eventually not.
 	#
 	# There used to be a `match` in front of this, for the three stock lines that
-	# DID have an effect to apply -- ten arrows, a slot, a heart. They are
+	# DID have an effect to apply -- ten arrows, a slot, a health upgrade. They are
 	# `SupplyDb.buy` now and the match went with them.
 	Bus.gear_forged.emit(id, Game.upgrades[id])
 	Bus.item_acquired.emit(id)

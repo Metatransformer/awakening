@@ -91,6 +91,7 @@ func _ready() -> void:
 	# And the wheel can change without this screen touching it: picking something
 	# up auto-binds it, and a save loaded from the Saves screen replaces all eight.
 	Bus.wheel_changed.connect(func(_s: Array) -> void: refresh())
+	Game.garrison_changed.connect(refresh)
 	refresh()
 
 
@@ -649,33 +650,25 @@ func _build_stats(parent: Node) -> void:
 
 ## The five numbers, in the units the player feels them in.
 ##
-## Quarter-hearts for the two that are quarter-hearts, because that is what the
-## HUD draws and what `Hero.hurt` subtracts. Speed as a percentage of the
-## measured `[oot]` run rather than in metres a second: the player has no way to
-## know what 4.8 m/s felt like, and 100% is a ceiling they can read as one.
+## Health, damage and soak use the same HP unit as the HUD and combat. Speed as a
+## percentage of the measured `[oot]` run rather than in metres a second: the
+## player has no way to know what 4.8 m/s felt like, and 100% is a ceiling they
+## can read as one.
 func _refresh_stats() -> void:
 	if _stat_values.is_empty():
 		return
-	_stat_values[&"damage"].text = "+%d %s" % [
-		Game.sword_bonus(), _quarters(Game.sword_bonus())]
+	_stat_values[&"damage"].text = "+%d HP" % Game.sword_bonus()
 	_stat_values[&"speed"].text = "%.1f%%" % (Game.speed_mult() * 100.0)
-	_stat_values[&"health"].text = "%d hearts" % Game.heart_containers()
+	_stat_values[&"health"].text = "%d HP" % Game.max_health_points
 	_stat_values[&"stamina"].text = "%d" % int(round(Game.max_stamina))
 	# The exact figure beside the one that actually applies, because
 	# `armour_soak()` FLOORS and four pieces at 0.4 each is 1.6 -- a player who
 	# only saw "1" would read three purchases as having done nothing.
 	var exact := Game.armour_soak_exact()
 	var applied := Game.armour_soak()
-	_stat_values[&"soak"].text = "-%d %s" % [applied, _quarters(applied)] \
+	_stat_values[&"soak"].text = "-%d HP" % applied \
 		if is_equal_approx(exact, floorf(exact)) \
-		else "-%d %s  (%.1f)" % [applied, _quarters(applied), exact]
-
-
-## "quarter" or "quarters". A one-word helper rather than living with "+1
-## quarters", because the stat block is five short lines and a grammar slip on
-## one of them is the whole card looking unfinished.
-func _quarters(n: int) -> String:
-	return "quarter" if n == 1 else "quarters"
+		else "-%d HP  (%.1f HP)" % [applied, exact]
 
 
 ## Grid wiring, done by hand because MenuUtil.chain does closed loops and this is
@@ -782,14 +775,21 @@ func _refresh_tools() -> void:
 	UITheme.clear_children(_tools)
 	var any := false
 	for definition: Dictionary in ToolDb.all():
-		if not bool(definition.get("owned", false)):
+		if not bool(definition.get("known", false)) \
+				and not bool(definition.get("usable", false)):
 			continue
 		var row := VBoxContainer.new()
 		row.add_theme_constant_override(&"separation", 1)
 		_tools.add_child(row)
 		var title := Label.new()
-		title.text = String(definition.get("display_name", ""))
-		UITheme.apply_text_style(title, UITheme.TYPE_LABEL_MD, UITheme.TEXT)
+		var durability := int(definition.get("durability", 0))
+		var maximum := int(definition.get("max_durability", 0))
+		var broken := bool(definition.get("known", false)) and durability <= 0
+		title.text = "%s  ·  %d / %d%s" % [
+			definition.get("display_name", ""), durability, maximum,
+			"  ·  BROKEN" if broken else ""]
+		UITheme.apply_text_style(title, UITheme.TYPE_LABEL_MD,
+			UITheme.DANGER if broken else UITheme.TEXT)
 		row.add_child(title)
 		var blurb := Label.new()
 		blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
