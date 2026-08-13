@@ -26,7 +26,7 @@ unauthorised.
 | Puzzle atoms | **9** |
 | Puzzle prefabs | **12** |
 | Puzzle combinators | **9** |
-| Enemy behaviours | **8**, with four currently committed |
+| Enemy behaviours | **8**, with six built and two deferred |
 | Added dungeon graph edges | **1 per floor** |
 | Blessings | **12** |
 | Relics | **12** |
@@ -119,8 +119,22 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
+Issue [#200](https://github.com/Metatransformer/awakening/issues/200) is a
+narrow owner override for four behavior-bearing prototype variants in tool
+order: floor 1 Knotback/Sword, floor 2 Lantern Seer/Bow, floor 3 Cinder
+Automaton/Burst and floor 4 Mirebell/Hookshot. Each keeps ordinary damage as a
+slower answer. They use temporary primitive kitbash attachments over existing
+animated bipeds, add no `Enemy.DEFS` kind or permanent model, and permit at
+most one signature variant per ordinary room with none as elites or boss
+summons. The implementation and its deterministic automated proof are complete;
+the human question is owned by
+[design-tests/ENEMY_TOOL_LADDER_PROOF.md](design-tests/ENEMY_TOOL_LADDER_PROOF.md).
+This override adds no item, ammo, currency, screen, boss beat, autoload,
+permanent art asset or broader production authority.
+
 Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
 implementations are complete; their precommitted human tests remain pending.
+#200's implementation proof is complete and its human result is pending.
 Floors 2–4, bosses 2–4, production content, another fishing location or
 minigame, and every expansion below remain frozen.
 
@@ -166,7 +180,9 @@ human evidence. That is sequencing debt, not permission to continue.
 
 Do not expand production until the pending five-session human tests are
 resolved.
+Issue #200 does not lift the floor, boss, content-production or permanent-art
+freezes; it authorises only the four bounded prototype variants and their proof.
 Directors and automated checks can prove implementation; only observed human
-play can answer either design question. A result from one cannot prove the
-other. After a result, update the owning design test first, then amend current
+play can answer a design question. An automated result cannot prove a human
+result. After a result, update the owning design test first, then amend current
 canon only where the decision requires it.

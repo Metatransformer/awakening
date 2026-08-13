@@ -3238,6 +3238,7 @@ func _populate() -> void:
 	# The choice itself was made back in `_plan_maze`, before the masonry went up;
 	# this only reads it.
 	var maze_cell = pick_maze_cell()
+	var floor_signature: Dictionary = FloorDb.signature(Run.level)
 
 	for cell: Vector2i in rooms:
 		var root: Node3D = rooms[cell].get("node")
@@ -3272,9 +3273,17 @@ func _populate() -> void:
 		# the entrance) and `Prog` chooses how hard it is (`elite_chance`, and the
 		# health/damage/wind-up curve inside `Enemy`). Keeping those two apart is
 		# what lets a floor be re-cast without being re-tuned.
-		var elite_chance := Prog.elite_chance(Run.level)
-		var count := _rng.randi_range(enemies_min, enemies_max)
-		var has_barrel_cluster := _rng.randf() < barrel_cluster_chance
+		var elite_chance: float = Prog.elite_chance(Run.level)
+		var count: int = _rng.randi_range(enemies_min, enemies_max)
+		var has_barrel_cluster: bool = _rng.randf() < barrel_cluster_chance
+		var has_signature: bool = not floor_signature.is_empty() \
+			and _rng.randf() < float(floor_signature.get("share", 0.0))
+		# A signature replaces an ordinary body instead of enlarging the pack, so
+		# authored identity does not quietly become a second difficulty curve.
+		# The last slot is deterministic. If a one-body room makes that index 0,
+		# the elite roll is still consumed below but explicitly suppressed;
+		# reserving the slot also lets a separate eligible body take `thrower`.
+		var signature_index: int = count - 1 if has_signature else -1
 		if has_barrel_cluster:
 			_place_barrel_cluster(root, size, chest_dir)
 		# The watcher is built BEFORE the bodies and told about each one as it is
@@ -3285,19 +3294,29 @@ func _populate() -> void:
 		var watch: RoomWatch = null
 		if count > 0:
 			watch = RoomWatch.attach(root, StringName(root.name))
-		var thrower_assigned := false
+		var thrower_assigned: bool = false
 		for i in count:
-			var spot := _scatter(i, count, size * 0.30)
-			var kind := _roll_kind(dist)
+			var spot: Vector3 = _scatter(i, count, size * 0.30)
+			var make_signature: bool = i == signature_index
+			var kind: StringName = _roll_kind(dist)
 			# At most one elite in a room. The point of an elite is that it is
 			# THE thing in the room; two of them is just a harder room, and the
 			# separation rule has to keep them both legible besides.
-			var elite := i == 0 and _rng.randf() < elite_chance
-			var make_thrower := has_barrel_cluster and not elite and not thrower_assigned
+			var elite: bool = i == 0 and _rng.randf() < elite_chance
+			if make_signature:
+				elite = false
+			var make_thrower: bool = has_barrel_cluster and not elite \
+				and not make_signature and not thrower_assigned
 			if make_thrower:
 				thrower_assigned = true
+			var foe_behaviour: StringName = &""
+			if make_signature:
+				kind = floor_signature.get("kind", &"")
+				foe_behaviour = floor_signature.get("behaviour", &"")
+			elif make_thrower:
+				foe_behaviour = &"thrower"
 			watch.add(_spawn_foe(root, kind, spot, elite,
-				&"thrower" if make_thrower else &""))
+				foe_behaviour))
 
 		# The deep-chest anchor already put one in its room. On a floor with no
 		# anchors at all the deepest room still gets the good chest, which is what

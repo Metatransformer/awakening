@@ -267,6 +267,9 @@ static var ANCHORS_ENDLESS := {}
 ##                              `PACK_FROM_PROG` to defer.
 ##   `bands`       Dictionary — room distance from the entrance -> roster pool.
 ##   `bands_deep`  Array      — the pool for any distance past the last key.
+##   `signature`   Dictionary — one floor-specific body and behaviour that can
+##                              replace an ordinary room spawn. It belongs here
+##                              because it is place identity, not difficulty.
 ##   `tint`        StringName — a key into `TINTS`.
 ##   `boss`        StringName — a `BossDb` id.
 ##   `boss_item`   StringName — what its earned great chest grants when opened
@@ -297,6 +300,7 @@ static var FLOORS := {
 			2: [&"goblin", &"goblin", &"skeleton"],
 		},
 		"bands_deep": [&"goblin", &"skeleton", &"goblin"],
+		"signature": {"kind": &"goblin", "behaviour": &"knotback", "share": 0.35},
 		"tint": &"drowned_bronze",
 		"boss": &"cistern_warden",
 		"boss_item": &"bow",
@@ -322,6 +326,7 @@ static var FLOORS := {
 			2: [&"kobold", &"orc", &"orc"],
 		},
 		"bands_deep": [&"orc", &"orc", &"kobold"],
+		"signature": {"kind": &"kobold", "behaviour": &"lantern_seer", "share": 0.35},
 		"tint": &"slag_light",
 		"boss": &"slag_ogre",
 		# The Burst-Verse, not a satchel (`docs/GDD.md` §5.2). This id is what
@@ -360,6 +365,7 @@ static var FLOORS := {
 			2: [&"wraith", &"wraith", &"orc"],
 		},
 		"bands_deep": [&"wraith", &"wraith", &"wraith"],
+		"signature": {"kind": &"knight_iron", "behaviour": &"cinder_automaton", "share": 0.30},
 		"tint": &"pale_ring",
 		"boss": &"bellwake",
 		"boss_item": &"hookshot",
@@ -399,6 +405,7 @@ static var FLOORS := {
 			2: [&"troll", &"knight_iron", &"knight_iron"],
 		},
 		"bands_deep": [&"knight_iron", &"knight_iron", &"troll"],
+		"signature": {"kind": &"troll", "behaviour": &"mirebell", "share": 0.35},
 		"tint": &"riven_dawn",
 		"boss": &"riven_knight",
 		"boss_item": &"far_lantern",
@@ -432,6 +439,7 @@ static var ENDLESS := {
 		2: [&"wraith", &"troll", &"knight_iron"],
 	},
 	"bands_deep": [&"troll", &"knight_iron", &"wraith"],
+	"signature": {},
 	"tint": &"riven_dawn",
 	"boss": &"",
 	"boss_item": &"",
@@ -542,6 +550,10 @@ static func roster(level: int, room_dist: int) -> Array:
 	var deep: Array = row.get("bands_deep", [])
 	var table: Dictionary = row.get("bands", {})
 	return table.get(maxi(room_dist, 0), deep)
+
+
+static func signature(level: int) -> Dictionary:
+	return get_floor(level).get("signature", {})
 
 
 ## The floor's colour identity. Returns the TINT, not its key, because every

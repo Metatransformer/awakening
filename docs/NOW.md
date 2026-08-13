@@ -70,6 +70,25 @@ location. It changes access and cost around fishing but is not evidence that
 the near/deep fishing choice is deep; that hypothesis remains open in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
+### Enemy tool-ladder prototype
+
+Issue [#200](https://github.com/Metatransformer/awakening/issues/200) is a third
+explicit owner override alongside the freeze. It authorises exactly four
+behavior-bearing variants in tool-acquisition order: floor 1 Knotback/Sword,
+floor 2 Lantern Seer/Bow, floor 3 Cinder Automaton/Burst and floor 4
+Mirebell/Hookshot. Each is a tool question with a fast named-tool answer and a
+slower ordinary-damage answer; none is a hard tool lock.
+
+Implementation and deterministic automated proof are complete. The human
+question remains unproven and its criteria are precommitted in
+[design-tests/ENEMY_TOOL_LADDER_PROOF.md](design-tests/ENEMY_TOOL_LADDER_PROOF.md).
+The variants use only temporary primitive kitbash attachments over existing
+animated bipeds, add no `Enemy.DEFS` kind or permanent monster model, and keep the
+rotation at seven kinds. At most one may appear in an ordinary room, and none
+may be an elite or boss summon. This override adds no item, ammo, currency,
+screen, boss beat, autoload, permanent art asset or broader production
+authorisation.
+
 ## Authorized Field Notes implementation
 
 > Do players connect filed notes to observed Cistern events, compare finite
@@ -102,6 +121,8 @@ additional observations, additional doctrines, repeatable faucet or item.
 - Freeform construction or placement.
 - Destructible buildings.
 - The explosive-barrel and hanging-lantern interaction system.
+- Signature variants beyond #200's four, more than one per ordinary room,
+  elite signatures, or boss-summon signatures.
 - Mining expansion beyond #184's one deterministic vein rule, additional ore
   or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy
@@ -109,5 +130,6 @@ additional observations, additional doctrines, repeatable faucet or item.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
 Implementation proves only that each bounded system works. It does not prove
-either human hypothesis. Expansion remains frozen until the pending human tests
-are resolved and [SCOPE.md](SCOPE.md) is amended.
+any human hypothesis. The #200 prototype does not lift the floor, boss,
+content-production or permanent-art freezes. Expansion remains frozen until the
+pending human tests are resolved and [SCOPE.md](SCOPE.md) is amended.
