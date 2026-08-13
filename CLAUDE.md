@@ -23,6 +23,17 @@ Before you write a system, in this order:
 If the thing already exists and yours would be better, **replace it and delete
 the loser**. Do not land both and wire a switch. One of each system, always.
 
+### 0.1 Keep tiny fixes tiny
+
+When the requested result is an obvious local edit — a label, constant, typo,
+or similarly bounded one-file change — make it directly. Do not create a card,
+worktree, worker package, plan, documentation sweep, or repository-wide audit.
+Do not reinterpret a visual or copy request as a gameplay-system change.
+
+Verification must be proportional: use the smallest relevant check or capture
+that proves the edit. Do not run unrelated directors. If the change genuinely
+needs broader semantics or multiple owners, say why before expanding its scope.
+
 ---
 
 ## 1. Cards and worktrees
@@ -380,6 +391,11 @@ class is not knowing the pattern.
 ## 6. House style
 
 - Static types everywhere. `snake_case` files, `PascalCase` classes.
+- **Game UI is terse.** Prefer short noun labels such as `DOCUMENT CASE` and
+  `BAG`. Do not turn headings into explanations (`COMES HOME`, `DIES WITH YOU`,
+  `CARRIED`) or repeat system consequences in every notice. A status notice
+  reports the action (`Iron Scrap packed.`); tutorials or tooltips explain a
+  consequence only when the player needs it to make a decision.
 - Health uses integer **health points (HP)**. Runtime fields are `health_points`
   and `max_health_points`; `K.HEALTH_POINT` = 1, `K.START_HEALTH_POINTS` = 12,
   `K.HEALTH_UPGRADE_POINTS` = 4, `K.JEWEL_VIGOR_HEALTH_POINTS` = 2 per rung,

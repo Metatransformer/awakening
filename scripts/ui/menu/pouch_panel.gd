@@ -419,14 +419,13 @@ func _build_grid(parent: Node) -> void:
 	card.add_child(inner)
 
 	# THE CASE FIRST, and above. It is the top of the bag in the fiction and it
-	# has to be the top of the picture, because the sentence this card makes when
-	# you read it downwards is the design: this comes home, this does not.
+	# has to be the top of the picture.
 	# A styled Label rather than a `section_rule`, because the rule is gold and
 	# this caption is CYAN: the way out is CYAN and nothing else is (STYLEGUIDE
 	# §1), and the case is the OTHER way out — the one that works when you did not
 	# make it to the rope. That colour is load-bearing and a divider would eat it.
 	var case_cap := Label.new()
-	case_cap.text = "THE DOCUMENT CASE  ·  COMES HOME"
+	case_cap.text = "DOCUMENT CASE"
 	UITheme.apply_text_style(case_cap, UITheme.TYPE_H3, Pal.CYAN)
 	inner.add_child(case_cap)
 
@@ -439,7 +438,7 @@ func _build_grid(parent: Node) -> void:
 	_case_grid.cell_activated.connect(_on_case_activated)
 	inner.add_child(_case_grid)
 
-	UITheme.section_rule(inner, "CARRIED  ·  DIES WITH YOU")
+	UITheme.section_rule(inner, "BAG")
 
 	# `ItemGrid` rather than a GridContainer full of hand-built cells. The cell
 	# below used to be written out here, and it is the cell every other screen
@@ -1045,12 +1044,11 @@ func _on_hold_activated(index: int) -> void:
 		var why := Run.case_refusal(id)
 		notice.emit(why if why != "" else "That will not fit in the case.", true)
 		return
-	notice.emit("%s packed. It comes home." % ItemDb.get_def(id).display_name, false)
+	notice.emit("%s packed." % ItemDb.get_def(id).display_name, false)
 	refresh()
 
 
-## A on a cased cell takes it back out. It stays in the bag — it just stops being
-## the half that survives you, which is the trade every third slot is about.
+## A on a cased cell takes it back out. It stays in the bag.
 func _on_case_activated(index: int) -> void:
 	if _mouse_cell_press:
 		return
@@ -1062,8 +1060,7 @@ func _on_case_activated(index: int) -> void:
 	if Run.unstow(id, _case_counts[index]) <= 0:
 		notice.emit("There is no room in the bag for that outside the case.", true)
 		return
-	notice.emit("%s unpacked. It dies with you now."
-		% ItemDb.get_def(id).display_name, false)
+	notice.emit("%s unpacked." % ItemDb.get_def(id).display_name, false)
 	refresh()
 
 
@@ -1163,9 +1160,8 @@ func _describe(index: int, case_side: bool) -> void:
 		_tip.kicker.text = "CASE %d" % slot if case_side else "SLOT %d" % slot
 		_tip.title.text = "Empty"
 		if case_side:
-			_tip.blurb.text = "Room in the case. Whatever is in here when you " \
-				+ "die is what comes home with your body."
-			_tip.say_note("Press A on anything below to pack it. " \
+			_tip.blurb.text = "Room for one more stack."
+			_tip.say_note("Press A on a Bag item to pack it. " \
 				+ "Relics will not fit.", UITheme.TEXT_DIM)
 		else:
 			_tip.blurb.text = "Room for one more stack. Nothing is refused while " \
