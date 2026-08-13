@@ -71,6 +71,12 @@ profession system. Its bounded resource-working extension remains inside the
 already-counted daily-life-loop mechanic and does not raise the four-mechanic
 cap.
 
+Issue #198 is the one bounded player extension to the existing explosive-prop
+family: one idle barrel may be picked up through the world prompt and thrown,
+and Burst and the carried barrel share one world-space lob landing marker. The
+barrel adds no usable item, inventory entry, persistence, equipment stop, UI
+screen, lantern variant, or broader interaction family, and raises no cap.
+
 The Field Notes amendment adds one finite, non-convertible permanent currency
 and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
@@ -119,8 +125,14 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
-implementations are complete; their precommitted human tests remain pending.
+Issue #198 is separately owner-authorised implementation sequencing debt: only
+player pickup/throw of the existing explosive barrel and the shared
+Burst/barrel lob marker. It does not authorise another explosive prop, lantern
+interaction, inventory path, equipment path, or production expansion.
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining implementation,
+and #198's bounded player-barrel extension are complete; their precommitted
+human tests remain pending.
 Floors 2–4, bosses 2–4, production content, another fishing location or
 minigame, and every expansion below remain frozen.
 
@@ -132,7 +144,8 @@ These are candidates, not promises:
 - recurring raids;
 - scouts, watchtowers, guards, staffing, or broader morale consequences;
 - more waves, routes, attackers, or defensive structures;
-- the explosive-barrel and hanging-lantern interaction family;
+- any explosive-barrel or hanging-lantern expansion beyond #198's single
+  player-throw extension and shared Burst/barrel marker;
 - another home-life responsibility, resource-gathering loop, or profession.
 
 Each needs its own design question, smallest proof, and explicit scope decision.

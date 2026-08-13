@@ -70,6 +70,12 @@ location. It changes access and cost around fishing but is not evidence that
 the near/deep fishing choice is deep; that hypothesis remains open in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
+Issue #198 is a third explicit owner-authorised bounded override alongside the
+freeze. It permits only player pickup and throw of the existing explosive
+barrels, plus one shared world-space lob landing marker used by both Burst and a
+carried barrel. The barrel is never inventory, persistent gear, or a ring stop;
+its existing fuse, impact, chain, and blast rules remain authoritative.
+
 ## Authorized Field Notes implementation
 
 > Do players connect filed notes to observed Cistern events, compare finite
@@ -101,7 +107,8 @@ additional observations, additional doctrines, repeatable faucet or item.
 - Multiple waves, routes, raid types, or defensive structures.
 - Freeform construction or placement.
 - Destructible buildings.
-- The explosive-barrel and hanging-lantern interaction system.
+- Any explosive-barrel or hanging-lantern expansion beyond #198's player
+  pickup/throw and shared Burst/barrel lob marker.
 - Mining expansion beyond #184's one deterministic vein rule, additional ore
   or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen, voiced line, or enemy

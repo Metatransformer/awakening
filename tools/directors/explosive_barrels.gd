@@ -23,6 +23,8 @@ extends RefCounted
 ##   D  A real Enemy wearing `behaviour = &"thrower"` discovers an available
 ##      barrel, walks to it, carries it through a visible wind-up, then releases
 ##      a live arcing projectile toward the real hero.
+##   E  The fixture hero picks one up through Prompt, aims and throws it through
+##      the real shoulder path, then raises Burst onto the same landing marker.
 ##
 ## Prints `BARREL OK` only after every assertion above has passed.
 
@@ -60,6 +62,7 @@ func run(rig) -> void:
 	await _b_three_barrel_chain(rig)
 	await _c_hanging_lantern(rig)
 	await _d_enemy_thrower(rig)
+	await _e_player_throw(rig)
 	_finish()
 
 
@@ -290,6 +293,127 @@ func _d_enemy_thrower(rig) -> void:
 	await rig.capture(_out.path_join("15_thrower_explosion.png"))
 	thrower.queue_free()
 	_park_hero()
+
+
+# --- E. Real player pickup, aim and throw -----------------------------------
+
+func _e_player_throw(rig) -> void:
+	var hero := _hero as Hero
+	if hero == null or hero.ranged == null or hero.combat == null:
+		_fail(rig, "E0 the fixture hero has no real combat/ranged children")
+		return
+	Game.heal(Game.max_health_points)
+	hero.global_position = Vector3(0.0, FLOOR_Y + 0.03, 0.65)
+	hero.velocity = Vector3.ZERO
+	hero.facing_yaw = PI
+	_point_camera(Vector3(4.6, 3.4, 6.0), Vector3(0.0, 0.0, -4.0))
+
+	var barrel := _barrel(rig.scene(), &"PlayerBarrel",
+		Vector3(0.0, FLOOR_Y, -0.35))
+	_watch(barrel, &"player")
+	var pickup := barrel.get_node_or_null(^"Pickup") as Interactable
+	_ok(rig, "E0 an idle barrel exposes the standard terse Interactable",
+		pickup != null and pickup.enabled and pickup.prompt == "PICK UP BARREL")
+	var focused: bool = await rig.until(func() -> bool:
+		return Prompt.focus == pickup, 1.0)
+	_ok(rig, "E1 the real Prompt focuses the idle barrel", focused)
+	await rig.tap([&"interact"])
+	var picked_up: bool = await rig.until(func() -> bool:
+		return hero.ranged.has_carried_barrel(), 1.0)
+	_ok(rig, "E2 the real interact action delegates pickup to HeroRanged",
+		picked_up and not barrel.is_available() and not pickup.enabled)
+
+	var other := Node3D.new()
+	other.name = &"OtherBarrelClaimant"
+	rig.scene().add_child(other)
+	_ok(rig, "E3 one carried barrel is unavailable to another claimant",
+		not barrel.begin_carry(other))
+	other.queue_free()
+
+	var before_follow := barrel.global_position
+	var before_hero := hero.global_position
+	await rig.hold([&"move_right"], 30)
+	var hero_move := hero.global_position.distance_to(before_hero)
+	var barrel_move := barrel.global_position.distance_to(before_follow)
+	var carry_gap := barrel.global_position.distance_to(hero.global_position)
+	_ok(rig, "E4 the claimed barrel follows the moving real hero " \
+			+ "(hero %.2f, barrel %.2f, gap %.2f)" \
+			% [hero_move, barrel_move, carry_gap],
+		hero_move > 0.18 and barrel_move > 0.18 and carry_gap < 1.7)
+	hero.velocity = Vector3.ZERO
+	hero.facing_yaw = PI
+	await rig.wait_physics_frames(4)
+	var camera_target := hero.global_position + Vector3(0.0, -0.02, -4.4)
+	_point_camera(hero.global_position + Vector3(2.0, 3.4, 5.4), camera_target)
+	await rig.wait_physics_frames(3)
+
+	var targeter := hero.ranged.lob_targeter
+	await rig.press(&"heavy")
+	var barrel_preview: bool = await rig.until(func() -> bool:
+		return hero.ranged.aim_item() == &"barrel" and targeter != null \
+			and targeter.target_visible(), 1.0)
+	var preview := targeter.target_position() if barrel_preview else Vector3.INF
+	_ok(rig, "E5 holding a real shoulder raises barrel aim and LobTargeter",
+		barrel_preview and preview.is_finite())
+	await rig.capture(_out.path_join("16_player_barrel_aim_marker.png"))
+	# Capture resumes after draw; sample the still-live marker on the release
+	# frame so a camera easing during the shutter cannot make the proof compare
+	# the throw against an older aim solution.
+	preview = targeter.target_position() if targeter.target_visible() else Vector3.INF
+
+	var impact: Dictionary = {"contact": Vector3.INF, "at": Vector3.INF}
+	barrel.exploded.connect(func(at: Vector3) -> void:
+		impact["contact"] = barrel.last_impact_position()
+		impact["at"] = at)
+	var throw_origin := barrel.global_position
+	rig.release(&"heavy")
+	var released: bool = await rig.until(func() -> bool:
+		return is_instance_valid(barrel) and barrel.is_fusing() \
+			and not hero.ranged.has_carried_barrel(), 0.5)
+	_ok(rig, "E6 release throws a live barrel and gives the shoulders back",
+		released and not targeter.target_visible())
+
+	var flight_frame := false
+	for _i in 24:
+		await rig.wait_physics_frames(1)
+		if is_instance_valid(barrel) and not barrel.has_exploded() \
+				and barrel.global_position.distance_to(throw_origin) > 0.55:
+			await rig.capture(_out.path_join("17_player_barrel_flight.png"))
+			flight_frame = true
+			break
+	_ok(rig, "E7 the released live barrel has a readable travelling frame",
+		flight_frame)
+
+	var player_blast: bool = await rig.until(func() -> bool:
+		return _count(&"player") == 1, 2.0)
+	var impact_contact := impact["contact"] as Vector3
+	var miss := preview.distance_to(impact_contact) \
+		if preview.is_finite() and impact_contact.is_finite() else INF
+	_ok(rig, "E8 real flight impacts the previewed point " \
+			+ "(%.3f m; preview %s, impact %s)" \
+			% [miss, preview, impact_contact],
+		player_blast and miss < 0.28)
+	await rig.wait_physics_frames(4)
+	_ok(rig, "E9 the player-thrown barrel explodes exactly once",
+		_count(&"player") == 1 and barrel.explosion_count() == 1)
+	await rig.capture(_out.path_join("18_player_barrel_impact.png"))
+	await rig.wait_seconds(0.7)
+
+	Game.grant(&"burst")
+	Game.add_charges(1)
+	var drew_burst: bool = await rig.draw_weapon(&"burst")
+	_ok(rig, "E10 the real D-pad path separately draws Burst", drew_burst)
+	await rig.press(&"attack")
+	var burst_preview: bool = await rig.until(func() -> bool:
+		return hero.ranged.aim_item() == &"burst" \
+			and hero.ranged.lob_targeter == targeter \
+			and targeter.target_visible(), 1.0)
+	_ok(rig, "E11 Burst raises the same LobTargeter instance", burst_preview)
+	await rig.capture(_out.path_join("19_burst_lob_marker.png"))
+	rig.release(&"attack")
+	var burst_hidden: bool = await rig.until(func() -> bool:
+		return not targeter.target_visible(), 0.5)
+	_ok(rig, "E12 releasing Burst hides the shared landing marker", burst_hidden)
 
 
 func _barrel(parent: Node, prop_name: StringName, at: Vector3) -> ExplosiveBarrel:
