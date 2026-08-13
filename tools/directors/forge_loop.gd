@@ -1,8 +1,9 @@
 extends RefCounted
 ## The forge, end to end: a component on the floor becomes a longer chain.
 ##
-## Point it at GARRISON. It descends on its own, because half the claims here are
-## about what survives the trip and you cannot test that from one side of it.
+## Point it at GARRISON. It enters the Sunken Cut on its own, because half the
+## claims here are about what survives the trip and you cannot test that from
+## one side of it.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -15,7 +16,7 @@ extends RefCounted
 ##   B  The pouch draws `Game.bag_slots` cells and marks the components.
 ##   C  The smith names a component cost and REFUSES when the bench is short.
 ##   CH Forging is a HOLD, it shows a gauge while you hold it, and a tap does
-##      nothing -- the same contract the gate has, at the counter.
+##      nothing -- the same contract the mine entrance has, at the counter.
 ##   D  Buying a rung moves the number the gear actually reads -- the arc, the
 ##      draw, the reach, the edge, the plate -- not just a counter.
 ##   E  A component on the dungeon floor is picked up by WALKING OVER IT.
@@ -396,7 +397,7 @@ func _smith(rig) -> void:
 
 	# Close it and WAIT FOR IT TO BE GONE. The trade screen holds `Prompt.block`
 	# for its whole life, so a screen still shutting means `Prompt.focus` is null
-	# at the gate, the hold goes nowhere, and every beat after it reports a
+	# at the Sunken Cut, the hold goes nowhere, and every beat after it reports a
 	# failure it did not cause. mvp_loop.gd learned this the expensive way and
 	# left a comment about it; a fixed frame count is the wrong instrument.
 	await rig.tap(["ui_cancel"])
@@ -513,26 +514,31 @@ func _forge_is_a_hold(rig, screen) -> void:
 
 func _descend(rig) -> void:
 	var garrison := rig.scene() as Garrison
-	_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
-	# Wait for THE GATE to own the button, not for "something" to. The teleport
+	var descent := garrison.sunken_cut
+	_ck("E0 the Sunken Cut exists in the surface world", descent != null)
+	if descent == null:
+		return
+	_stand_at(rig, descent.global_position + Vector3(0.0, 0.0, 1.8),
+		descent.global_position)
+	# Wait for THE SUNKEN CUT to own the button, not for "something" to. The teleport
 	# out of the smith's trigger takes a physics frame or two to register as an
 	# exit, and until it does `Prompt.focus` is still the smith -- non-null, so a
 	# "focus != null" wait breaks instantly and the 0.9 s hold that follows
-	# re-opens the shop instead of opening the gate. That is exactly how this
+	# re-opens the shop instead of entering the mine. That is exactly how this
 	# beat failed here, and the whole run then reported an economy bug it did not
-	# have. `Prompt.focus != null` is not the state you need; the gate is.
+	# have. `Prompt.focus != null` is not the state you need; the Sunken Cut is.
 	for _i in 90:
-		if Prompt.focus == garrison.gate:
+		if Prompt.focus == descent:
 			break
 		await rig.wait_frames(2)
-	print("FORGE gate focus=%s blocked=%s" % [
+	print("FORGE mine focus=%s blocked=%s" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>", Prompt.blocked])
-	_ck("E0a the gate owns the interact button", Prompt.focus == garrison.gate)
-	# The gate wants a 0.9 s hold. A tap must not open it -- that is the whole
+	_ck("E0a the Sunken Cut owns the interact button", Prompt.focus == descent)
+	# The mine entrance wants a 0.9 s hold. A tap must not open it -- that is the whole
 	# point of the hold, and it is one press to prove.
 	await rig.tap(["interact"])
 	await rig.wait_frames(20)
-	_ck("E0b a tap does not open the gate", not Run.in_dungeon)
+	_ck("E0b a tap does not enter the mine", not Run.in_dungeon)
 
 	# Hold until the descent registers, rather than for a fixed 1.3 s and a shrug.
 	# `rig.hold_seconds` was what this used and it left `Prompt._hold` at 0.00
@@ -541,15 +547,15 @@ func _descend(rig) -> void:
 	# This beat is also what found the bug that made every director on this
 	# machine flaky: a GAMEPAD on the desk. Sticks resting just outside the
 	# deadzone reported `move_up` / `move_right` held, the hero walked out of the
-	# gate's radius mid-hold, `Prompt` dropped focus, and the run reported five
-	# economy failures for a gate it had never reached. `shoot.gd` now strips
+	# mine entrance's radius mid-hold, `Prompt` dropped focus, and the run reported
+	# five economy failures for a transition it had never reached. `shoot.gd` now strips
 	# joypad bindings for the life of a capture run.
 	#
 	# The re-plant stays: the hero has physics, and losing focus zeroes `_hold`
 	# with nothing printed, so the bar restarts and the beat lies about why.
 	Input.action_press(&"interact")
 
-	# The gate's own glow is the diegetic half of this and the HUD's gauge is the
+	# The Sunken Cut's glow is the diegetic half of this and the HUD's gauge is the
 	# legible half; the bug being guarded against is a hold that ships with
 	# neither. `Hud` mirrors `Bus.hold_changed`, so reading it is reading what
 	# got drawn, and the shutter opens on the first frame it is non-zero.
@@ -567,11 +573,11 @@ func _descend(rig) -> void:
 		required = required or Hud._hold_required
 		if not shot and peak > 0.0:
 			shot = true
-			await rig.capture(out.path_join("f_03_gate_hold.png"))
+			await rig.capture(out.path_join("f_03_mine_hold.png"))
 		if Run.in_dungeon:
 			break
-	print("FORGE gate gauge peak=%.2f required=%s" % [peak, required])
-	_ck("E0c the HUD knows the gate is a hold", required)
+	print("FORGE mine gauge peak=%.2f required=%s" % [peak, required])
+	_ck("E0c the HUD knows the mine entrance is a hold", required)
 	_ck("E0d the gauge filled while he held it (%.2f)" % peak, peak > 0.0)
 
 	for _i in 12:
@@ -579,12 +585,15 @@ func _descend(rig) -> void:
 		if Run.in_dungeon:
 			break
 		# The scene can be freed one frame before Run publishes the destination.
-		# At that point the held gate has already succeeded; wait for the new scene
+		# At that point the held mine transition has succeeded; wait for the new scene
 		# instead of dereferencing the old garrison during the hand-off.
 		if not is_instance_valid(garrison):
 			break
-		if Prompt.focus != garrison.gate:
-			_stand_at(rig, garrison.gate.global_position + Vector3(0.0, 0.0, 1.8))
+		if not is_instance_valid(descent):
+			break
+		if Prompt.focus != descent:
+			_stand_at(rig, descent.global_position + Vector3(0.0, 0.0, 1.8),
+				descent.global_position)
 	Input.action_release(&"interact")
 	print("FORGE post_hold in_dungeon=%s busy=%s scene=%s" % [
 		Run.in_dungeon, Flow.busy, rig.scene().name])

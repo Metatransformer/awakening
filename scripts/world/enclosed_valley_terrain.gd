@@ -7,7 +7,6 @@ extends Node3D
 ## skyline.  There is no geometry beneath the playable site and no collision;
 ## each room keeps ownership of its authored ground, movement, and boundaries.
 
-const HEIGHTMAP: Texture2D = preload("res://assets/terrain/enclosed_valley_heightmap.png")
 const TERRAIN_SHADER: Shader = preload("res://assets/shaders/enclosed_valley_terrain.gdshader")
 
 const INNER_ANGULAR_SEGMENTS := 128
@@ -21,7 +20,8 @@ const FAR_RADIAL_SEGMENTS := 8
 const HEIGHTMAP_FLOOR := 0.10
 const NORMAL_SAMPLE_METRES := 1.5
 const LOD_SEAM_SKIRT_DEPTH := 1.5
-const CROWN_TREE_COUNT := 88
+const CLIFF_FACE_VERTICAL_SEGMENTS := 4
+const CROWN_TREE_COUNT := 144
 
 @export_range(20.0, 180.0, 1.0, "or_greater") var site_radius := 58.0
 ## Full side length represented by the square heightmap, in metres.
@@ -31,13 +31,9 @@ const CROWN_TREE_COUNT := 88
 @export_range(10.0, 180.0, 1.0, "or_greater") var height_scale := 38.0
 @export_range(2.0, 30.0, 0.5, "or_greater") var inner_cliff_height := 20.0
 @export_range(2.0, 30.0, 0.5, "or_greater") var inner_cliff_depth := 14.0
-## The default aperture points along local +Z. Rotate the component with `yaw` to
-## align this distant gorge behind a gate, bridge, or other controlled exit.
-@export_range(-180.0, 180.0, 1.0) var gorge_angle_degrees := 135.0
-@export_range(4.0, 60.0, 1.0) var gorge_width_degrees := 20.0
 @export_range(-180.0, 180.0, 1.0) var yaw_degrees := 0.0
-## Production rooms should preload the three `.res` outputs of `bake_meshes`.
-## Leaving these empty retains a deterministic runtime fallback for lookdev.
+## Production rooms preload the three `.res` outputs of `bake_meshes`. The
+## image-model heightmap is offline source art and is never decoded at runtime.
 @export var baked_inner_mesh: ArrayMesh
 @export var baked_mid_mesh: ArrayMesh
 @export var baked_far_mesh: ArrayMesh
@@ -71,12 +67,15 @@ func rebuild_terrain() -> void:
 
 
 func triangle_count() -> int:
-	var surface_triangles := INNER_ANGULAR_SEGMENTS * INNER_RADIAL_SEGMENTS * 2 \
-		+ MID_ANGULAR_SEGMENTS * MID_RADIAL_SEGMENTS * 2 \
-		+ FAR_ANGULAR_SEGMENTS * FAR_RADIAL_SEGMENTS * 2
-	var cliff_triangles := INNER_ANGULAR_SEGMENTS * 2
-	var seam_triangles := (INNER_ANGULAR_SEGMENTS + MID_ANGULAR_SEGMENTS) * 2
-	return surface_triangles + cliff_triangles + seam_triangles
+	var triangles := 0
+	for mesh: ArrayMesh in [baked_inner_mesh, baked_mid_mesh, baked_far_mesh]:
+		if mesh == null:
+			continue
+		for surface_index: int in mesh.get_surface_count():
+			var arrays := mesh.surface_get_arrays(surface_index)
+			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+			triangles += indices.size() / 3
+	return triangles
 
 
 ## Offline bake API. A small `@tool` script can save each returned ArrayMesh with
@@ -95,8 +94,6 @@ static func bake_meshes(heightmap_texture: Texture2D, site_radius_value: float,
 	baker.height_scale = maxf(height_scale_value, 10.0)
 	baker.inner_cliff_height = maxf(cliff_height_value, 2.0)
 	baker.inner_cliff_depth = maxf(cliff_depth_value, 2.0)
-	baker.gorge_angle_degrees = rad_to_deg(gorge_angle_value)
-	baker.gorge_width_degrees = rad_to_deg(gorge_width_value)
 	baker._height_image = heightmap_texture.get_image()
 	var meshes: Dictionary[StringName, ArrayMesh] = {}
 	if baker._height_image == null or baker._height_image.is_empty():
@@ -128,19 +125,7 @@ func _rebuild() -> void:
 		_add_mesh_instance(&"FarMountains", baked_far_mesh, false)
 		_build_cliff_crown_forest(baked_inner_mesh)
 		return
-	_height_image = HEIGHTMAP.get_image()
-	if _height_image == null or _height_image.is_empty():
-		push_error("EnclosedValleyTerrain could not read its heightmap")
-		return
-
-	var extents := _ring_extents()
-	_add_mesh_instance(&"InnerCliffs", _build_ring_mesh(site_radius, extents.x,
-		INNER_ANGULAR_SEGMENTS, INNER_RADIAL_SEGMENTS, 0.0, true,
-		deg_to_rad(gorge_angle_degrees), deg_to_rad(gorge_width_degrees), true), true)
-	_add_mesh_instance(&"MidMountains", _build_ring_mesh(extents.x, extents.y,
-		MID_ANGULAR_SEGMENTS, MID_RADIAL_SEGMENTS, 0.5, false, 0.0, 0.0, true), false)
-	_add_mesh_instance(&"FarMountains", _build_ring_mesh(extents.y, world_span * 0.5,
-		FAR_ANGULAR_SEGMENTS, FAR_RADIAL_SEGMENTS, 1.0, false, 0.0, 0.0, false), false)
+	push_error("EnclosedValleyTerrain requires all three baked meshes")
 
 
 func _ring_extents() -> Vector2:
@@ -202,9 +187,10 @@ func _build_ring_mesh(inner_radius: float, outer_radius: float,
 	if add_outer_skirt:
 		var skirt_first_index := ring_vertex_count
 		if add_cliff_face:
-			skirt_first_index += (angular_segments + 1) * 2
+			skirt_first_index += (angular_segments + 1) \
+				* (CLIFF_FACE_VERTICAL_SEGMENTS + 1)
 		_add_lod_seam_skirt(surface, outer_radius, angular_segments, lod_band,
-			opening_angle, opening_width, skirt_first_index)
+			skirt_first_index)
 
 	var mesh := ArrayMesh.new()
 	surface.commit(mesh)
@@ -248,9 +234,6 @@ func _build_cliff_crown_forest(source_mesh: ArrayMesh) -> void:
 	for i: int in CROWN_TREE_COUNT:
 		var angle := TAU * float(i) / float(CROWN_TREE_COUNT) \
 			+ sin(float(i) * 2.17) * 0.035
-		if _angle_distance(angle, deg_to_rad(gorge_angle_degrees)) \
-				< deg_to_rad(gorge_width_degrees + 8.0) * 0.5:
-			continue
 		var radius := site_radius + 5.0 + float(i % 5) * 7.2 \
 			+ sin(float(i) * 1.31) * 2.4
 		var flat := Vector2(cos(angle), sin(angle)) * radius
@@ -324,8 +307,7 @@ func _plain_forest_material(color: Color) -> StandardMaterial3D:
 ## The bands now share identical angular boundary vertices; this short downward
 ## overlap is still cheap insurance against precision cracks at extreme distance.
 func _add_lod_seam_skirt(surface: SurfaceTool, radius: float,
-		angular_segments: int, lod_band: float, opening_angle: float,
-		opening_width: float, first_index: int) -> void:
+		angular_segments: int, lod_band: float, first_index: int) -> void:
 	for angular_index: int in angular_segments + 1:
 		var angle := TAU * float(angular_index) / float(angular_segments)
 		var direction := Vector2(cos(angle), sin(angle))
@@ -372,12 +354,24 @@ func _add_inner_cliff_face(surface: SurfaceTool, radius: float,
 	for angular_index: int in angular_segments + 1:
 		var angle := TAU * float(angular_index) / float(angular_segments)
 		var direction := Vector2(cos(angle), sin(angle))
-		var point := direction * (radius + _cliff_edge_offset(angle))
-		var top_y := _terrain_height_at(point.x, point.y)
+		var edge_radius := radius + _cliff_edge_offset(angle)
+		var edge_point := direction * edge_radius
+		var top_y := _terrain_height_at(edge_point.x, edge_point.y)
 		var bottom_y := top_y - inner_cliff_depth
-		var inward_normal := Vector3(-direction.x, 0.08, -direction.y).normalized()
 		var uv_x := float(angular_index) / float(angular_segments)
-		for wall_y: float in [top_y, bottom_y]:
+		for vertical_index: int in CLIFF_FACE_VERTICAL_SEGMENTS + 1:
+			var vertical_t := float(vertical_index) / float(CLIFF_FACE_VERTICAL_SEGMENTS)
+			# Alternating inset ledges make the near wall read as fractured geology
+			# from gameplay height. End rows stay exact at the authored lip/base.
+			var ledge_profile := sin(vertical_t * PI)
+			var ledge_offset := ledge_profile * (
+				sin(angle * 7.0 + float(vertical_index) * 1.31) * 1.65
+				+ sin(angle * 17.0 - float(vertical_index) * 0.83) * 0.70)
+			var point := direction * (edge_radius + ledge_offset)
+			var wall_y := lerpf(top_y, bottom_y, vertical_t)
+			var inward_normal := Vector3(-direction.x,
+				sin(angle * 9.0 + float(vertical_index) * 1.7) * 0.34,
+				-direction.y).normalized()
 			surface.set_normal(inward_normal)
 			surface.set_uv(Vector2(uv_x, inverse_lerp(bottom_y, top_y, wall_y)))
 			surface.set_color(Color(clampf((top_y - elevation) / height_scale,
@@ -390,18 +384,20 @@ func _add_inner_cliff_face(surface: SurfaceTool, radius: float,
 		if opening_width > 0.0 and _angle_distance(cell_angle,
 				opening_angle) < opening_width * 0.5:
 			continue
-		var top_a: int = first_index + angular_index * 2
-		var bottom_a: int = top_a + 1
-		var top_b: int = top_a + 2
-		var bottom_b: int = top_a + 3
-		# The inner wall faces the playable centre, opposite the terrain's radial face.
-		# Godot's clockwise front face needs the complementary order to the top shell.
-		surface.add_index(top_a)
-		surface.add_index(top_b)
-		surface.add_index(bottom_a)
-		surface.add_index(bottom_a)
-		surface.add_index(top_b)
-		surface.add_index(bottom_b)
+		for vertical_index: int in CLIFF_FACE_VERTICAL_SEGMENTS:
+			var stride := CLIFF_FACE_VERTICAL_SEGMENTS + 1
+			var top_a: int = first_index + angular_index * stride + vertical_index
+			var bottom_a: int = top_a + 1
+			var top_b: int = top_a + stride
+			var bottom_b: int = top_b + 1
+			# The inner wall faces the playable centre, opposite the terrain's radial face.
+			# Godot's clockwise front face needs the complementary order to the top shell.
+			surface.add_index(top_a)
+			surface.add_index(top_b)
+			surface.add_index(bottom_a)
+			surface.add_index(bottom_a)
+			surface.add_index(top_b)
+			surface.add_index(bottom_b)
 
 
 func _normal_at(x: float, z: float) -> Vector3:
@@ -459,6 +455,6 @@ static func _angle_distance(a: float, b: float) -> float:
 
 
 static func _cliff_edge_offset(angle: float) -> float:
-	return sin(angle * 5.0 + 0.3) * 1.45 \
-		+ sin(angle * 11.0 - 1.1) * 0.72 \
-		+ sin(angle * 23.0 + 2.4) * 0.28
+	return sin(angle * 5.0 + 0.3) * 3.2 \
+		+ sin(angle * 11.0 - 1.1) * 1.45 \
+		+ sin(angle * 23.0 + 2.4) * 0.62

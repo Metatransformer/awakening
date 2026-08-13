@@ -322,7 +322,7 @@ func _buy(rig) -> bool:
 func _descend(rig) -> bool:
 	var garrison := rig.scene() as Garrison
 
-	# Wait for the GATE to actually own the interact button before holding it.
+	# Wait for the SUNKEN CUT to own the interact button before holding it.
 	#
 	# This beat was flaky about one run in five, and the failure was expensive
 	# out of all proportion: the hold went into the smith's screen while it was
@@ -335,29 +335,16 @@ func _descend(rig) -> bool:
 	# That lesson is `_approach` now, and the sell and buy beats above -- which
 	# had the same bug against the shop triggers rather than against a closing
 	# screen -- go through it too.
-	if not await _approach(rig, garrison.gate,
-			garrison.gate.global_position + Vector3(0.0, 0.0, 1.8)):
+	var cut := garrison.sunken_cut
+	if cut == null:
+		rig.fail("MVP FAIL the combined garrison has no Sunken Cut")
 		return false
-	print("MVP gate focus=%s" % [
-		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
-	await rig.capture(out.path_join("m_07_gate.png"))
-
-	# The compound gate now opens onto the authored outskirts rather than
-	# teleporting through the surface journey.
-	await rig.hold_seconds(["interact"], 1.3)
-	var reached_outskirts: bool = await rig.until(func() -> bool:
-		return rig.scene() is GarrisonOutskirts, 10.0)
-	if not reached_outskirts:
-		rig.fail("MVP FAIL holding DEPART did not open the outskirts")
-		return false
-	var outskirts: GarrisonOutskirts = rig.scene() as GarrisonOutskirts
-	await rig.wait_frames(30)
-	await rig.capture(out.path_join("m_08_outskirts.png"))
-	if not await _approach(rig, outskirts.sunken_cut,
-			outskirts.sunken_cut.global_position + Vector3(0.0, 0.0, 1.8)):
+	if not await _approach(rig, cut,
+			cut.global_position + cut.global_basis.z.normalized() * 1.8):
 		return false
 	print("MVP cut focus=%s" % [
 		Prompt.focus.prompt if Prompt.focus != null else "<none>"])
+	await rig.capture(out.path_join("m_07_sunken_cut.png"))
 	await rig.hold_seconds(["interact"], 1.3)
 	var arrived: bool = await rig.until(
 		func() -> bool: return Run.in_dungeon and _dungeon(rig) != null, 10.0)

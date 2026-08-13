@@ -79,7 +79,8 @@ static func build(compound: GarrisonCompound) -> void:
 	_build_interiors(compound, art_pass)
 	_build_garden(art_pass)
 	_build_practicals(art_pass)
-	_build_gate_vista(art_pass)
+	if not compound.open_surface_gate:
+		_build_gate_vista(art_pass)
 
 
 static func _build_terrain(compound: GarrisonCompound, art_pass: Node3D) -> void:
