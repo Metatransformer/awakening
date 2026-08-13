@@ -23,6 +23,8 @@ enum Rarity { COMMON, UNCOMMON, RARE }
 ##    `Game.components` instead of handing it to the vendor. It still has a
 ##    `value`, because the extraction fee is a share of what you are carrying and
 ##    a component you carried is something you carried.
+##  * `SUPPLY` is garrison cargo. It occupies the same bag, but neither a vendor
+##    nor a bench accepts it; the central supply crate is its only destination.
 ##
 ## WHICH bench is `bench`, and it is a label rather than a second kind, because
 ## every rule that matters -- banked on extraction, lost on death, never sold --
@@ -31,7 +33,7 @@ enum Rarity { COMMON, UNCOMMON, RARE }
 ## One catalogue, one drop path, one LootMote. The kind is a label on the row,
 ## not a second inventory: a component and a pearl compete for the same bag slot,
 ## and that competition IS the decision this whole system exists to create.
-enum Kind { INGREDIENT, COMPONENT }
+enum Kind { INGREDIENT, COMPONENT, SUPPLY }
 
 var id: StringName
 var display_name: String
@@ -103,8 +105,22 @@ static func gem(p_id: StringName, p_name: String, p_value: int,
 	return d
 
 
+## Provisions share the bag definition but leave it only through the garrison
+## crate. Keeping this constructor explicit prevents a zero-value fish from
+## silently becoming merchandise that the vendor removes for no payment.
+static func supply(p_id: StringName, p_name: String, p_stack: int,
+		p_tint: Color, p_blurb: String) -> ItemDef:
+	var d := make(p_id, p_name, 0, Rarity.COMMON, p_stack, p_tint, p_blurb)
+	d.kind = Kind.SUPPLY
+	return d
+
+
 func is_component() -> bool:
 	return kind == Kind.COMPONENT
+
+
+func is_supply() -> bool:
+	return kind == Kind.SUPPLY
 
 
 ## "THE FORGE" / "THE ALCHEMIST", for a screen that has to tell the player where

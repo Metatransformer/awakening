@@ -161,7 +161,7 @@ func _rebuild_band() -> void:
 func _build_hearth_status() -> void:
 	UITheme.section_rule(_body, "HEARTH & TRADE")
 	_fact("Hearth stock", "%d / %d bundles" % [Game.firewood_stock, Game.FIREWOOD_CAP])
-	_fact("Carried bundle", "Yes" if Game.carrying_firewood else "No")
+	_fact("Carried Firewood cargo", "%d bundles" % _carried_firewood())
 	_fact("Next unresolved bonfire",
 		"Can be fueled" if Game.firewood_stock > 0 else "No stored bundle")
 	_fact("Garrison Warmth", "Active" if Game.warmth_active else "Inactive",
@@ -174,6 +174,7 @@ func _build_hearth_status() -> void:
 func _build_provisions_and_morale() -> void:
 	UITheme.section_rule(_body, "PROVISIONS & MORALE")
 	_fact("Fish reserve", "%d / %d meals" % [Game.fish_stock, Game.FISH_CAP])
+	_fact("Carried Food cargo", "%d fish" % _carried_food())
 	_fact("Today's remaining yield",
 		"%d Fish" % Game.fishing_remaining_today(Clock.day))
 	_fact("Next supper", _next_supper_status())
@@ -223,56 +224,47 @@ func _next_supper_status() -> String:
 func _build_duty_status() -> void:
 	UITheme.section_rule(_body, "KEEP THE HEARTH")
 	var assigned: bool = Game.flag(StoryDb.told_flag(&"elder", &"timber_duty"))
-	var axe_known: bool = Game.tool_known(ToolDb.WOODSMAN_AXE_ID)
-	var axe_usable: bool = Game.tool_usable(ToolDb.WOODSMAN_AXE_ID)
-	var axe_durability: int = Game.tool_durability(ToolDb.WOODSMAN_AXE_ID)
-	var axe_maximum: int = Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)
+	var owns_axe: bool = Game.has(ShopDb.WOODSMAN_AXE_ID)
 	var completed: bool = Game.timber_completed_day == Clock.day
 	var availability: String
 	if not assigned:
 		availability = "Unavailable · duty not assigned"
-	elif not axe_known:
-		availability = "Unavailable · axe not crafted"
-	elif not axe_usable:
-		availability = "Unavailable · axe is broken"
+	elif not owns_axe:
+		availability = "Unavailable · axe not owned"
 	elif completed:
 		availability = "Completed today"
-	elif Game.carrying_firewood:
-		availability = "Bundle already cut"
 	elif Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
 		availability = "Closed · %s" % _phase_label(Clock.garrison_phase())
-	elif Game.firewood_stock >= Game.FIREWOOD_CAP:
-		availability = "Unavailable · hearth stock is full"
 	else:
 		availability = "Available now"
 	_fact("Outskirts grove", availability)
-	var axe_status := "%d / %d durability" % [axe_durability, axe_maximum]
-	if not axe_known:
-		axe_status = "Never crafted · %s" % axe_status
-	elif not axe_usable:
-		axe_status = "BROKEN · %s" % axe_status
-	_fact("Woodsman's Axe", axe_status,
-		UITheme.DANGER if axe_known and not axe_usable else null)
 	_fact("Today's chop", "Complete" if completed else "Not complete")
-	_fact("Current step", _duty_step(assigned, axe_known, axe_usable, completed))
+	_fact("Current step", _duty_step(assigned, owns_axe, completed))
 
 
-func _duty_step(assigned: bool, axe_known: bool, axe_usable: bool,
-		completed: bool) -> String:
+func _duty_step(assigned: bool, owns_axe: bool, completed: bool) -> String:
 	if not assigned:
 		return "Not assigned"
-	if not axe_known:
+	if not owns_axe:
 		return "Craft the Woodsman's Axe at Brannoc's forge."
-	if not axe_usable:
+	if not Game.tool_usable(ToolDb.WOODSMAN_AXE_ID):
 		return "Reforge the broken Woodsman's Axe at Brannoc's forge."
-	if Game.carrying_firewood:
-		return "Carry today's bundle home to the central hearth."
+	if _carried_firewood() > 0 or _carried_food() > 0:
+		return "Deposit carried cargo at the south-gate supply box."
 	if completed:
-		if Clock.garrison_phase() == WorldClock.GARRISON_DAYTIME \
-				and Game.firewood_stock > 0:
-			return "Hearth stocked for tonight's bonfire."
 		return "Return tomorrow for the next bundle."
 	return "Fell today's tree in the outskirts grove."
+
+
+func _carried_firewood() -> int:
+	return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0))
+
+
+func _carried_food() -> int:
+	var total := 0
+	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
+		total += int(Run.bag.get(fish_id, 0)) * SupplyCargoDb.food_units(fish_id)
+	return total
 
 
 func _build_garrison_defence() -> void:

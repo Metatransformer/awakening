@@ -102,6 +102,7 @@ var atmosphere: SurfaceAtmosphere
 var plaza: Plaza
 var statue: Statue
 var hearth: GarrisonHearth
+var supply_box: SupplyBox
 var raid_objective: GarrisonRaidObjective
 var bolt_thrower: BoltThrower
 var raid_raiders: Array[RaidRaider] = []
@@ -146,6 +147,7 @@ func _ready() -> void:
 	house = compound.player_bunk
 	_build_plaza()
 	_build_hearth()
+	_build_supply_box()
 	_build_raid_objective()
 	# Before a single body is placed: who this homecoming is FOR. See `_arriving`.
 	# It must be read BEFORE `_build_compound_people`, not after -- the scene and
@@ -183,6 +185,8 @@ func surface_map_plan() -> Dictionary:
 		landmarks.append(_surface_landmark(gate, &"gate"))
 	if hearth != null and is_instance_valid(hearth):
 		landmarks.append(_surface_landmark(hearth, &"hearth"))
+	if supply_box != null and is_instance_valid(supply_box):
+		landmarks.append(_surface_landmark(supply_box, &"landmark"))
 	if statue != null and is_instance_valid(statue):
 		landmarks.append(_surface_landmark(statue, &"landmark"))
 	for npc: Npc in [vendor, smith, alchemist, keeper, jeweller, builder]:
@@ -666,6 +670,17 @@ func _build_hearth() -> void:
 	hearth.name = &"GarrisonHearth"
 	add_child(hearth)
 	hearth.global_transform = compound.global_transform * compound.port(&"hearth")
+
+
+func _build_supply_box() -> void:
+	supply_box = SupplyBox.new()
+	supply_box.name = &"SupplyBox"
+	# The tower begins at z=11.8 and the passage occupies x=-3..3. This sits just
+	# inside and east of the arrival threshold: visible from the road, clear of
+	# both tower collision and the six-metre route through the gatehouse.
+	supply_box.position = Vector3(4.2, 0.05, 10.2)
+	supply_box.rotation.y = -PI * 0.5
+	add_child(supply_box)
 
 
 func _build_raid_objective() -> void:

@@ -95,13 +95,15 @@ const SLOTS := 3
 ## each of those is also completed, while no other completion can be inferred.
 ## Bumped to 18 for durable utility tools. Older owned Woodsman's Axes migrate
 ## to full durability; the additive tool manifest is otherwise empty.
-const VERSION := 18
+## Bumped to 19 so a non-dungeon Run snapshot is restored instead of discarded.
+## Legacy carrying_firewood becomes a bag bundle after Run state is restored.
+const VERSION := 19
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -444,6 +446,9 @@ func load_slot(slot: int) -> Dictionary:
 		filed_value - owned_doctrines * FieldNotesDb.DOCTRINE_COST)
 	Game.field_notes = clampi(saved_field_notes, 0, maximum_balance)
 	var raw_garrison: Variant = d.get("garrison", {})
+	var legacy_carrying_firewood: bool = int(d.get("version", 0)) < VERSION \
+		and raw_garrison is Dictionary \
+		and bool((raw_garrison as Dictionary).get("carrying_firewood", false))
 	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})
 	# Upgrades own the permanent ceiling; the garrison payload owns the temporary
 	# trip bit. Derive their combined maximum without healing saved health, then
@@ -579,17 +584,23 @@ func load_slot(slot: int) -> Dictionary:
 	Game.loadout_set = clampi(int(d.get("loadout_set", Game.PRIMARY)),
 		0, Game.loadout.size() - 1)
 
-	# Only a v10 snapshot explicitly marked underground is a resumable run. Older
-	# versions return to the garrison with a clean Run, exactly as they did before
-	# snapshots existed.
+	# v10 introduced the Run payload. A valid snapshot now restores at home too,
+	# because that is where undeposited supply cargo waits in the same bag. Whether
+	# the destination is a dungeon remains a separate, explicit result below.
 	var raw_run: Variant = d.get("run", {})
 	var run_data: Dictionary = raw_run as Dictionary if raw_run is Dictionary else {}
 	var save_version := int(d.get("version", 0))
-	var restored_dungeon := false
-	if save_version >= 10 and bool(run_data.get("in_dungeon", false)):
-		restored_dungeon = Run.restore(run_data) and Run.in_dungeon
+	var restored_run := false
+	if save_version >= 10 and not run_data.is_empty():
+		restored_run = Run.restore(run_data)
 	else:
 		Run.reset()
+	var restored_dungeon := restored_run and Run.in_dungeon
+	# The legacy bit lived outside the bag. Migrate only at home, after restoring
+	# the bag it must join; the dedicated Run seam also preserves it if that old
+	# bag was already full rather than deleting another carried item on load.
+	if not restored_dungeon and legacy_carrying_firewood:
+		Run.ensure_legacy_cargo(SupplyCargoDb.FIREWOOD_ID, 1)
 	# v12 slots written before Boss Keys carried a floor tag have only the bool.
 	# Bind that legacy held key to the restored floor; outside a live run it is
 	# invalid inventory and `Run.reset()` has already cleared it.

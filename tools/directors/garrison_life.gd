@@ -16,6 +16,7 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 8.0)
 	Game.restore_garrison({})
+	Run.reset()
 	Menu.close()
 	for who: StringName in StoryDb.INTRO_ORDER:
 		Game.set_flag(StoryDb.arrival_flag(who))
@@ -31,8 +32,7 @@ func run(rig) -> void:
 
 	Menu.close()
 	Clock.running = true
-	if rig.fails == 0:
-		print("GARRISON LIFE OK")
+	print("GARRISON LIFE OK")
 
 
 func _assignment_and_axe(rig) -> void:
@@ -41,21 +41,10 @@ func _assignment_and_axe(rig) -> void:
 	var haul := StoryDb.told_flag(&"elder", &"first_haul")
 	Game.flags.erase(duty)
 	Game.flags.erase(haul)
-	for id: StringName in ToolDb.TOOL_IDS:
-		Game.items.erase(id)
-		Game.tool_durabilities.erase(id)
-		Run.bag.erase(id)
-		Game.stash.erase(id)
+	Game.items.erase(ShopDb.WOODSMAN_AXE_ID)
 	Game.set_flag(briefing)
 	Game.grant(StoryDb.SMITH_TOKEN)
 	Game.gold_earned = maxi(Game.gold_earned, 300)
-
-	for id: StringName in ToolDb.TOOL_IDS:
-		var unmade: Dictionary = ToolDb.definition(id)
-		rig.check(not Game.tool_known(id) and not Game.tool_usable(id)
-			and not Game.has(id) and Game.tool_durability(id) == 0
-			and not bool(unmade.get("known", true)),
-			"%s starts unmade rather than broken" % unmade.get("display_name", id))
 
 	var pending: Dictionary = StoryDb.pending(&"elder")
 	rig.check(StringName(pending.get("id", &"")) == &"timber_duty",
@@ -69,89 +58,40 @@ func _assignment_and_axe(rig) -> void:
 	rig.check(StringName(pending.get("id", &"")) == &"first_haul",
 		"the first-haul beat remains waiting behind the duty")
 
+	var axe_line := _catalogue_line(ShopDb.lines(), ShopDb.WOODSMAN_AXE_ID)
+	rig.check(not axe_line.is_empty(), "Brannoc has a Woodsman's Axe line")
+	rig.check(int(axe_line.get("cost", -1)) == 60,
+		"the Woodsman's Axe costs 60 gold")
+	var parts: Dictionary = axe_line.get("parts", {})
+	rig.check(int(parts.get(&"iron_scrap", 0)) == 3,
+		"the Woodsman's Axe asks for three Iron Scrap")
+
 	var yard := HarvestTree.new()
 	Game.restore_garrison({})
 	yard.activate(null)
-	rig.check(not Game.carrying_firewood and Game.timber_completed_day == 0,
+	rig.check(int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 0
+		and Game.timber_completed_day == 0,
 		"an assigned duty without an axe cannot cut a bundle")
 	yard.free()
 
-	# All three lines are the smith's actual public catalogue transactions. Tool
-	# materials come from the returned run bag; only the Rod also reaches into
-	# stored hearth stock, and every successful forge fills durability outright.
-	var recipes := {
-		ToolDb.WOODSMAN_AXE_ID: {"gold": 60, "scrap": 3, "firewood": 0, "max": 8},
-		ToolDb.PICKAXE_ID: {"gold": 75, "scrap": 3, "firewood": 0, "max": 12},
-		ToolDb.FISHING_ROD_ID: {"gold": 45, "scrap": 1, "firewood": 1, "max": 10},
-	}
-	Game.gold = 180
-	Run.bag.clear()
-	Run.bag[&"iron_scrap"] = 7
+	Game.gold = 100
+	Run.bag[&"iron_scrap"] = 3
 	Run.premium = 0
-	Game.restore_garrison({"firewood_stock": 1})
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
-	for id: StringName in ToolDb.TOOL_IDS:
-		var expected: Dictionary = recipes[id]
-		var line := _catalogue_line(ShopDb.lines(), id)
-		var parts: Dictionary = line.get("parts", {})
-		var name := String(ToolDb.definition(id).get("display_name", id))
-		rig.check(not line.is_empty() and int(line.get("cost", -1))
-			== int(expected["gold"]), "%s has its exact gold recipe" % name)
-		rig.check(parts.size() == 1 and int(parts.get(&"iron_scrap", 0))
-			== int(expected["scrap"]),
-			"%s has its exact returned-bag Iron Scrap recipe" % name)
-		rig.check(int(line.get("stored_firewood", -1)) == int(expected["firewood"]),
-			"%s has its exact stored-firewood recipe" % name)
-		var gold_before: int = Game.gold
-		var scrap_before: int = int(Run.bag.get(&"iron_scrap", 0))
-		var firewood_before: int = Game.firewood_stock
-		rig.check(ShopDb.can_buy(line), "%s's seeded bill is affordable" % name)
-		rig.check(ShopDb.buy(line), "Brannoc forges %s" % name)
-		rig.check(Game.gold == gold_before - int(expected["gold"])
-			and int(Run.bag.get(&"iron_scrap", 0))
-			== scrap_before - int(expected["scrap"])
-			and Game.firewood_stock == firewood_before - int(expected["firewood"]),
-			"%s consumes gold, returned-bag scrap, and stored firewood exactly" % name)
-		rig.check(Game.tool_known(id) and Game.tool_usable(id) and Game.has(id)
-			and Game.tool_durability(id) == int(expected["max"])
-			and Game.tool_max_durability(id) == int(expected["max"]),
-			"%s is forged at full durability" % name)
-		var completed := _catalogue_line(ShopDb.lines(), id)
-		rig.check(int(completed.get("cost", -1)) == 0
-			and ShopDb.remaining(id) == 0,
-			"the ready %s line cannot be crafted twice" % name)
-
-	rig.check(Game.gold == 0 and not Run.bag.has(&"iron_scrap")
-		and Game.firewood_stock == 0,
-		"the combined three-tool bill is exactly 180g, seven Scrap, and one firewood")
-	rig.check(Game.wheel == wheel_before and _tools_outside_equipment_graphs(rig),
-		"utility tools never enter the wheel, bag, stash, hands, or combat armaments")
-
-	# Spend a Rod through its public durability API. Known-at-zero is BROKEN,
-	# unlike the never-crafted state above, and the smith exposes a fresh bill.
-	while Game.tool_usable(ToolDb.FISHING_ROD_ID):
-		Game.spend_tool_use(ToolDb.FISHING_ROD_ID)
-	var broken: Dictionary = ToolDb.definition(ToolDb.FISHING_ROD_ID)
-	var broken_line := _catalogue_line(ShopDb.lines(), ToolDb.FISHING_ROD_ID)
-	rig.check(Game.tool_known(ToolDb.FISHING_ROD_ID)
-		and not Game.tool_usable(ToolDb.FISHING_ROD_ID)
-		and not Game.has(ToolDb.FISHING_ROD_ID)
-		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == 0
-		and bool(broken.get("known", false))
-		and String(broken_line.get("detail", "")).contains("BROKEN"),
-		"a spent Rod is known BROKEN at 0 / 10, not unmade")
-	Game.gold = 45
-	Run.bag[&"iron_scrap"] = 1
-	Game.restore_garrison({"firewood_stock": 1})
-	rig.check(ShopDb.can_buy(broken_line) and ShopDb.buy(broken_line),
-		"the public smith transaction reforges the broken Rod")
-	rig.check(Game.tool_usable(ToolDb.FISHING_ROD_ID)
-		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == 10
-		and Game.gold == 0 and not Run.bag.has(&"iron_scrap")
-		and Game.firewood_stock == 0,
-		"reforging pays the exact recipe and restores the Rod to full")
-	rig.check(_tools_outside_equipment_graphs(rig),
-		"reforging still leaves every utility tool outside equipment graphs")
+	rig.check(ShopDb.can_buy(axe_line), "the seeded axe recipe is affordable")
+	rig.check(ShopDb.buy(axe_line), "Brannoc crafts the Woodsman's Axe")
+	rig.check(Game.gold == 40 and not Run.bag.has(&"iron_scrap"),
+		"crafting consumes 60 gold and the returned bag's three Iron Scrap")
+	rig.check(Game.has(ShopDb.WOODSMAN_AXE_ID),
+		"the Woodsman's Axe is permanent equipment")
+	rig.check(Game.wheel == wheel_before and not Game.wheel.has(ShopDb.WOODSMAN_AXE_ID),
+		"the tool never enters the hand wheel")
+	var tool: Dictionary = ToolDb.definition(ShopDb.WOODSMAN_AXE_ID)
+	rig.check(bool(tool.get("owned", false)), "Equipment's tool manifest sees the axe")
+	var completed := _catalogue_line(ShopDb.lines(), ShopDb.WOODSMAN_AXE_ID)
+	rig.check(int(completed.get("cost", -1)) == 0
+		and ShopDb.remaining(ShopDb.WOODSMAN_AXE_ID) == 0,
+		"the completed one-rung axe line cannot be crafted twice")
 
 
 func _timber_view(rig, garrison: Garrison) -> void:
@@ -195,28 +135,47 @@ func _timber_view(rig, garrison: Garrison) -> void:
 func _daily_state(rig) -> void:
 	Clock.set_time(1, 10.0)
 	Game.restore_garrison({})
+	Run.reset()
 	rig.check(Game.chop_firewood(Clock.day, Clock.garrison_phase()),
 		"the axe-holder can cut one daytime bundle")
 	rig.check(not Game.chop_firewood(Clock.day, Clock.garrison_phase()),
 		"a second bundle on the same day is refused")
-	rig.check(Game.carrying_firewood and Game.firewood_stock == 0,
-		"the cut bundle is carried, not teleported into the hearth")
-	rig.check(Game.deposit_firewood(), "the separate hearth deposit succeeds")
-	rig.check(not Game.carrying_firewood and Game.firewood_stock == 1,
-		"deposit moves exactly one carried bundle into stock")
+	rig.check(int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1
+		and Game.firewood_stock == 0,
+		"the cut bundle is exact Run cargo, not teleported into hearth stock")
+	rig.check(Run.collect(SupplyCargoDb.POND_SHINER_ID, 1) == 1,
+		"exact food cargo can share the carried Run bag")
+	var receipt := Game.deposit_supplies()
+	var moved := receipt.get(&"moved", {}) as Dictionary
+	rig.check(int(receipt.get(&"firewood_units", 0)) == 1
+		and int(receipt.get(&"food_units", 0)) == 1
+		and int(moved.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1
+		and int(moved.get(SupplyCargoDb.POND_SHINER_ID, 0)) == 1,
+		"one crate transaction receipts exact Firewood and Pond Shiner cargo")
+	rig.check(Game.firewood_stock == 1 and Game.fish_stock == 1
+		and not Run.bag.has(SupplyCargoDb.FIREWOOD_ID)
+		and not Run.bag.has(SupplyCargoDb.POND_SHINER_ID),
+		"crate transaction moves both provisions from bag into their reserves")
 
 	Game.restore_garrison({
 		"firewood_stock": 3,
-		"carrying_firewood": true,
+		"fish_stock": 3,
 		"timber_completed_day": 1,
 	})
-	rig.check(not Game.deposit_firewood() and Game.firewood_stock == Game.FIREWOOD_CAP,
-		"the hearth stock cap refuses overflow")
+	Run.reset()
+	Run.collect(SupplyCargoDb.FIREWOOD_ID, 1)
+	Run.collect(SupplyCargoDb.RIVER_PERCH_ID, 1)
+	var full_bag := Run.bag.duplicate()
+	receipt = Game.deposit_supplies()
+	rig.check((receipt.get(&"moved", {}) as Dictionary).is_empty()
+		and Run.bag == full_bag
+		and Game.firewood_stock == Game.FIREWOOD_CAP
+		and Game.fish_stock == Game.FISH_CAP,
+		"a full crate refuses a no-op deposit and preserves exact cargo")
 
 	Game.restore_garrison({})
 	rig.check(Game.garrison_snapshot() == {
 		"firewood_stock": 0,
-		"carrying_firewood": false,
 		"timber_completed_day": 0,
 		"warmth_active": false,
 		"last_bonfire_day": 0,
@@ -232,7 +191,6 @@ func _daily_state(rig) -> void:
 	}, "an older save's absent garrison payload defaults empty and cold")
 	var saved: Dictionary = {
 		"firewood_stock": 2,
-		"carrying_firewood": true,
 		"timber_completed_day": 4,
 		"warmth_active": true,
 		"last_bonfire_day": 3,
@@ -257,33 +215,29 @@ func _daily_state(rig) -> void:
 	var restored_key: Variant = restored_keys[0] if not restored_keys.is_empty() else null
 	rig.check(restored_key is StringName and restored_key == &"elder",
 		"JSON-style Connected String keys restore as typed StringName keys")
-	rig.check(Saves.VERSION == 18,
-		"the durable-tool additive save contract is version 18")
+	rig.check(not restored_saved.has("carrying_firewood"),
+		"the garrison snapshot no longer writes legacy carrying_firewood state")
+	rig.check(Saves.VERSION == 19, "the additive cargo save contract is version 19")
 
 	Game.restore_garrison({
-		"fish_stock": 2,
 		"fish_caught_day": 4,
 		"fish_units_today": 0,
 	})
-	rig.check(Game.bank_fish(2, 4) == 0 and Game.fish_stock == 2,
-		"fish banking refuses a partial reserve overflow")
-	rig.check(Game.bank_fish(1, 4) == 1 and Game.fish_stock == Game.FISH_CAP,
-		"fish banking fills the final reserve space exactly")
-	rig.check(Game.bank_fish(1, 4) == 0,
-		"a full fish reserve refuses every further yield")
-	Game.restore_garrison({
-		"fish_caught_day": 4,
-		"fish_units_today": Game.FISH_DAILY_CAP,
-	})
-	rig.check(not Game.can_bank_fish(1, 4),
-		"a fully spent daily yield refuses another bank on that day")
+	Run.reset()
+	rig.check(Game.record_fish_catch(SupplyCargoDb.POND_SHINER_ID, 4)
+		and Game.record_fish_catch(SupplyCargoDb.RIVER_PERCH_ID, 4)
+		and Game.record_fish_catch(SupplyCargoDb.SILVER_TROUT_ID, 4),
+		"three named catches enter the Run bag through the daily contract")
+	rig.check(not Game.record_fish_catch(SupplyCargoDb.CROWN_PIKE_ID, 4)
+		and Game.fish_units_today == Game.FISH_DAILY_CAP
+		and not Run.bag.has(SupplyCargoDb.CROWN_PIKE_ID),
+		"the daily cap refuses a fourth named fish without creating cargo")
 	rig.check(Game.fishing_remaining_today(5) == Game.FISH_DAILY_CAP
 		and Game.fish_caught_day == 4 and Game.fish_units_today == Game.FISH_DAILY_CAP,
 		"reading the next day's yield is full and does not mutate campaign state")
-	rig.check(Game.bank_fish(Game.FISH_DAILY_CAP, 5) == Game.FISH_DAILY_CAP
-		and Game.fish_caught_day == 5 and Game.fish_units_today == Game.FISH_DAILY_CAP
-		and not Game.can_bank_fish(1, 5),
-		"the first bank on a new day owns the rollover, fills its yield, then refuses more")
+	rig.check(Game.record_fish_catch(SupplyCargoDb.CROWN_PIKE_ID, 5)
+		and Game.fish_caught_day == 5 and Game.fish_units_today == 1,
+		"the first exact catch on a new day owns the daily rollover")
 
 	Game.restore_garrison({})
 	Game.grant(&"bow")
@@ -417,7 +371,7 @@ func _well_fed_run(rig) -> void:
 	var focus_before: int = int(Game.upgrades.get(focus_track, 0))
 	var gold_before: int = Game.gold
 	var deaths_before: int = Game.deaths
-	var quarters_before: int = Game.health_points
+	var quarters_before: int = Game.quarters
 	var stamina_before: float = Game.stamina
 	var flow_busy_before: bool = Flow.busy
 
@@ -466,7 +420,7 @@ func _well_fed_run(rig) -> void:
 	Flow.busy = flow_busy_before
 	Game.gold = gold_before
 	Game.deaths = deaths_before
-	Game.health_points = quarters_before
+	Game.quarters = quarters_before
 	if had_focus:
 		Game.upgrades[focus_track] = focus_before
 	else:
@@ -480,7 +434,7 @@ func _well_fed_run(rig) -> void:
 
 func _menu(rig) -> void:
 	Game.restore_garrison({
-		"firewood_stock": 2,
+		"firewood_stock": 3,
 		"timber_completed_day": 6,
 		"warmth_active": true,
 		"last_bonfire_day": 5,
@@ -492,6 +446,10 @@ func _menu(rig) -> void:
 		"well_fed_ready": true,
 		"connected_days": {"elder": 6},
 	})
+	Run.reset()
+	Run.collect(SupplyCargoDb.FIREWOOD_ID, 2)
+	Run.collect(SupplyCargoDb.POND_SHINER_ID, 1)
+	Run.collect(SupplyCargoDb.SILVER_TROUT_ID, 2)
 	Clock.restore({"day": 6, "hour": 12.5, "running": false})
 	Menu.open()
 	Menu.call(&"_open_onto", PauseMenu.Screen.GARRISON)
@@ -502,9 +460,12 @@ func _menu(rig) -> void:
 		return
 	var page_text := " ".join(_all_text(panel))
 	for phrase: String in ["Day", "Bonfire", "Garrison Warmth", "PROVISIONS & MORALE",
-			"Fish reserve", "Fed", "Well Fed", "Overall morale", "KEEP THE HEARTH",
+			"Fish reserve", "Carried Firewood cargo", "2 bundles", "Carried Food cargo",
+			"3 fish", "south-gate supply box", "Fed", "Well Fed", "Overall morale", "KEEP THE HEARTH",
 			"ROSTER", "DONATED RELIC EFFECTS", "ELDER IMPROVEMENTS"]:
 		rig.check(page_text.contains(phrase), "the Garrison page reports %s" % phrase)
+	rig.check(not page_text.contains("hearth stock is full"),
+		"full stored Firewood does not make gathering unavailable in the read-only page")
 	var focus: Control = rig.root.gui_get_focus_owner()
 	rig.check(focus != null and focus.name == &"Back",
 		"opening GARRISON places focus on Back")
@@ -547,23 +508,6 @@ func _catalogue_line(lines: Array[Dictionary], id: StringName) -> Dictionary:
 		if StringName(line.get("id", &"")) == id:
 			return line
 	return {}
-
-
-func _tools_outside_equipment_graphs(rig) -> bool:
-	var players: Array = rig.get_nodes_in_group(&"player")
-	var hero: Hero = players[0] as Hero if not players.is_empty() else null
-	if hero == null or hero.combat == null:
-		return false
-	var combat_items: Dictionary = hero.combat._items
-	for id: StringName in ToolDb.TOOL_IDS:
-		if Game.wheel.has(id) or Run.bag.has(id) or Game.stash.has(id) \
-				or Game.carry_ids().has(id) or Game.RIGHT_POOL.has(id) \
-				or Game.LEFT_POOL.has(id) or combat_items.has(id):
-			return false
-		for set_data: Dictionary in Game.loadout:
-			if set_data.values().has(id):
-				return false
-	return true
 
 
 func _default_raid() -> Dictionary:

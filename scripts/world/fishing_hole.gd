@@ -10,24 +10,18 @@ const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 const FEEDBACK_DRAW := preload("res://scripts/ui/fishing_feedback_draw.gd")
 
-const TARGET_NEAR: StringName = &"near"
-const TARGET_DEEP: StringName = &"deep"
 const ATTEMPT_MINUTES: float = 10.0
 const CAST_CHARGE_TIME: float = 1.1
 const WAIT_TIME: float = 1.25
-const BITE_WINDOW: float = 0.9
 const RESULT_TIME: float = 1.8
-const NEAR_RUN_TIME: float = 1.45
-const DEEP_RUN_TIME: float = 0.95
-const NEAR_LINE_ESCAPE_RATE: float = 0.09
-const DEEP_LINE_ESCAPE_RATE: float = 0.11
 const REEL_SFX_GAP: float = 0.72
 const STRAIN_SFX_GAP: float = 0.58
 
-enum State { IDLE, CHOOSE, CASTING, WAITING, BITE, HOOKED, RESULT }
+enum State { IDLE, CASTING, WAITING, BITE, HOOKED, RESULT }
+
+@export_range(1, 4) var spot_level: int = 1
 
 var _state: State = State.IDLE
-var _target: StringName = TARGET_NEAR
 var _state_elapsed: float = 0.0
 var _cast_charge: float = 0.0
 var _tension_value: float = 0.0
@@ -35,10 +29,13 @@ var _line_value: float = 1.0
 var _run_direction: int = -1
 var _run_elapsed: float = 0.0
 var _run_index: int = 0
-var _result_text: String = ""
 var _result_success: bool = false
-var _caught_quantity: int = 0
 var _failure_result: StringName = &""
+var _current_fish_id: StringName = &""
+var _caught_fish_id: StringName = &""
+var _forced_next_fish_id: StringName = &""
+var _current_tuning: Dictionary = {}
+var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _actual_steering: int = 0
 var _reeling: bool = false
 var _reel_sfx_armed: bool = false
@@ -50,13 +47,11 @@ var _attempt_spent: bool = false
 
 ## Release-gated edges are deliberate. The interact press that Prompt used to
 ## open this mode is still down when our first `_process` runs, and polling it as
-## a fresh edge would choose and cast in the same press.
+## a fresh edge would skip the cast's held-input beat.
 var _interact_armed: bool = false
 var _interact_was_down: bool = false
 var _cancel_armed: bool = false
 var _cancel_was_down: bool = false
-var _left_was_down: bool = false
-var _right_was_down: bool = false
 
 var _water: MeshInstance3D
 var _near_fish: Node3D
@@ -83,6 +78,7 @@ func _ready() -> void:
 	prompt = "FISH"
 	radius = 2.5
 	super()
+	_rng.randomize()
 	_build_landmark()
 	_build_overlay()
 	Game.garrison_changed.connect(_repaint_creel)
@@ -115,30 +111,25 @@ func _process(delta: float) -> void:
 		and _interact_armed
 	var interact_released: bool = not interact_down and _interact_was_down
 	var cancel_pressed: bool = cancel_down and not _cancel_was_down and _cancel_armed
-	var left_pressed: bool = left_down and not _left_was_down
-	var right_pressed: bool = right_down and not _right_was_down
-
 	if cancel_pressed:
 		_cancel_armed = false
 		cancel()
-		_update_input_history(interact_down, cancel_down, left_down, right_down)
+		_update_input_history(interact_down, cancel_down)
 		return
 
 	_state_elapsed += delta
 	match _state:
-		State.CHOOSE:
-			_tick_choose(left_pressed, right_pressed, interact_pressed)
 		State.CASTING:
 			_tick_casting(delta, interact_down, interact_released)
 		State.WAITING:
 			if _state_elapsed >= WAIT_TIME:
 				_transition(State.BITE)
 		State.BITE:
-			if interact_pressed:
+			if _state_elapsed >= current_hook_window():
+				_finish_failure("THE BITE SLIPPED AWAY.", &"escaped")
+			elif interact_pressed:
 				_interact_armed = false
 				_transition(State.HOOKED)
-			elif _state_elapsed >= BITE_WINDOW:
-				_finish_failure("THE BITE SLIPPED AWAY.", &"escaped")
 		State.HOOKED:
 			_tick_hooked(delta, interact_down, left_down, right_down)
 		State.RESULT:
@@ -149,32 +140,28 @@ func _process(delta: float) -> void:
 
 	_animate_fish()
 	_refresh_overlay()
-	_update_input_history(interact_down, cancel_down, left_down, right_down)
+	_update_input_history(interact_down, cancel_down)
 
 
 func activate(_by: Node3D) -> void:
 	if _mode_active:
 		return
-	var first_target: StringName = TARGET_NEAR
-	if not Game.can_bank_fish(1, Clock.day):
-		first_target = TARGET_DEEP
-	_start_mode(first_target)
+	_start_mode()
 
 
-## Director seam: enter through the same tool and capacity gates as activation,
-## but begin with the authored target already selected.
-func begin_for_test(target: StringName) -> bool:
-	if _mode_active or not _valid_target(target):
+## Director seam: enter through the same gates as ordinary activation. The
+## retired target argument remains so older probes parse while difficulty is
+## now rolled statistically from this spot's level.
+func begin_for_test(_legacy_target: StringName = &"") -> bool:
+	if _mode_active:
 		return false
-	return _start_mode(target)
+	return _start_mode()
 
 
 func state_name() -> StringName:
 	match _state:
 		State.IDLE:
 			return &"idle"
-		State.CHOOSE:
-			return &"choose"
 		State.CASTING:
 			return &"casting"
 		State.WAITING:
@@ -186,10 +173,6 @@ func state_name() -> StringName:
 		State.RESULT:
 			return &"result"
 	return &"idle"
-
-
-func target_name() -> StringName:
-	return _target
 
 
 func tension() -> float:
@@ -216,12 +199,44 @@ func actual_steering() -> int:
 	return _actual_steering if _state == State.HOOKED else 0
 
 
+func current_fish_id() -> StringName:
+	return _current_fish_id
+
+
+func caught_fish_id() -> StringName:
+	return _caught_fish_id
+
+
+func current_fish_tier() -> int:
+	return SupplyCargoDb.tier_of(_current_fish_id)
+
+
+func current_hook_window() -> float:
+	return float(_current_tuning.get("hook_window", 0.0))
+
+
+func reaction_fraction() -> float:
+	if _state != State.BITE:
+		return 0.0
+	var window := current_hook_window()
+	return clampf(1.0 - _state_elapsed / window, 0.0, 1.0) if window > 0.0 else 0.0
+
+
 func feedback_reaction_name() -> StringName:
 	return _feedback.reaction_name() if _feedback != null else &"neutral"
 
 
 func feedback_visual_text() -> String:
 	return _feedback.visual_text() if _feedback != null else ""
+
+
+## The forced row is consumed by the next released cast. Invalid catalogue IDs
+## are rejected so a proof cannot manufacture tuning or inventory state.
+func debug_force_next_fish(id: StringName) -> bool:
+	if not SupplyCargoDb.is_fish(id):
+		return false
+	_forced_next_fish_id = id
+	return true
 
 
 ## Only waiting may be advanced by this probe. It cannot manufacture a cast or
@@ -231,7 +246,7 @@ func debug_force_bite() -> void:
 		_transition(State.BITE)
 
 
-## Deterministic proof still lands through Game's real all-or-nothing bank and
+## Deterministic proof still lands through Game's real all-or-nothing record and
 ## the same ten-minute outcome transaction as live play.
 func debug_land_catch() -> void:
 	if _state == State.HOOKED:
@@ -252,7 +267,7 @@ func cancel() -> void:
 		_transition(State.IDLE)
 
 
-func _start_mode(target: StringName) -> bool:
+func _start_mode() -> bool:
 	if not Game.tool_known(ToolDb.FISHING_ROD_ID):
 		Bus.request_message.emit("BRANNOC FORGES THE FISHING ROD.")
 		return false
@@ -260,17 +275,13 @@ func _start_mode(target: StringName) -> bool:
 		Bus.request_message.emit(
 			"THE FISHING ROD IS BROKEN. BRANNOC MUST REFORGE IT.")
 		return false
-	if Game.fish_space() <= 0:
-		Bus.request_message.emit("THE CREEL IS FULL. SUPPER MUST USE THE RESERVE.")
-		return false
 	if Game.fishing_remaining_today(Clock.day) <= 0:
 		Bus.request_message.emit("TODAY'S WATER IS SPENT.")
 		return false
-	if not Game.can_bank_fish(_yield_for(target), Clock.day):
-		Bus.request_message.emit("THAT WATER CANNOT FIT TODAY'S RESERVE.")
+	if not _any_fish_room():
+		Bus.request_message.emit("BAG FULL — MAKE ROOM FOR A FISH.")
 		return false
 
-	_target = target
 	_attempt_spent = false
 	_mode_active = true
 	_clock_was_running = Clock.running
@@ -281,7 +292,7 @@ func _start_mode(target: StringName) -> bool:
 	Prompt.block(self)
 	_disarm_input()
 	_overlay.visible = true
-	_transition(State.CHOOSE)
+	_transition(State.CASTING)
 	return true
 
 
@@ -293,15 +304,15 @@ func _transition(next: State) -> void:
 	match next:
 		State.IDLE:
 			_exit_mode()
-		State.CHOOSE:
+		State.CASTING:
 			_cast_charge = 0.0
 			_tension_value = 0.0
 			_line_value = 1.0
 			_result_success = false
-			_caught_quantity = 0
 			_failure_result = &""
-		State.CASTING:
-			_cast_charge = 0.0
+			_current_fish_id = &""
+			_caught_fish_id = &""
+			_current_tuning = {}
 		State.WAITING:
 			_set_selected_fish_visible(true)
 			Bus.request_sfx.emit(&"fishing_cast", _selected_fish_world_position())
@@ -310,7 +321,7 @@ func _transition(next: State) -> void:
 			Bus.request_sfx.emit(&"fishing_bite", _selected_fish_world_position())
 		State.HOOKED:
 			Bus.request_sfx.emit(&"fishing_hook", _selected_fish_world_position())
-			_tension_value = 0.22 if _target == TARGET_NEAR else 0.30
+			_tension_value = float(_current_tuning.get("initial_tension", 0.0))
 			_line_value = 1.0
 			_run_index = 0
 			_run_direction = -1
@@ -332,9 +343,7 @@ func _exit_mode() -> void:
 	Prompt.unblock(self)
 	Clock.running = _clock_was_running
 	_overlay.visible = false
-	_result_text = ""
 	_result_success = false
-	_caught_quantity = 0
 	_failure_result = &""
 	_actual_steering = 0
 	_reeling = false
@@ -348,30 +357,23 @@ func _exit_mode() -> void:
 	_disarm_input()
 
 
-func _tick_choose(left_pressed: bool, right_pressed: bool,
-		interact_pressed: bool) -> void:
-	if left_pressed and Game.can_bank_fish(1, Clock.day):
-		_target = TARGET_NEAR
-	elif right_pressed and Game.can_bank_fish(2, Clock.day):
-		_target = TARGET_DEEP
-	if interact_pressed and Game.can_bank_fish(_yield_for(_target), Clock.day):
-		_interact_armed = false
-		_transition(State.CASTING)
-
-
 func _tick_casting(delta: float, interact_down: bool,
 		interact_released: bool) -> void:
 	if interact_down:
 		_cast_charge = minf(1.0, _cast_charge + delta / CAST_CHARGE_TIME)
 	if interact_released:
-		# Charge controls presentation and anticipation; even a short cast reaches
-		# the chosen authored water so a fumbled release does not waste the attempt.
+		_current_fish_id = _roll_fish_for_cast()
+		_current_tuning = SupplyCargoDb.tuning(_current_fish_id)
 		_transition(State.WAITING)
+		if _current_fish_id == &"":
+			# Bag state may change while the opening press is held. The empty cast
+			# still resolves its ten minutes, but no daily catch is recorded.
+			_finish_failure("BAG FULL.", &"escaped")
 
 
 func _tick_hooked(delta: float, reeling: bool, left_down: bool,
 		right_down: bool) -> void:
-	var run_time: float = NEAR_RUN_TIME if _target == TARGET_NEAR else DEEP_RUN_TIME
+	var run_time := maxf(float(_current_tuning.get("run_interval", 0.0)), 0.001)
 	_run_elapsed += delta
 	if _run_elapsed >= run_time:
 		_run_elapsed = fmod(_run_elapsed, run_time)
@@ -385,18 +387,15 @@ func _tick_hooked(delta: float, reeling: bool, left_down: bool,
 	var correcting: bool = steer == -_run_direction
 	var following: bool = steer == _run_direction
 	if not reeling:
-		_tension_value -= delta * (0.31 if _target == TARGET_NEAR else 0.25)
-		var escape_rate: float = NEAR_LINE_ESCAPE_RATE if _target == TARGET_NEAR \
-			else DEEP_LINE_ESCAPE_RATE
-		_line_value += delta * escape_rate
+		_tension_value -= delta * float(_current_tuning.get("tension_recovery", 0.0))
+		_line_value += delta * float(_current_tuning.get("no_reel_escape_rate", 0.0))
 	elif correcting:
-		_tension_value -= delta * (0.24 if _target == TARGET_NEAR else 0.18)
-		var reel_rate: float = 0.27 if _target == TARGET_NEAR else 0.17
-		_line_value -= delta * reel_rate
+		_tension_value -= delta * float(_current_tuning.get("tension_recovery", 0.0))
+		_line_value -= delta * float(_current_tuning.get("correct_reel_rate", 0.0))
 	elif following:
-		_tension_value += delta * (0.31 if _target == TARGET_NEAR else 0.43)
+		_tension_value += delta * float(_current_tuning.get("wrong_tension_gain", 0.0))
 	else:
-		_tension_value += delta * (0.17 if _target == TARGET_NEAR else 0.27)
+		_tension_value += delta * float(_current_tuning.get("neutral_tension_gain", 0.0))
 
 	_tension_value = clampf(_tension_value, 0.0, 1.0)
 	_line_value = clampf(_line_value, 0.0, 1.0)
@@ -423,42 +422,40 @@ func _tick_reel_sfx(reeling: bool, steer: int) -> void:
 
 
 func _land_catch() -> void:
-	var units: int = _yield_for(_target)
-	var banked: int = Game.bank_fish(units, Clock.day)
-	var reserve_after_bank: int = Game.fish_stock
+	var landed_id := _current_fish_id
+	var caught := Game.record_fish_catch(landed_id, Clock.day)
 	Clock.advance_hours(ATTEMPT_MINUTES / 60.0)
-	if banked == units:
+	if caught:
 		_result_success = true
-		_caught_quantity = banked
+		_caught_fish_id = landed_id
 		_failure_result = &""
-		_result_text = "LANDED %d FISH · RESERVE %d / %d" \
-			% [banked, reserve_after_bank, Game.FISH_CAP]
 		Bus.request_sfx.emit(&"fishing_catch", _selected_fish_world_position())
 	else:
-		# Capacity is reserved when the mode starts, so this can only describe an
-		# external state change. It still resolves as the attempt the player made.
 		_result_success = false
-		_caught_quantity = 0
+		_caught_fish_id = &""
 		_failure_result = &"escaped"
-		_result_text = "THE CATCH COULD NOT ENTER THE CREEL."
 		Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
-	_result_text += _spend_attempt_use()
+	_spend_attempt_use()
 	_transition(State.RESULT)
 
 
-func _finish_failure(text: String, result: StringName) -> void:
+func _finish_failure(_text: String, result: StringName) -> void:
 	Clock.advance_hours(ATTEMPT_MINUTES / 60.0)
 	_result_success = false
-	_caught_quantity = 0
+	_caught_fish_id = &""
 	_failure_result = result
-	_result_text = text + " · 10 MINUTES PASS" + _spend_attempt_use()
+	_spend_attempt_use()
 	Bus.request_sfx.emit(&"fishing_fail", _selected_fish_world_position())
 	_transition(State.RESULT)
 
 
 func _selected_fish_world_position() -> Vector3:
-	var fish: Node3D = _deep_fish if _target == TARGET_DEEP else _near_fish
+	var fish := _active_fish_node()
 	return fish.global_position if fish != null else global_position
+
+
+func _active_fish_node() -> Node3D:
+	return _deep_fish if current_fish_tier() >= 3 else _near_fish
 
 
 func _spend_attempt_use() -> String:
@@ -472,12 +469,46 @@ func _spend_attempt_use() -> String:
 		Game.tool_max_durability(ToolDb.FISHING_ROD_ID)]
 
 
-func _yield_for(target: StringName) -> int:
-	return 2 if target == TARGET_DEEP else 1
+func _any_fish_room() -> bool:
+	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
+		if Run.room_for(fish_id) > 0:
+			return true
+	return false
 
 
-func _valid_target(target: StringName) -> bool:
-	return target == TARGET_NEAR or target == TARGET_DEEP
+func _roll_fish_for_cast() -> StringName:
+	var rolled := SupplyCargoDb.roll_fish(spot_level, _rng)
+	if _forced_next_fish_id != &"":
+		rolled = _forced_next_fish_id
+	_forced_next_fish_id = &""
+	if rolled != &"" and Run.room_for(rolled) > 0:
+		return rolled
+
+	var fitting: Array[StringName] = []
+	for fish_id: StringName in SupplyCargoDb.FISH_IDS:
+		if Run.room_for(fish_id) > 0:
+			fitting.append(fish_id)
+	if fitting.is_empty():
+		return &""
+
+	# Filter once and roll once. Rejection sampling would bias deterministic
+	# proofs through an unbounded number of RNG draws as the bag fills.
+	var authored := SupplyCargoDb.tier_weights_for_spot(spot_level)
+	var total := 0.0
+	for i: int in SupplyCargoDb.FISH_IDS.size():
+		if fitting.has(SupplyCargoDb.FISH_IDS[i]):
+			total += maxf(float(authored[i]), 0.0)
+	if total <= 0.0:
+		return fitting.front()
+	var pick := _rng.randf_range(0.0, total)
+	for i: int in SupplyCargoDb.FISH_IDS.size():
+		var fish_id: StringName = SupplyCargoDb.FISH_IDS[i]
+		if not fitting.has(fish_id):
+			continue
+		pick -= maxf(float(authored[i]), 0.0)
+		if pick <= 0.0:
+			return fish_id
+	return fitting.back()
 
 
 func _disarm_input() -> void:
@@ -486,21 +517,21 @@ func _disarm_input() -> void:
 	_interact_was_down = Input.is_action_pressed(&"interact")
 	_cancel_was_down = Input.is_action_pressed(&"ui_cancel") \
 		or Input.is_action_pressed(&"pause")
-	_left_was_down = Input.is_action_pressed(&"move_left")
-	_right_was_down = Input.is_action_pressed(&"move_right")
 
 
-func _update_input_history(interact_down: bool, cancel_down: bool,
-		left_down: bool, right_down: bool) -> void:
+func _update_input_history(interact_down: bool, cancel_down: bool) -> void:
 	_interact_was_down = interact_down
 	_cancel_was_down = cancel_down
-	_left_was_down = left_down
-	_right_was_down = right_down
 
 
 func _animate_fish() -> void:
-	var selected: Node3D = _deep_fish if _target == TARGET_DEEP else _near_fish
-	var base: Vector3 = Vector3(0.62, 0.03, -2.82) if _target == TARGET_DEEP \
+	var selected := _active_fish_node()
+	if _current_fish_id == &"" or selected == null:
+		_splash.visible = false
+		_ripple_root.visible = false
+		_water.position.y = 0.30 + sin(Time.get_ticks_msec() * 0.0018) * 0.012
+		return
+	var base := Vector3(0.62, 0.03, -2.82) if selected == _deep_fish \
 		else Vector3(-0.62, 0.08, -1.72)
 	var travel: float = sin(_state_elapsed * (3.8 if _state == State.HOOKED else 2.2))
 	if _state == State.HOOKED:
@@ -556,10 +587,9 @@ func _animate_ripples(fish_position: Vector3, cue_visible: bool) -> void:
 
 
 func _set_selected_fish_visible(value: bool) -> void:
-	if _target == TARGET_NEAR:
-		_near_fish.visible = value
-	else:
-		_deep_fish.visible = value
+	var fish := _active_fish_node()
+	if fish != null:
+		fish.visible = value
 
 
 func _repaint_creel() -> void:
@@ -678,25 +708,22 @@ func _refresh_overlay() -> void:
 	# The remaining line falls toward zero in play; invert it so the landing bar
 	# visibly fills toward the promised catch.
 	_line_gauge.value = 1.0 - _line_value
-	_feedback.selected_target = _target
-	_feedback.selected_yield = _yield_for(_target)
-	_feedback.near_ready = Game.can_bank_fish(1, Clock.day)
-	_feedback.deep_ready = Game.can_bank_fish(2, Clock.day)
-	_feedback.reserve_available = Game.fish_space()
 	_feedback.fish_run_direction = fish_run_direction()
 	_feedback.desired_steer_direction = desired_steer_direction()
 	_feedback.actual_steering = actual_steering()
 	_feedback.reeling = _reeling
 	_feedback.tension = _tension_value
 	_feedback.landing_progress = 1.0 - _line_value
-	_feedback.caught_quantity = _caught_quantity
+	_feedback.reaction_fraction = reaction_fraction()
+	_feedback.caught_name = SupplyCargoDb.name_of(_caught_fish_id)
+	_feedback.caught_tier = SupplyCargoDb.tier_of(_caught_fish_id)
+	var caught_def := ItemDb.get_def(_caught_fish_id)
+	_feedback.caught_tint = caught_def.tint if caught_def != null else Pal.GOLD
 	_feedback.failure_result = _failure_result
 	_feedback.animation_phase = _state_elapsed
 	_feedback.rod_durability = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	_feedback.rod_max_durability = Game.tool_max_durability(ToolDb.FISHING_ROD_ID)
 	match _state:
-		State.CHOOSE:
-			_feedback.mode = FishingFeedbackDraw.MODE_CHOOSE
 		State.CASTING:
 			_feedback.mode = FishingFeedbackDraw.MODE_CASTING
 		State.WAITING:

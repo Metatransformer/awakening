@@ -74,6 +74,9 @@ func _commit_at_impact(hero: Hero) -> void:
 	# Game still gets the last word on the exact frame the axe meets the trunk.
 	if not Game.chop_firewood(Clock.day, Clock.garrison_phase()):
 		enabled = true
+		var refusal := _refusal()
+		if not refusal.is_empty():
+			Bus.request_message.emit(refusal)
 		return
 	Game.spend_tool_use(ToolDb.WOODSMAN_AXE_ID)
 
@@ -88,7 +91,7 @@ func _commit_at_impact(hero: Hero) -> void:
 	var durability: String = "AXE BROKEN — BRANNOC MUST REFORGE IT." \
 		if remaining <= 0 else "AXE %d / %d" % [remaining,
 			Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)]
-	Bus.request_message.emit("FIREWOOD CUT. CARRY IT TO THE GARRISON HEARTH. · " \
+	Bus.request_message.emit("FIREWOOD CUT. TAKE IT TO THE GATE SUPPLY BOX. · " \
 		+ durability)
 
 
@@ -101,12 +104,10 @@ func _refusal() -> String:
 		return "THE WOODSMAN'S AXE IS BROKEN. BRANNOC MUST REFORGE IT."
 	if Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
 		return "CHOP FIREWOOD DURING DAYTIME."
-	if Game.carrying_firewood:
-		return "YOU ARE ALREADY CARRYING FIREWOOD."
-	if Game.firewood_stock >= Game.FIREWOOD_CAP:
-		return "THE GARRISON HEARTH IS FULL."
 	if Game.timber_completed_day == Clock.day:
 		return "TODAY'S BUNDLE IS ALREADY CUT."
+	if Run.room_for(SupplyCargoDb.FIREWOOD_ID) <= 0:
+		return "BAG FULL — MAKE ROOM FOR FIREWOOD."
 	return ""
 
 

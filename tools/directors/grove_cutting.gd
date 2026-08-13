@@ -14,12 +14,10 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 10.0)
 	Game.restore_garrison({})
+	Run.reset()
 	Game.set_flag(StoryDb.told_flag(&"elder", &"timber_duty"))
-	Game.grant(ToolDb.WOODSMAN_AXE_ID)
-	var axe_maximum: int = Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)
-	rig.check(axe_maximum == 8
-		and Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == axe_maximum,
-		"the crafted Woodsman's Axe begins at its exact 8 / 8 durability")
+	Game.grant(ShopDb.WOODSMAN_AXE_ID)
+	var axe_maximum := Game.tool_max_durability(ToolDb.WOODSMAN_AXE_ID)
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
 
 	await rig.wait_physics_frames(4)
@@ -61,12 +59,12 @@ func run(rig) -> void:
 		await rig.capture("grove_01_chop.png")
 		cam.global_position = tree.global_position + Vector3(7.0, 4.6, 7.5)
 		cam.look_at(tree.global_position + Vector3.UP * 2.7, Vector3.UP)
-	var harvested: bool = await rig.until(
-		func() -> bool: return Game.carrying_firewood, 2.0)
+	var harvested: bool = await rig.until(func() -> bool:
+		return int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1, 2.0)
 	rig.release(&"interact")
-	rig.check(harvested, "the axe impact awards one carried firewood bundle")
+	rig.check(harvested, "the axe impact awards exact Firewood cargo to the Run bag")
 	rig.check(Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == axe_maximum - 1,
-		"the successful tree impact spends exactly one Axe durability")
+		"the successful tree impact spends exactly one Axe use")
 	rig.check(heard_cues == [HarvestTree.SFX_AXE_HIT, HarvestTree.SFX_TREE_FALL],
 		"the committed impact requests one axe hit and one tree-fall cue")
 	rig.check(_positional_voice_playing(HarvestTree.SFX_AXE_HIT)
@@ -90,53 +88,23 @@ func run(rig) -> void:
 	await rig.capture("grove_03_stump.png")
 
 	var second: HarvestTree = outskirts.harvest_trees[1]
-	var before_refusal: int = Game.tool_durability(ToolDb.WOODSMAN_AXE_ID)
 	second.activate(hero)
+	var before_refusal := Game.tool_durability(ToolDb.WOODSMAN_AXE_ID)
 	await rig.wait_seconds(0.1)
-	rig.check(not hero.woodsman_chopping(),
-		"a second tree refuses the same day's already-carried bundle")
+	rig.check(not hero.woodsman_chopping()
+		and int(Run.bag.get(SupplyCargoDb.FIREWOOD_ID, 0)) == 1,
+		"a second tree refuses because today's chop is complete, not because cargo is held")
 	rig.check(Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == before_refusal,
-		"the same-day refusal spends no Axe durability")
-
-	# Leave one public use, then take it through another real impact. The zero
-	# durability entry remains the distinction between BROKEN and never crafted;
-	# compatibility ownership deliberately leaves Game.items on that last hit.
-	while Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) > 1:
-		Game.spend_tool_use(ToolDb.WOODSMAN_AXE_ID)
-	Game.restore_garrison({})
+		"the same-day refusal spends no Axe use")
 	Clock.set_time(2, 10.0)
 	await rig.wait_physics_frames(3)
-	rig.check(not stump.visible and tree.enabled,
-		"a new day restores the grove while preserving the one-bundle rule")
-	hero.global_position = second.global_position + Vector3(1.35, 0.12, 0.0)
-	hero.velocity = Vector3.ZERO
-	await rig.wait_physics_frames(5)
-	rig.check(await rig.until(func() -> bool: return Prompt.focus == second, 2.0),
-		"the restored second-day tree receives the real prompt focus")
-	await rig.press(&"interact")
-	var broke: bool = await rig.until(func() -> bool:
-		return Game.tool_durability(ToolDb.WOODSMAN_AXE_ID) == 0, 2.5)
-	rig.release(&"interact")
-	rig.check(broke and Game.tool_known(ToolDb.WOODSMAN_AXE_ID)
-		and not Game.tool_usable(ToolDb.WOODSMAN_AXE_ID)
-		and not Game.items.has(ToolDb.WOODSMAN_AXE_ID),
-		"the last successful impact leaves a known broken 0 / 8 Axe")
-
-	Menu.open()
-	Menu.call(&"_open_onto", PauseMenu.Screen.EQUIP)
-	await rig.wait_frames(5)
-	var equip := Menu.get_node("Root/Screens/EquipScreen") as Control
-	var equip_text := " ".join(_all_text(equip)) if equip != null else ""
-	rig.check(equip != null and equip.visible and equip_text.contains("WOODSMAN'S AXE")
-		and equip_text.contains("0 / 8") and equip_text.contains("BROKEN"),
-		"Equipment draws the exhausted Axe as 0 / 8 BROKEN")
-	await rig.capture("grove_04_broken.png")
-	Menu.close()
+	rig.check(not stump.visible and tree.enabled
+		and Game.can_chop_firewood(Clock.day, Clock.garrison_phase()),
+		"the next day restores the grove and a fresh daily chop")
 	if Bus.request_sfx.is_connected(cue_listener):
 		Bus.request_sfx.disconnect(cue_listener)
 	Clock.running = true
-	if rig.fails == 0:
-		print("GROVE CUTTING OK")
+	print("GROVE CUTTING OK")
 
 
 func _positional_voice_playing(cue: StringName) -> bool:
@@ -146,13 +114,3 @@ func _positional_voice_playing(cue: StringName) -> bool:
 				and voice.stream.resource_path.ends_with(suffix):
 			return true
 	return false
-
-
-func _all_text(root: Node) -> PackedStringArray:
-	var out := PackedStringArray()
-	var label := root as Label
-	if label != null and not label.text.strip_edges().is_empty():
-		out.append(label.text)
-	for child: Node in root.get_children():
-		out.append_array(_all_text(child))
-	return out

@@ -1,6 +1,6 @@
 class_name GarrisonHearth
 extends Interactable
-## Central deposit point and presentation of the already-resolved bonfire state.
+## Presentation of the already-resolved bonfire state and its remaining reserve.
 
 const MAT_STONE := preload("res://assets/materials/mat_wall_sunlit.tres")
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
@@ -14,7 +14,7 @@ var _fire_light: OmniLight3D
 
 
 func _ready() -> void:
-	prompt = "STACK FIREWOOD"
+	prompt = "CHECK HEARTH RESERVE"
 	radius = 2.3
 	super()
 	_build()
@@ -25,15 +25,15 @@ func _ready() -> void:
 
 
 func activate(_by: Node3D) -> void:
-	if not Game.carrying_firewood:
-		Bus.request_message.emit("YOU ARE NOT CARRYING FIREWOOD.")
+	if Clock.garrison_phase() == WorldClock.GARRISON_BONFIRE \
+			and Game.last_supper_day == Clock.day:
+		var fire_state := "FIRE LIT" if Game.warmth_active else "NO FIREWOOD"
+		var food_state := "FISH SERVED" if Game.fed_active else "NO FISH"
+		Bus.request_message.emit("SUPPER: %s; %s. DEPOSIT AT THE SOUTH-GATE SUPPLY BOX."
+			% [fire_state, food_state])
 		return
-	if Game.firewood_stock >= Game.FIREWOOD_CAP:
-		Bus.request_message.emit("THE GARRISON HEARTH IS FULL.")
-		return
-	if Game.deposit_firewood():
-		Bus.request_message.emit("FIREWOOD STACKED. HEARTH STOCK: %d / %d."
-			% [Game.firewood_stock, Game.FIREWOOD_CAP])
+	Bus.request_message.emit("HEARTH RESERVE: %d / %d. DEPOSIT AT THE SOUTH-GATE SUPPLY BOX."
+		% [Game.firewood_stock, Game.FIREWOOD_CAP])
 
 
 func _on_phase_changed(_phase: StringName) -> void:
@@ -45,6 +45,9 @@ func _on_minute_changed(_day: int, _hour: int, _minute: int) -> void:
 
 
 func _repaint() -> void:
+	prompt = "CHECK SUPPER" \
+		if Clock.garrison_phase() == WorldClock.GARRISON_BONFIRE \
+		else "CHECK HEARTH RESERVE"
 	for i: int in _stock_bundles.size():
 		_stock_bundles[i].visible = i < Game.firewood_stock
 	var fueled: bool = Clock.garrison_phase() == WorldClock.GARRISON_BONFIRE \

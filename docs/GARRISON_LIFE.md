@@ -49,9 +49,8 @@ that animation beneath the louder owl or morning birds.
 - At **20:00**, show **“Night falls”** and **“Day X”**, with a tawny-owl call.
 - At **05:00**, show **“The sun rises”** and **“Day X”**, with a morning-bird
   song.
-- The top-right column and pause MAP share the one active `Atlas` plan in every
-  authored exterior zone and underground; the corner view follows the player
-  while the pause view fits and pans the same plan. Directly beneath the minimap,
+- The top-right column shows a player-following minimap in authored exterior
+  zones and the discovered dungeon floor plan underground. Directly beneath it,
   compact companion strips show **Day X**, the current time and moving sun/moon
   track, plus 15-degree heading ticks and eight compass points beneath a fixed
   player-bearing pointer.
@@ -63,10 +62,11 @@ so ordinary evenings remain warm rather than falsely threatening. The reusable
 ceremony is implemented and verified in the real garrison; it remains separate
 from the raid proof.
 
-The existing read-only Garrison page reports time, the next phase, current
-Firewood/Hearth and Fish/supper state, Well Fed readiness, overall and
-per-resident morale with its causes, residents and their activities, and active
-garrison effects. It performs no remote action.
+The existing read-only Garrison page reports time, the next phase, carried
+Firewood and aggregate Food cargo, stored Firewood/Hearth and Fish/supper state,
+Well Fed readiness, overall and per-resident morale with its causes, residents
+and their activities, and active garrison effects. It points carried provisions
+to the south-gate supply box and performs no remote action.
 
 ## Firewood and Hearth
 
@@ -74,14 +74,15 @@ Firewood is built and valid. It is a supporting warm-home vignette, not the
 active proof and not a prerequisite for the raid.
 
 - After Brannoc arrives, Aldric assigns **Keep the Hearth**.
-- Brannoc forges or fully reforges the permanent Woodsman's Axe for 60 gold and
-  three Iron Scrap. It has eight uses, remains known and **BROKEN** at zero, and
-  is a utility tool rather than a weapon or hand slot.
+- Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
+  It is a utility tool, not a weapon or hand slot.
 - The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
   a visible side grove of individually harvestable trees. Holding at one with
-  the axe plays the work, fells that trunk to a stump, spends one use only on
-  that successful tree impact, and yields at most one carried bundle per
-  campaign day during Daytime. The player must carry it to the separate hearth.
+  the axe plays the work, fells that trunk to a stump, spends one use only at
+  the successful impact, and yields at most one exact **Firewood Bundle** per
+  campaign day during Daytime. The bundle enters
+  the Run bag, stacks to **five per slot**, and is carried to the supply box just
+  inside the south gate.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
   Time.
 - A fueled bonfire grants Warmth for the next service window; an unfueled
@@ -91,10 +92,13 @@ active proof and not a prerequisite for the raid.
 - Arrived residents gather around a fueled or empty hearth alike. The social
   moment is not conditional on earning the economic benefit.
 
-A carried bundle persists until deposited. Depositing after a bonfire does not
-retroactively fuel it. Every harvestable tree refuses work when the axe, time,
-daily availability, carrying capacity, or hearth capacity rule is not
-satisfied; the grove is world interaction, never a remote menu action.
+Carried Firewood persists in the home Run snapshot until deposited. Depositing
+after a bonfire does not retroactively fuel it. A full hearth does not prevent
+the daily tree from being worked: the supply box fills the remaining Firewood
+capacity, leaves exact overflow in the bag, and accepts it after space opens.
+Every harvestable tree still refuses work when the axe, time, daily availability,
+or bag capacity rule is not satisfied; the grove is world interaction, never a
+remote menu action.
 
 The exact item, service, and economy contracts remain with
 [ITEMS.md](ITEMS.md), [METAGAME.md](METAGAME.md), and
@@ -103,33 +107,50 @@ The exact item, service, and economy contracts remain with
 ## Fishing and provisions
 
 Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
-garrison outskirts. Its dock, rod rack, creel, near-water target, and deep-water
-target make the opportunity readable while the route beyond remains physically
-closed. Brannoc forges or fully reforges its durable Fishing Rod for 45 gold,
-one Iron Scrap, and one bundle already deposited in the hearth. It has ten uses,
-remains known and **BROKEN** at zero, and is not a weapon, hand or armament slot,
-bag item, locker item, wheel item, sale good, or combat verb.
+garrison outskirts. Its dock, rod rack, creel, and water make the opportunity
+readable while the route beyond remains physically closed. Brannoc forges or
+fully reforges its durable Fishing Rod for 45 gold, one Iron Scrap, and one
+deposited Firewood Bundle. It has ten uses, remains known and **BROKEN** at zero,
+and is not a weapon, hand slot, bag item, wheel item, sale good, or combat verb.
 
-Interacting enters one bounded fishing mode: choose near or deep water, cast,
-react to the bite, and reel while steering against the fish's run and managing
-tension. Water ripples are the bite language: quiet pulses mark the wait and a
-bright, fast expansion marks the hook window. Once hooked, one dominant arrow
-shows the counter-steer input direction rather than the fish's travel; its color
-reacts to correct or wrong steering beside compact **TENSION** and **LAND** bars.
-A released reel safely eases tension, but the fish steadily takes line back and
-the **LAND** bar recedes; easing is recovery with a cost, not banked progress.
-A landed catch reveals a fish icon with its one- or two-unit yield, while an
+Interacting enters **CASTING** directly; there is no target or species selection.
+Releasing the cast rolls one named fish from the pond's spot-level table, then
+the player reacts to its bite and reels while steering against its run and
+managing tension. Water ripples are the bite language: quiet pulses mark the
+wait and a bright, fast expansion counts down that species tier's hook window.
+Once hooked, one dominant arrow shows the counter-steer input direction rather
+than the fish's travel; its color reacts to correct or wrong steering beside
+compact **TENSION** and **LAND** bars. A released reel safely eases tension, but
+the fish steadily takes line back and the **LAND** bar recedes; easing is
+recovery with a cost, not banked progress. Higher tiers strictly narrow the hook
+window, change runs faster, begin at greater tension, recover more slowly, reel
+in more slowly, escape faster, and gain more tension from neutral or wrong
+steering.
+
+The level-1 pond table is canonical:
+
+| Species | Tier | Level-1 weight | Hook window |
+|---|---:|---:|---:|
+| Pond Shiner | 1 | 75 | 1.20 s |
+| River Perch | 2 | 20 | 1.00 s |
+| Silver Trout | 3 | 4 | 0.82 s |
+| Crown Pike | 4 | 1 | 0.68 s |
+
+A landed catch card names the exact species and shows one to four tier pips; an
 escape or snapped line has a distinct failure emblem. Semantic bite, catch, and
 failure SFX route through the shared pool. Authored cast, bite, hook, neutral
 reel, directional strain, catch, and failure recordings voice the full attempt
-without changing the interaction. The rules that
-bound its resource economy are exact:
+without changing the interaction. Every species is exact Food cargo worth one
+supper unit, stacks by its own ID to **six per bag slot**, has no sale value, and
+leaves the bag only through the south-gate supply box. The resource rules are
+exact:
 
 - Fish reserve capacity is **three units**, representing three suppers.
-- At most **three Fish units per campaign day** may be banked.
-- A near-water catch banks **one** unit; a deep-water catch banks **two**.
-  A target is unavailable unless both its full yield and reserve space remain;
-  catches are never partially banked.
+- At most **three Fish units per campaign day** may be caught. The daily cap is
+  recorded at the catch; the garrison reserve is not.
+- Stored reserve capacity never prevents fishing while the bag has room. A
+  deposit fills only the remaining reserve capacity and leaves every overflow
+  species and count exact in the bag.
 - A successful or failed attempt advances the civil clock by **ten minutes**
   and spends one Rod use. Cancelling exits lawfully, advances no time, and
   spends no durability.
@@ -143,6 +164,13 @@ the prepared state and grants **+15 temporary maximum stamina** for the trip.
 The active trip state survives a resumable dungeon save, then clears on
 extraction or death. The bonus sits outside permanent Focus progression and
 never becomes a purchase, upgrade rank, or permanent saved maximum.
+
+The south-gate supply box is the single deposit transaction for both categories.
+It stores at most three Firewood and three Food units, reports exact moved counts,
+and makes a full no-op without deleting overflow cargo. Home saves preserve the
+whole Run snapshot so undeposited provisions survive save/load. Beginning a new
+descent deliberately starts a new Run and clears that home bag, so cargo must be
+deposited before setting out if the player wants it added to garrison stores.
 
 ## Morale and care
 
@@ -206,8 +234,6 @@ The complete authored slice and evidence rules live in
 - The bounded Firewood and fishing/provisions loop does not authorise another
   chore, fishing location, gathering profession, relationship ladder, town
   economy, or freeform base builder.
-- Issue #184's Pickaxe and bounded deterministic dungeon veins do not authorise
-  another tool, ore, gathering site, profession ladder, or mining expansion.
 - Implementing one raid does not authorise recurrence.
 - No scouts, watchtowers, guards, staffing, morale-based service locks or
   relationship progression, multiple raid routes or waves, additional
