@@ -45,6 +45,12 @@ const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
 ## ever changes stone, change it in both.
 const MAT_WALL_SUNLIT := preload("res://assets/materials/mat_wall_sunlit.tres")
 const SKY_SHADER := preload("res://assets/shaders/sky.gdshader")
+const VALLEY_INNER: ArrayMesh = preload(
+	"res://assets/terrain/enclosed_valley_inner.res")
+const VALLEY_MID: ArrayMesh = preload(
+	"res://assets/terrain/enclosed_valley_mid.res")
+const VALLEY_FAR: ArrayMesh = preload(
+	"res://assets/terrain/enclosed_valley_far.res")
 
 ## Where the paved circle sits, and how big it is.
 ##
@@ -144,6 +150,15 @@ func _ready() -> void:
 	atmosphere = SurfaceAtmosphere.new()
 	atmosphere.name = &"SurfaceAtmosphere"
 	add_child(atmosphere)
+	var valley := EnclosedValleyTerrain.new()
+	valley.name = &"EnclosedValleyTerrain"
+	valley.baked_inner_mesh = VALLEY_INNER
+	valley.baked_mid_mesh = VALLEY_MID
+	valley.baked_far_mesh = VALLEY_FAR
+	valley.gorge_angle_degrees = 135.0
+	valley.gorge_width_degrees = 20.0
+	valley.configure_for_site(58.0, 440.0, -9.0, -PI * 0.25)
+	add_child(valley)
 	compound = GarrisonCompound.new()
 	compound.name = &"Compound"
 	add_child(compound)

@@ -4,7 +4,7 @@ extends Interactable
 ## Campaign authority remains on `Game`; this node owns the tactile attempt,
 ## pond landmark, and a small third-person overlay.
 
-const MAT_PATH := preload("res://assets/materials/mat_flagstone_sunlit.tres")
+const MAT_PATH := preload("res://assets/materials/mat_floor.tres")
 const MAT_STONE := preload("res://assets/materials/mat_wall_sunlit.tres")
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
@@ -20,6 +20,10 @@ const STRAIN_SFX_GAP: float = 0.58
 enum State { IDLE, CASTING, WAITING, BITE, HOOKED, RESULT }
 
 @export_range(1, 4) var spot_level: int = 1
+
+## Composite exteriors may own a larger pond and banks. In that case this node
+## still supplies the dock, fishing gear, fish, ripples, and full interaction.
+@export var build_pool_visuals: bool = true
 
 var _state: State = State.IDLE
 var _state_elapsed: float = 0.0
@@ -750,6 +754,17 @@ func _set_row_visible(row: Control, value: bool) -> void:
 # --- Landmark ---------------------------------------------------------------
 
 func _build_landmark() -> void:
+	if not build_pool_visuals:
+		_water = MeshInstance3D.new()
+		_water.name = &"WaterDriver"
+		_water.visible = false
+		add_child(_water)
+		_build_dock()
+		_build_rod_rack()
+		_build_creel()
+		_build_fish()
+		_build_ripples()
+		return
 	var water_material := StandardMaterial3D.new()
 	water_material.albedo_color = Color(0.10, 0.42, 0.50, 1.0)
 	water_material.metallic = 0.08

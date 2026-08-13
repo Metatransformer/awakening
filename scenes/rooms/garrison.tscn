@@ -15,3 +15,4 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 10.2)
 
 [node name="GameCamera" parent="." instance=ExtResource("3_cam")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 14.2)
+far = 320.0

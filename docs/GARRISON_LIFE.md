@@ -76,11 +76,11 @@ active proof and not a prerequisite for the raid.
 - After Brannoc arrives, Aldric assigns **Keep the Hearth**.
 - Brannoc forges the permanent Woodsman's Axe for 60 gold and three Iron Scrap.
   It is a utility tool, not a weapon or hand slot.
-- The cliff-partitioned outskirts between the garrison and the Sunken Cut holds
-  a visible side grove of individually harvestable trees. Holding at one with
-  the axe plays the work, fells that trunk to a stump, spends one use only at
-  the successful impact, and yields at most one exact **Firewood Bundle** per
-  campaign day during Daytime. The bundle enters
+- The wooded homestead clearing between the garrison bridge and the visible
+  Sunken Cut mine holds a dense west-side grove of individually harvestable
+  trees. Holding at one with the axe plays the work, fells that trunk to a
+  stump, spends one use only at the successful impact, and yields at most one
+  exact **Firewood Bundle** per campaign day during Daytime. The bundle enters
   the Run bag, stacks to **five per slot**, and is carried to the supply box just
   inside the south gate.
 - The hearth stores at most three bundles and consumes at most one at Bonfire
@@ -106,12 +106,15 @@ The exact item, service, and economy contracts remain with
 
 ## Fishing and provisions
 
-Exactly one spring-fed fishing pond occupies the blocked eastern spur of the
-garrison outskirts. Its dock, rod rack, creel, and water make the opportunity
-readable while the route beyond remains physically closed. Brannoc forges or
-fully reforges its durable Fishing Rod for 45 gold, one Iron Scrap, and one
-deposited Firewood Bundle. It has ten uses, remains known and **BROKEN** at zero,
-and is not a weapon, hand slot, bag item, wheel item, sale good, or combat verb.
+Exactly one spring-fed fishing pond on the east side of the garrison outskirts
+owns the fishing interaction. Its dock, rod rack, creel, and water make the
+opportunity readable. A river dock and south pond are scenic landmarks only:
+they do not add interactions, catches, reserves, or another fishing mode. The
+garrison bridge ends at a visible, solid boundary, so the player cannot leave
+the authored screen beyond it. Brannoc forges or fully reforges the east pond's
+durable Fishing Rod for 45 gold, one Iron Scrap, and one deposited Firewood
+Bundle. It has ten uses, remains known and **BROKEN** at zero, and is not a
+weapon, hand slot, bag item, wheel item, sale good, or combat verb.
 
 Interacting enters **CASTING** directly; there is no target or species selection.
 Releasing the cast rolls one named fish from the pond's spot-level table, then

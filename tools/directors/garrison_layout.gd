@@ -23,6 +23,14 @@ func run(rig) -> void:
 	_prove_warm_lighting(rig, compound)
 	_prove_elder_arrival(rig, compound)
 	_prove_exit_backstop(rig, compound)
+	var valley := garrison.get_node_or_null(^"EnclosedValleyTerrain") \
+		as EnclosedValleyTerrain
+	rig.check(valley != null and valley.baked_inner_mesh != null
+		and valley.baked_mid_mesh != null and valley.baked_far_mesh != null,
+		"the garrison reuses the three pre-baked enclosed-valley LOD bands")
+	var game_camera := garrison.get_node_or_null(^"GameCamera") as Camera3D
+	rig.check(game_camera != null and game_camera.far >= 300.0,
+		"the garrison camera resolves the reused mountain skyline")
 
 	var camera := Camera3D.new()
 	camera.fov = 56.0

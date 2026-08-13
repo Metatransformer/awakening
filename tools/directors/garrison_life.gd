@@ -110,8 +110,8 @@ func _timber_view(rig, garrison: Garrison) -> void:
 	Prompt.drop_focus()
 	Clock.set_time(1, 12.0)
 	await rig.wait_frames(12)
-	rig.check(outskirts.harvest_trees.size() == 10,
-		"the exterior route contains a ten-tree working grove")
+	rig.check(outskirts.harvest_trees.size() == 18,
+		"the exterior route contains an eighteen-tree working grove")
 	rig.check(outskirts.port(&"grove").origin != Vector3.ZERO,
 		"the grove entrance has an authored exterior port")
 
