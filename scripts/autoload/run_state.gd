@@ -571,7 +571,7 @@ func relic_toll() -> int:
 	return _relic_toll_of(bag)
 
 
-## Die. **The case comes home; the other seven slots are gone.** Gold and anything
+## Die. **The case comes home; the exposed hold is gone.** Gold and anything
 ## bought with it survives, as it always did.
 ##
 ## Added 2026-08-10 (docs/GDD.md §3.1). Death used to take the whole bag, which is
@@ -611,7 +611,7 @@ func die() -> void:
 			lost[id] = n
 	var lost_value := _value_of(lost)
 	# Measured before the pot is split, because `_premium_share` divides by the
-	# bag as it stands and the bag is about to be seven slots smaller.
+	# bag as it stands and the bag is about to lose its exposed side.
 	var lost_hot := _premium_share(_base_of(lost) - _relic_toll_of(lost))
 
 	# The heat premium follows the merchandise. What the floor kept takes its

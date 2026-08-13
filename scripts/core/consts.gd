@@ -705,10 +705,10 @@ const THIEF_SHARE := 0.25
 ## new player who panics twice is broke and has to finish a run to recover.
 ## That first forced commitment is where the game teaches what it is about.
 const START_GOLD := 30
-## Slots, not items -- a stack shares a slot. Twelve is enough to fill on a good
-## run and not enough to clear a floor with, which is what makes a bag a
-## decision rather than a container. [tune]
-const START_BAG_SLOTS := 12
+## Slots, not items -- a stack shares a slot. Seventeen is five protected
+## document-case cells plus twelve exposed hold cells: enough to fill on a good
+## run and not enough to clear a floor with. [tune]
+const START_BAG_SLOTS := 17
 ## Slots in the footlocker in the hero's quarters (`scripts/props/footlocker.gd`).
 ##
 ## **Finite on purpose, and the reason is `docs/GDD.md` §2**, which names

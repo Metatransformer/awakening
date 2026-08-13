@@ -395,6 +395,12 @@ func load_slot(slot: int) -> Dictionary:
 		Game.upgrades[upgrade_id] = maxi(
 			int(Game.upgrades.get(upgrade_id, 0)),
 			int((d["upgrades"] as Dictionary)[k]))
+	# Stored capacity alone cannot reveal whether it includes the old 12-cell
+	# baseline, so rebuild that baseline from the purchased rank without reducing
+	# a larger explicit stored value.
+	var bag_slot_rank: int = clampi(int(Game.upgrades.get(&"bag_slot", 0)),
+		0, int(SupplyDb.LIMITS[&"bag_slot"]))
+	Game.bag_slots = maxi(Game.bag_slots, K.START_BAG_SLOTS + bag_slot_rank)
 	var bed_rank: int = clampi(
 		int(Game.upgrades.get(ElderUpgradeDb.BED_ID, 0)),
 		0, int(ElderUpgradeDb.LIMITS[ElderUpgradeDb.BED_ID]))

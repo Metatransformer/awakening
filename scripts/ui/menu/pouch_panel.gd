@@ -72,10 +72,9 @@ const ROPE_HOLD := 0.9
 ## number now lives in `ItemGrid` for everyone, and this const survives only
 ## because this panel is the one that has to fight for the width.
 ##
-## The bag holds `Game.bag_slots` (12 at the start, 16 bought out) less the
-## case's 5, so the grid is 7 cells at the low end and 11 at the high end: two
-## rows then three, where four across was three rows then four. One row shorter
-## is the point — the whole bag is one glance instead of a scan.
+## The bag holds `Game.bag_slots` (17 at the start, 21 bought out) less the
+## case's 5, so the hold grid is 12 cells at the low end and 16 at the high end:
+## three rows then four. The whole bag remains one glance instead of a scan.
 ##
 ## **Five used to be a fight and is not one any more.** With the old 140 px card
 ## the grid was 732 px, `Bag` 748, plus `Worn` 152 and 16 between made `Left` 916
@@ -101,12 +100,10 @@ const CELL_NAME_PT := ItemGrid.NAME_PT
 ## taller than the frame and push the footer off the screen — which is exactly
 ## how the EQUIP screen broke the first time it was built.
 ##
-## Sixteen is `Game.bag_slots` at its bought maximum, which is the most the game
-## can legitimately ask for; at `COLS` = 5 that is four rows rather than the four
-## rows of four it used to be, and the real grid is smaller again because the
-## case takes five of those slots off the top (`Run.hold_slots`). Kept at the
-## bag's ceiling rather than lowered to the 11 the grid can actually be handed,
-## because it is a guard against a corrupt number and not a layout constant.
+## Sixteen is the exact legitimate HOLD ceiling: 21 bought-out bag cells less
+## the five-cell case. At `COLS` = 5 that is four hold rows, and keeping the guard
+## at the real hold ceiling still prevents a corrupt number from growing the
+## grid beyond the layout.
 const MAX_CELLS := 16
 
 ## The paper doll's column, and twenty px of comfort over `MenuPaperDoll.MIN_SIZE.x`.
@@ -312,7 +309,7 @@ func _build() -> void:
 	carried.add_theme_constant_override("separation", 16)
 	# The row takes the column's whole height now that the bench is not under it,
 	# so the bag is ONE open well from the case down to the footer -- the field a
-	# bag bought up to sixteen slots grows into, instead of a 342 px box with a
+	# bag bought up to twenty-one slots grows into, instead of a 342 px box with a
 	# band of nothing beneath it.
 	carried.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(carried)

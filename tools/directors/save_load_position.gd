@@ -111,6 +111,10 @@ func run(rig) -> void:
 	legacy.erase("run")
 	legacy["pos"] = [FAR_POSITION.x, FAR_POSITION.y, FAR_POSITION.z]
 	legacy["yaw"] = FAR_YAW
+	legacy["bag_slots"] = 16
+	var legacy_upgrades: Dictionary = legacy.get("upgrades", {})
+	legacy_upgrades["bag_slot"] = int(SupplyDb.LIMITS[&"bag_slot"])
+	legacy["upgrades"] = legacy_upgrades
 	var legacy_items: Dictionary = legacy.get("items", {})
 	legacy_items.erase(String(StoryDb.SMITH_TOKEN))
 	legacy["items"] = legacy_items
@@ -145,6 +149,9 @@ func run(rig) -> void:
 	StoryDb.mark_told(&"elder", &"timber_duty")
 	_ck("D8 the timber duty stocks the Woodsman's Axe",
 		ShopDb.stocked(ShopDb.WOODSMAN_AXE_ID))
+	_ck("D9 the old bought-out bag keeps four upgrades on the larger baseline",
+		Game.bag_slots == K.START_BAG_SLOTS
+			+ int(SupplyDb.LIMITS[&"bag_slot"]))
 
 	var resumed: bool = await Flow.resume(dest)
 	_ck("E0 Flow accepted the restored destination", resumed)

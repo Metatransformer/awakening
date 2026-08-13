@@ -64,9 +64,9 @@ rules belong to [ITEMS.md](ITEMS.md), and Echo placement and effects belong to
 
 ## 3. Bag pressure
 
-The starting bag has **12 cells**. Four purchasable upgrades raise the hard
-maximum to **16 cells**. The document case uses five of those cells; it does
-not add capacity.
+The starting bag has **17 cells**. The document case uses five of those cells,
+leaving **12 exposed hold cells** by default; it does not add capacity. Four
+purchasable upgrades raise the hard maximum to **21 cells**.
 
 Each item defines its own stack limit. A stack that exceeds its limit consumes
 another cell. Common ingredients stack deeply, while rarer finds generally

@@ -2459,7 +2459,7 @@ func _make_stone(stone_id: StringName) -> Node3D:
 ## `docs/PUZZLES.md` §5.3: *optional, richer, harder* -- a puzzle on the mid-ring's
 ## blank wall, and behind it the floor's **miniboss** (§7), a rich chest and an
 ## Echo. Nothing here is on the critical path, so GDD §5.1's *"walking in, filling
-## twelve slots and roping out is a complete run"* survives untouched.
+## the starting bag and roping out is a complete run"* survives untouched.
 ##
 ## The puzzle is §3's first combinator, the **nest**: a pressure plate across the
 ## room from the door, and a push block to hold it down. It is the oldest pair in
