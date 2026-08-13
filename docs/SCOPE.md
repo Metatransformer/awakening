@@ -11,8 +11,8 @@ unauthorised.
 | Surface | Cap |
 |---|---:|
 | Dungeon floors | **4**, plus the existing post-credits endless mode |
-| Bosses | **4** |
-| Minibosses | **4**, one per floor |
+| Bosses | **4**, three beats each, one health bar, two behaviour phases |
+| Minibosses | **4**, one per floor, two beats each, two behaviour phases |
 | Enemy kinds in rotation | **9** |
 | New monster models | **0** |
 | Dungeon kits | **1**, used in four tints |
@@ -76,6 +76,15 @@ and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
 
+Issue #203 amends boss behaviour without raising a content cap: the roster stays
+at four bosses and four minibosses, uses zero new monster models, adds no item,
+and retains the existing five attack shapes. “One phase” is no longer the cap.
+Each row has one health bar and two behaviour phases at half health; phase 2
+reuses the same three boss beats or two miniboss beats while increasing movement
+and selection pressure. Only full bosses turn the arena. Exact mappings and
+cycle counts are owned by [BOSSES.md](BOSSES.md), and the evidence boundary is
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+
 Counts rise only through an explicit scope amendment. By default, an addition
 must delete something of comparable cost in the same decision. Implementing a
 feature does not authorise another instance, variant, or supporting system.
@@ -119,10 +128,18 @@ slice. It does not supersede the authorised human proofs above or satisfy the
 near/deep evidence bar in
 [design-tests/FISHING_PROVISIONS_PROOF.md](design-tests/FISHING_PROVISIONS_PROOF.md).
 
-Raid, Field Notes, fishing/provisions, and #184's bounded tool/mining
-implementations are complete; their precommitted human tests remain pending.
-Floors 2–4, bosses 2–4, production content, another fishing location or
-minigame, and every expansion below remain frozen.
+Issue #203 is separately owner-authorised boss/miniboss refinement and proof.
+It may change only the behaviour and evidence for the existing four-plus-four
+roster inside the attack, model, item, and floor caps above. Runtime
+implementation and the dedicated automated gate pass; the five-session human
+gate remains tracked in
+[design-tests/BOSS_DYNAMISM_PROOF.md](design-tests/BOSS_DYNAMISM_PROOF.md).
+
+Raid, Field Notes, fishing/provisions, #184's bounded tool/mining implementation,
+and #203's boss runtime refinement are present; their precommitted human tests
+remain pending. Floors 2–4 production content, any fifth boss or miniboss, any
+new boss model/item/attack shape, another fishing location or minigame, and
+every expansion below remain frozen.
 
 ## Later, only if proven
 
@@ -167,6 +184,6 @@ human evidence. That is sequencing debt, not permission to continue.
 Do not expand production until the pending five-session human tests are
 resolved.
 Directors and automated checks can prove implementation; only observed human
-play can answer either design question. A result from one cannot prove the
-other. After a result, update the owning design test first, then amend current
-canon only where the decision requires it.
+play can answer each design question. A result from one cannot prove another.
+After a result, update the owning design test first, then amend current canon
+only where the decision requires it.

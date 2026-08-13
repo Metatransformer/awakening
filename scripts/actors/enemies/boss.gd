@@ -9,9 +9,9 @@ extends Enemy
 ##
 ## **It is an `Enemy`, and it reuses `Enemy`'s state machine.** Twelve beats and
 ## five shapes needed no second FSM: `State.WINDUP` is the tell, `State.STRIKE`
-## is the commit, `State.RECOVER` carries the recovery tail AND the guaranteed
-## punish window, and `State.CHASE` is the only window in a beat where the thing
-## is allowed to walk. That mapping is worth more than a bespoke machine would
+## is the commit, `State.RECOVER` carries the recovery tail and any authored
+## recover-aperture, and `State.CHASE` owns the moving breath between attacks.
+## That mapping is worth more than a bespoke machine would
 ## be, because the pieces around it -- the glow guard in `_physics_process`, the
 ## gravity, `move_and_slide`, `rotation.y = _facing` -- keep working unchanged.
 ## The parts that are genuinely different are overridden and named:
@@ -19,17 +19,15 @@ extends Enemy
 ##   `_resolve_def`   stats come from `BossDb`, not `Enemy.DEFS`
 ##   `_build_combat`  health is ABSOLUTE (contract §2) and there is no hitbox
 ##   `_style_model`   the authored tint, applied BEFORE `HitFlash.bind`
-##   `_on_damaged`    poise: a blow does not interrupt a beat (see below)
-##   `freeze`         the chain does not stop it, for the same reason
+##   `apply_hit`      armour, weak-point matching and stagger segment budget
+##   `_on_damaged`    feedback for damage that passed the true-stagger gate
+##   `freeze`         the authored hookshot weak point, otherwise armour
 ##   `_drop_loot`     the authored drop, not a roll off `ItemDb`
 ##
-## **Poise, and why it is not a difficulty knob.** `Enemy._on_damaged` throws the
-## body into `HURT` and pushes the cooldown, which is right for a skeleton and
-## fatal here: the promise this fight makes is that EVERY beat buys the player a
-## window (contract §4), and a boss that can be knocked out of its own recovery
-## has no beat left to be punished during. It also makes the tell a lie -- you
-## read the wind-up, you hit first, and the attack you read never arrives. So a
-## blow lands, flashes, shakes and rings, and changes no state at all.
+## **Armour and poise.** Outside a true stagger, weapon hits do no health damage.
+## A correct authored interaction breaks the visible weak point and roots the
+## body in a capped vulnerable window. The public parry `stagger()` remains the
+## shorter recovery interruption and does not open health damage by itself.
 ##
 ## **What is greybox here and what is not.** The scale fit is MEASURED
 ## (`height / _model_height`) because a magic factor is a correctness bug waiting
@@ -53,7 +51,7 @@ extends Enemy
 ##  2. `force_beat()` exists for directors only. It does not re-implement the
 ##     choice rule (§6) -- `pick_beat` is still the only chooser in play.
 
-## Fired the instant a tell begins, at commit, and around the punish window.
+## Fired the instant a tell begins, at commit, and around a recover weak point.
 ## `punish_closed` carries the window MEASURED in game seconds rather than the
 ## number the table authored, because the thing worth proving is the one the
 ## player stood in. See `_measured_punish`.
@@ -61,6 +59,9 @@ signal beat_started(beat_id: StringName)
 signal beat_committed(beat_id: StringName)
 signal punish_opened(beat_id: StringName, seconds: float)
 signal punish_closed(beat_id: StringName, measured: float)
+signal weakpoint_opened(kind: StringName, beat_id: StringName)
+signal staggered(count: int, goal: int, seconds: float)
+signal phase_changed(phase: int)
 
 ## Which row of `BossDb.BOSSES` this is.
 @export var boss_id: StringName = &"cistern_warden"
@@ -95,14 +96,11 @@ const COMMIT_TIME := 0.22
 ## turning to look at you is the fight's opening line.
 const WAKE_DELAY := 1.0
 
-## Where the boss tries to stand between beats, in metres. Inside the shortest
-## `max_range` in the game (the Riven Knight's arc, 5.5 m) so that closing is a
-## thing it does before a beat rather than during one.
-const ROAM_RING := 3.8
-
 ## Ground markers. Flat, unshaded, and drawn in the beat's own authored colour.
 const MARK_Y := 0.05
 const MARK_SEGMENTS := 28
+const BOUNDARY_INSET := 1.35
+const WEAKPOINT_PULSE_HZ := 2.6
 
 var _row: Dictionary = {}
 var _beat: Dictionary = {}
@@ -126,7 +124,15 @@ var _charge_left: float = 0.0
 var _charge_speed: float = 0.0
 var _charge_hit: Array[int] = []
 
-## Live zone discs: {node, at, radius, fuse, damage, knockback, stun}.
+## A leap moves the CharacterBody only in X/Z. The fitted model owns the sine
+## arc, so base gravity and authored height never write the same vertical value.
+var _leaping: bool = false
+var _leap_start: Vector3 = Vector3.ZERO
+var _leap_target: Vector3 = Vector3.ZERO
+var _leap_total: float = 0.0
+var _leap_elapsed: float = 0.0
+
+## Live thrown zones: destination marker, projectile flight, then fuse.
 var _zones: Array[Dictionary] = []
 var _summons: Array[Node3D] = []
 
@@ -146,6 +152,23 @@ var _arena_center: Vector3 = Vector3.ZERO
 var _arena_radius: float = -1.0
 var _marker: Node3D = null
 
+var _phase: int = 1
+var _orbit_sign: float = 1.0
+var _wall_latched: bool = false
+var _reposition_left: float = 0.0
+
+## Ordinary recovery remains armoured. This flag is the one health-damage gate.
+var _weakpoint_open: bool = false
+var _weakpoint_beat: StringName = &""
+var _vulnerable: bool = false
+var _vulnerable_timer: float = 0.0
+var _stagger_windows: int = 0
+var _segment_damage_done: int = 0
+var _weakpoint_marker: MeshInstance3D = null
+var _weakpoint_clock: float = 0.0
+var _phase_flash: Tween = null
+var _phase_two_pending: bool = false
+
 
 func _ready() -> void:
 	super()
@@ -155,6 +178,8 @@ func _ready() -> void:
 	if _model != null:
 		_fit_scale = _model.scale
 		_fit_pos = _model.position
+	_build_weakpoint_marker()
+	_orbit_sign = -1.0 if _rng.randf() < 0.5 else 1.0
 	_arena_center = _anchor
 	# Asleep until an arena wakes it. A boss that charged the moment the player
 	# came through the door would have started its fight off screen.
@@ -181,10 +206,12 @@ func _resolve_def() -> Dictionary:
 	# of `kind`. Setting it here rather than in `_ready` is not a shortcut: this
 	# function runs FIRST in `Enemy._ready`, before the model is built.
 	kind = _row["model"]
+	var movement: Dictionary = _row.get("movement", {})
+	var phase_one: Dictionary = movement.get("phase_1", {})
 	return {
 		"health": int(_row["health"]),
 		"damage": 0,
-		"speed": 2.1,
+		"speed": float(phase_one.get("speed", 2.1)),
 		"height": float(_row["height"]),
 		# It is already awake or it is asleep; the arena decides, never a radius.
 		"detect": 99.0,
@@ -261,10 +288,8 @@ func _build_combat() -> void:
 	health = HealthComponent.new()
 	health.name = "Health"
 	health.max_health_points = maxi(int(_row.get("health", 48)), 1)
-	# The same monster i-frames `Enemy` takes, and for the same reason: the light
-	# chain has to land all three of its steps on a boss too. What makes a boss
-	# hard is the authored beats and forty-odd HP, never a hidden
-	# rule that quietly deletes two thirds of the player's damage.
+	# The same monster i-frames `Enemy` takes. During true stagger the full light
+	# chain can land; armour outside it is explicit actor state, not an iframe.
 	health.iframe_time = K.ENEMY_IFRAME_TIME
 	add_child(health)
 	health.damaged.connect(_on_damaged)
@@ -276,9 +301,8 @@ func _build_combat() -> void:
 ## `Enemy` re-runs the floor's curve every time `level` is written now (card #22),
 ## which is right for a generated body and would be a disaster here: contract §2
 ## authors a boss's health ABSOLUTE for the one floor it stands on, so a single
-## stray `boss.level = 3` would otherwise rewrite the Bellwake's 96 HP as
-## `_row["health"] * Prog.health_mult(3)` and make the swing arithmetic in the
-## row's own comment a lie. Nothing writes it today. This is what keeps that from
+## stray `boss.level = 3` would otherwise rewrite the Bellwake's authored 96 HP
+## and its four 24 HP segments. Nothing writes it today. This is what keeps that from
 ## being a thing anyone has to remember.
 ##
 ## Virtual dispatch is real for methods -- it is only STATIC calls that bind to
@@ -321,6 +345,28 @@ func _style_model() -> void:
 			mi.set_surface_override_material(surface, m)
 
 
+func _build_weakpoint_marker() -> void:
+	var stagger_row: Dictionary = _row.get("stagger", {})
+	if stagger_row.is_empty():
+		return
+	var color: Color = stagger_row.get("color", Pal.BONE)
+	_weakpoint_marker = MeshInstance3D.new()
+	_weakpoint_marker.name = "WeakPoint"
+	var orb := SphereMesh.new()
+	var radius := clampf(_height() * 0.045, 0.11, 0.18)
+	orb.radius = radius
+	orb.height = radius * 2.0
+	_weakpoint_marker.mesh = orb
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_weakpoint_marker.material_override = mat
+	_weakpoint_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_weakpoint_marker.position = _weakpoint_rest_position()
+	_weakpoint_marker.visible = false
+	add_child(_weakpoint_marker)
+
+
 # --- Waking -------------------------------------------------------------------
 
 func is_awake() -> bool:
@@ -359,10 +405,57 @@ func current_beat() -> StringName:
 	return _beat.get("id", &"")
 
 
-## True while the fight is holding its promise open. Rooted, hitboxes shut, no
-## new tell -- the window every beat buys, without exception (contract §4).
+func current_phase() -> int:
+	return _phase
+
+
+func weakpoint_open() -> bool:
+	return _weakpoint_open
+
+
+func is_weakpoint_open() -> bool:
+	return _weakpoint_open
+
+
+func is_vulnerable() -> bool:
+	return _vulnerable
+
+
+func vulnerable() -> bool:
+	return _vulnerable
+
+
+func stagger_count() -> int:
+	return _stagger_windows
+
+
+func stagger_goal() -> int:
+	var authored: Dictionary = _row.get("stagger", {})
+	return int(authored.get("goal", 1))
+
+
+func segment_capacity() -> int:
+	if health == null:
+		return 0
+	return int(ceil(float(health.max_health_points) / float(maxi(stagger_goal(), 1))))
+
+
+func segment_damage() -> int:
+	return _segment_damage_done
+
+
+## True only while health damage can land. Ordinary recovery is armoured.
 func is_punishable() -> bool:
-	return state == State.RECOVER and _punishing
+	return _vulnerable
+
+
+func _movement_row() -> Dictionary:
+	var movement: Dictionary = _row.get("movement", {})
+	return movement.get("phase_2" if _phase >= 2 else "phase_1", {})
+
+
+func _reposition_duration() -> float:
+	return float(_movement_row().get("reposition", 0.5))
 
 
 # --- The beat -----------------------------------------------------------------
@@ -372,25 +465,58 @@ func _tick_idle() -> void:
 	_play(&"idle", true)
 
 
-## Everything between the end of one beat's punish and the start of the next
-## tell. The ONE window a beat gives the boss to move (contract §4), and
-## `_cooldown` -- decremented by `Enemy._physics_process` -- is what measures it.
-## A beat whose `cooldown` equals its `punish` therefore spends no time here at
-## all, which is what "pure openings with no repositioning" means in the table.
+## Everything between openings and tells. Row-driven orbit steering keeps the
+## body in motion, yields when crowded, closes when far, and pushes hard away
+## from the live arena boundary. Every exit arms a mandatory reposition timer.
 func _tick_chase(delta: float) -> void:
 	if _player == null:
 		_stop()
 		_play(&"idle", true)
 		return
+	_reposition_left = maxf(0.0, _reposition_left - delta)
 	_face_player(delta, ROAM_TRACK_DEG)
-	var dist := _distance()
-	if dist > ROAM_RING:
-		_steer(K.flat(_to_player()), float(_def["speed"]))
-		_play(&"walk_fwd", true, 0.9)
+	if is_on_wall() and not _wall_latched:
+		_orbit_sign *= -1.0
+	_wall_latched = is_on_wall()
+
+	var movement := _movement_row()
+	var speed := float(movement.get("speed", _def["speed"]))
+	var ring := float(movement.get("orbit_radius", 3.8))
+	var strength := float(movement.get("orbit_strength", 1.0))
+	# Bomb rows must remain beatable without stored charges. While their thrown
+	# zone is live the body presses just inside that zone's edge, making the
+	# renewable answer a deliberate bait-and-dodge instead of a random scatter
+	# that happens to clip the boss once in twenty casts.
+	var stagger_row: Dictionary = _row.get("stagger", {})
+	if _weakpoint_open and stagger_row.get("kind", &"") == BossDb.STAGGER_BOMB \
+			and stagger_row.get("open", &"") == BossDb.OPEN_ZONES:
+		ring = minf(ring, float(_beat.get("radius", ring)) * 0.80)
+		strength = maxf(strength, 1.65)
+	var radial := K.plane(global_position - _player.global_position)
+	var dist := radial.length()
+	if dist <= 0.001:
+		radial = Vector3.FORWARD.rotated(Vector3.UP, _facing)
+		dist = 0.001
 	else:
-		_steer(Vector3.ZERO, 0.0)
-		_play(&"idle", true)
-	if _cooldown <= 0.0:
+		radial /= dist
+	var tangent := Vector3(-radial.z, 0.0, radial.x) * _orbit_sign
+	var desired := tangent + radial * ((ring - dist) * strength)
+	if dist < ring * 0.72:
+		desired += radial * 1.8
+	elif dist > ring * 1.45:
+		desired -= radial * 1.5
+
+	var from_center := K.plane(global_position - _arena_center)
+	var boundary := maxf(arena_radius() - BOUNDARY_INSET, 1.0)
+	if from_center.length() > boundary - 1.0:
+		var edge_t := clampf(from_center.length() - (boundary - 1.0), 0.0, 2.0)
+		desired -= from_center.normalized() * (2.5 + edge_t * 2.0)
+	_steer(desired.normalized(), speed)
+	_play(&"walk_fwd", true, 0.9 + speed * 0.04)
+	# A live thrown-zone aperture is a bait sequence, not permission to layer a
+	# second attack over it. Keep orbiting until the last fuse closes or the
+	# player breaks the weak point.
+	if _cooldown <= 0.0 and _reposition_left <= 0.0 and not _weakpoint_open:
 		_begin_beat()
 
 
@@ -405,9 +531,11 @@ func _begin_beat() -> void:
 		return
 	_last_id = id
 	state = State.WINDUP
+	_stop()
 	_tell_total = maxf(float(_beat["tell"]["time"]), 0.001)
 	_timer = _tell_total
 	_kill_recoil()
+	_prepare_leap_target()
 	_show_tell_marker()
 	_play(&"attack_1")
 	# Once, on the first frame. Sfx owns which sound (docs/CONTRACT.md §8).
@@ -430,7 +558,7 @@ func _choose() -> StringName:
 	var dist := 0.0 if _player == null else _distance()
 	var refused := _last_id
 	for _attempt in 3:
-		var id := BossDb.pick_beat(boss_id, _rng, refused, dist)
+		var id := BossDb.pick_beat(boss_id, _rng, refused, dist, _phase)
 		if id == &"":
 			return &""
 		var b := BossDb.beat(boss_id, id)
@@ -445,6 +573,19 @@ func _choose() -> StringName:
 	# still happen: the player gets a free window out of it, which is the right
 	# way for a boss to be over-committed.
 	return refused
+
+
+func _prepare_leap_target() -> void:
+	_leap_target = global_position
+	if not _beat.has("leap") or _player == null:
+		return
+	var promised := _player.global_position
+	var from_center := K.plane(promised - _arena_center)
+	var limit := maxf(arena_radius() - BOUNDARY_INSET, 1.0)
+	if from_center.length() > limit:
+		promised = _arena_center + from_center.normalized() * limit
+	promised.y = global_position.y
+	_leap_target = promised
 
 
 func _tick_windup(delta: float) -> void:
@@ -475,7 +616,8 @@ func _tick_windup(delta: float) -> void:
 func _commit() -> void:
 	_glowing = false
 	_flash.restore()
-	_clear_marker()
+	if not _beat.has("leap"):
+		_clear_marker()
 	_pose_reset()
 	state = State.STRIKE
 	_timer = _commit_seconds(_beat)
@@ -491,12 +633,17 @@ func _commit() -> void:
 func _commit_seconds(b: Dictionary) -> float:
 	if b["shape"] == BossDb.SHAPE_CHARGE:
 		return float(b["reach"]) / maxf(float(b["speed"]), 0.1) + 0.05
+	if b.has("leap"):
+		var leap: Dictionary = b["leap"]
+		return float(leap["time"]) + 0.05
 	return COMMIT_TIME
 
 
 func _tick_strike(delta: float) -> void:
 	_timer -= delta
-	if _charging:
+	if _leaping:
+		_advance_leap(delta)
+	elif _charging:
 		_advance_charge(delta)
 	else:
 		_stop()
@@ -507,32 +654,54 @@ func _tick_strike(delta: float) -> void:
 		_punishing = false
 
 
-## RECOVER and PUNISH, in that order, in one state: both are "rooted, hitboxes
-## shut, no new tell", and the only thing that separates them is which promise is
-## being kept.
+## Recovery is rooted. Only the authored `OPEN_RECOVER` beat continues into a
+## stationary weak-point aperture; every other beat flows back into orbit as
+## soon as its animation tail is paid. That distinction prevents armoured fake
+## openings where the boss stands politely while sword blows clang for 0 HP.
 ##
 ## `_cooldown` is armed at the moment the punish OPENS, not at the moment it
 ## closes, because contract §4 measures both from the same instant and asserts
-## `cooldown >= punish`. So the leftover after the window is exactly
-## `cooldown - punish` -- the reposition time -- and a beat with `cooldown ==
-## punish` flows straight from the closing window into the next tell.
+## `cooldown >= punish`. The row's movement block adds a mandatory visible
+## reposition after the window even when those two authored timers are equal.
 func _tick_recover(delta: float) -> void:
 	_stop()
+	if _vulnerable:
+		_vulnerable_timer -= delta
+		_hold_stagger_pose()
+		if _vulnerable_timer <= 0.0:
+			_finish_true_stagger()
+		return
 	_timer -= delta
 	if not _punishing:
 		if _timer <= 0.0:
+			var stagger_row: Dictionary = _row.get("stagger", {})
+			var is_recover_aperture: bool = stagger_row.get("beat", &"") \
+				== _beat.get("id", &"") and stagger_row.get("open", &"") \
+				== BossDb.OPEN_RECOVER
+			if not is_recover_aperture:
+				# Spend the old recovery budget in motion. `cooldown` gates the next
+				# tell while `punish` is the minimum visible reposition; both tick in
+				# CHASE, so the boss gives breathing room without offering fake HP.
+				_cooldown = float(_beat["cooldown"])
+				_reposition_left = maxf(_reposition_duration(),
+					float(_beat["punish"]))
+				state = State.CHASE
+				return
 			_punishing = true
 			_measured_punish = 0.0
 			_timer = float(_beat["punish"])
 			_cooldown = float(_beat["cooldown"])
+			_open_weakpoint(BossDb.OPEN_RECOVER)
 			punish_opened.emit(_beat["id"], float(_beat["punish"]))
 		return
 	# Measured rather than assumed. The window is the promise; a director that
 	# checks the authored number has checked the table, not the fight.
 	_measured_punish += delta
 	if _timer <= 0.0:
+		_close_weakpoint_for(BossDb.OPEN_RECOVER)
 		_punishing = false
 		punish_closed.emit(_beat["id"], _measured_punish)
+		_reposition_left = _reposition_duration()
 		state = State.CHASE
 
 
@@ -585,6 +754,17 @@ func _shape_arc(b: Dictionary) -> void:
 ## The donut is the Warden's whole teaching value and it is one comparison: the
 ## answer to the biggest, loudest attack in the fight is to walk TOWARD it.
 func _shape_slam(b: Dictionary) -> void:
+	if b.has("leap"):
+		var leap: Dictionary = b["leap"]
+		_leaping = true
+		_leap_start = global_position
+		_leap_total = maxf(float(leap["time"]), 0.01)
+		_leap_elapsed = 0.0
+		return
+	_resolve_slam(b)
+
+
+func _resolve_slam(b: Dictionary) -> void:
 	var outer := float(b["radius"])
 	var inner := float(b["safe_inner"])
 	_flash_marker(_ring_marker(inner, outer, b["tell"]["color"]))
@@ -594,6 +774,39 @@ func _shape_slam(b: Dictionary) -> void:
 			_land(body, b)
 
 
+func _advance_leap(delta: float) -> void:
+	if not _leaping:
+		return
+	_leap_elapsed = minf(_leap_elapsed + delta, _leap_total)
+	var flat_delta := K.plane(_leap_target - _leap_start)
+	var direction := flat_delta.normalized()
+	var speed := flat_delta.length() / _leap_total
+	_steer(direction, speed)
+	var leap: Dictionary = _beat.get("leap", {})
+	var t := clampf(_leap_elapsed / _leap_total, 0.0, 1.0)
+	if _model != null:
+		_model.position.y = _fit_pos.y + sin(t * PI) * float(leap.get("height", 0.0))
+	if _leap_elapsed < _leap_total:
+		return
+	_leaping = false
+	_stop()
+	_kill_recoil()
+	_pose_reset()
+	_clear_marker()
+	_resolve_slam(_beat)
+	_timer = 0.0
+
+
+func _cancel_leap() -> void:
+	if not _leaping:
+		return
+	_leaping = false
+	_stop()
+	_kill_recoil()
+	_clear_marker()
+	_pose_reset()
+
+
 ## Lock the heading and go. Resolved per frame during `STRIKE`, once per body.
 func _shape_charge(b: Dictionary) -> void:
 	_charging = true
@@ -601,6 +814,7 @@ func _shape_charge(b: Dictionary) -> void:
 	_charge_left = float(b["reach"])
 	_charge_speed = float(b["speed"])
 	_charge_hit.clear()
+	_open_weakpoint(BossDb.OPEN_CHARGE)
 
 
 func _advance_charge(delta: float) -> void:
@@ -632,39 +846,23 @@ func _end_charge() -> void:
 	_charging = false
 	_charge_dir = Vector3.ZERO
 	_stop()
+	_close_weakpoint_for(BossDb.OPEN_CHARGE)
 
 
-## `count` discs marked on the floor at commit -- the first under the hero, the
-## rest scattered inside the arena -- detonating `fuse` seconds later.
+## `count` destinations marked on the floor at commit. A high-contrast projectile
+## crosses to each destination on the authored parabola; only landing starts its
+## fuse. The discs still hurt the player and nothing else.
 ##
-## **The boss is not placed in one and is not hurt by one either.** The first
-## disc goes under the HERO and never under the boss, which is the placement half
-## of `BossDb`'s executor contract §5; the damage half of that row used to say the
-## boss "is not protected from them" and this file said so twice, and neither was
-## ever true -- `_victims()` has only ever returned the player. The code is the
-## side that was kept, and the contract now says what it does. Three reasons, in
-## the order they decided it:
-##
-##  1. The boss cannot leave a disc that lands on it. It is ROOTED through the
-##     whole of `RECOVER` and the punish window, which is most of a zone's fuse,
-##     so a scattered disc landing on it is not a hazard it answers -- it is a
-##     coin flip. A hazard the actor has no move against is not gameplay.
-##  2. Contract §2: a boss's health is ABSOLUTE and authored for one floor. A
-##     second damage source on that health nobody tuned makes the swing counts in
-##     every row's comment arithmetic about a number that is no longer true.
-##  3. It buys nothing. Measured against the scatter, a disc lands on the boss on
-##     the order of once a fight for 3 HP out of 72 -- so the
-##     rule costs a random hitstop, a camera kick and a health bar that moves when
-##     the player did nothing, and returns about two percent of a fight.
-##
-## If it is ever wanted, it is `_victims()` growing an `include_self` argument
-## that only `_burst` passes -- and emphatically not the boss joining `_victims()`
-## outright, which would put it inside its own `slam` at range zero on every
-## beat that has one.
+## The first destination remains under the hero and zone damage still queries
+## only `_victims()`. A bomb-authored burst near the open marker is checked as a
+## weak-point interaction instead; it never sends its normal damage into health.
 func _shape_zone(b: Dictionary) -> void:
 	var radius := float(b["radius"])
 	var count := maxi(int(b["count"]), 1)
 	var ring := maxf(arena_radius() - radius, 1.0)
+	var throw: Dictionary = b.get("throw", {})
+	var start := global_position + Vector3.UP * (_height() * 0.62) \
+		+ K.flat(-global_transform.basis.z) * 0.35
 	for i in count:
 		var at := _arena_center
 		if i == 0 and _player != null:
@@ -677,37 +875,99 @@ func _shape_zone(b: Dictionary) -> void:
 		var mark := _ring_marker(0.0, radius, b["tell"]["color"])
 		get_parent().add_child(mark)
 		mark.global_position = at + Vector3(0.0, MARK_Y, 0.0)
+		mark.scale = Vector3(0.55, 1.0, 0.55)
+		var projectile_color: Color = b["tell"]["color"]
+		var projectile := _zone_projectile(projectile_color)
+		get_parent().add_child(projectile)
+		projectile.global_position = start
 		_zones.append({
-			"node": mark, "at": at, "radius": radius,
-			"fuse": float(b["fuse"]), "beat": b,
+			"node": mark, "projectile": projectile, "from": start, "at": at,
+			"radius": radius, "flight": float(throw.get("flight", 0.01)),
+			"flight_elapsed": 0.0, "height": float(throw.get("height", 0.0)),
+			"landed": false, "fuse": float(b["fuse"]),
+			"fuse_left": float(b["fuse"]), "beat": b,
 		})
+	_open_weakpoint(BossDb.OPEN_ZONES)
 
 
-## Burns every disc's fuse. Called from `_physics_process` BEFORE the base class,
-## so a disc placed by a boss that has since died still bursts -- the pool was
-## already on the floor and the player was already avoiding it.
+func _zone_projectile(color: Color) -> Node3D:
+	var root := Node3D.new()
+	root.name = "ThrownZone"
+	var mi := MeshInstance3D.new()
+	var orb := SphereMesh.new()
+	orb.radius = 0.16
+	orb.height = 0.32
+	mi.mesh = orb
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color.darkened(0.25)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(mi)
+	return root
+
+
+## Advances flight first, then burns the fuse after landing.
 func _tick_zones(delta: float) -> void:
 	var i := _zones.size() - 1
 	while i >= 0:
 		var z: Dictionary = _zones[i]
-		z["fuse"] = float(z["fuse"]) - delta
-		var node := z["node"] as Node3D
-		if float(z["fuse"]) <= 0.0:
-			_burst(z)
-			if is_instance_valid(node):
-				node.queue_free()
+		var node_ref: Variant = z["node"]
+		var projectile_ref: Variant = z["projectile"]
+		if not bool(z["landed"]):
+			z["flight_elapsed"] = float(z["flight_elapsed"]) + delta
+			var flight := maxf(float(z["flight"]), 0.01)
+			var travel_t := clampf(float(z["flight_elapsed"]) / flight, 0.0, 1.0)
+			if is_instance_valid(projectile_ref):
+				var projectile := projectile_ref as Node3D
+				var source: Vector3 = z["from"]
+				var at: Vector3 = z["at"]
+				projectile.global_position = source.lerp(at, travel_t) \
+					+ Vector3.UP * sin(travel_t * PI) * float(z["height"])
+			if travel_t >= 1.0:
+				z["landed"] = true
+				if is_instance_valid(projectile_ref):
+					(projectile_ref as Node3D).queue_free()
+			i -= 1
+			continue
+
+		z["fuse_left"] = float(z["fuse_left"]) - delta
+		if float(z["fuse_left"]) <= 0.0:
+			var breaks_weakpoint := _burst(z)
+			if is_instance_valid(node_ref):
+				(node_ref as Node3D).queue_free()
+			if is_instance_valid(projectile_ref):
+				(projectile_ref as Node3D).queue_free()
+			var b: Dictionary = z["beat"]
+			var burst_beat: StringName = b["id"]
 			_zones.remove_at(i)
-		elif is_instance_valid(node):
+			if breaks_weakpoint:
+				_break_weakpoint()
+				return
+			if _weakpoint_open and _weakpoint_beat == burst_beat \
+					and not _has_live_zone(burst_beat):
+				_close_weakpoint()
+		elif is_instance_valid(node_ref):
 			# Grows to full over the fuse, so "about to" and "now" are two
 			# pictures rather than one that blinks.
 			var b: Dictionary = z["beat"]
-			var t := clampf(1.0 - float(z["fuse"]) / maxf(float(b["fuse"]), 0.001),
+			var t := clampf(1.0 - float(z["fuse_left"]) \
+				/ maxf(float(z["fuse"]), 0.001),
 				0.0, 1.0)
-			node.scale = Vector3(0.55 + 0.45 * t, 1.0, 0.55 + 0.45 * t)
+			(node_ref as Node3D).scale = Vector3(0.55 + 0.45 * t, 1.0,
+				0.55 + 0.45 * t)
 		i -= 1
 
 
-func _burst(z: Dictionary) -> void:
+func _has_live_zone(beat_id: StringName) -> bool:
+	for zone in _zones:
+		var b: Dictionary = zone["beat"]
+		if b["id"] == beat_id:
+			return true
+	return false
+
+
+func _burst(z: Dictionary) -> bool:
 	var b: Dictionary = z["beat"]
 	var at: Vector3 = z["at"]
 	var radius := float(z["radius"])
@@ -715,6 +975,10 @@ func _burst(z: Dictionary) -> void:
 	for body in _victims():
 		if K.plane(body.global_position - at).length() <= radius:
 			_land(body, b, at)
+	var authored: Dictionary = _row.get("stagger", {})
+	return _weakpoint_open and authored.get("kind", &"") == BossDb.STAGGER_BOMB \
+		and _weakpoint_beat == b["id"] \
+		and K.plane(global_position - at).length() <= radius
 
 
 ## `count` ordinary `Enemy`s of `kind` at `radius`. Deals no damage.
@@ -920,6 +1184,11 @@ func _show_tell_marker() -> void:
 			# A zone draws its discs at COMMIT, where the table puts them, and a
 			# summon has nothing to draw: the tell IS the pose.
 			return
+	if b.has("leap") and b["shape"] == BossDb.SHAPE_SLAM:
+		get_parent().add_child(_marker)
+		_marker.global_position = _leap_target + Vector3(0.0, MARK_Y, 0.0)
+		_marker.scale = Vector3(0.001, 1.0, 0.001)
+		return
 	# Parented to the BODY, so a marker for a beat aimed in front of the boss
 	# turns with it while it tracks. A marker left in world space would promise
 	# a lane the boss has since walked off.
@@ -1101,12 +1370,241 @@ func _mark_mat(col: Color) -> StandardMaterial3D:
 
 # --- Damage, the chain, and death ---------------------------------------------
 
+func _open_weakpoint(exposure: StringName) -> void:
+	if _weakpoint_open or _vulnerable or state == State.DEAD:
+		return
+	var authored: Dictionary = _row.get("stagger", {})
+	var beat_id: StringName = _beat.get("id", &"")
+	if authored.get("beat", &"") != beat_id or authored.get("open", &"") != exposure:
+		return
+	_weakpoint_open = true
+	_weakpoint_beat = beat_id
+	if is_instance_valid(_weakpoint_marker):
+		_weakpoint_marker.visible = true
+	var kind: StringName = authored.get("kind", &"")
+	weakpoint_opened.emit(kind, beat_id)
+
+
+func _close_weakpoint() -> void:
+	_weakpoint_open = false
+	_weakpoint_beat = &""
+	if is_instance_valid(_weakpoint_marker):
+		_weakpoint_marker.visible = _vulnerable
+
+
+func _close_weakpoint_for(exposure: StringName) -> void:
+	if not _weakpoint_open:
+		return
+	var authored: Dictionary = _row.get("stagger", {})
+	if authored.get("open", &"") == exposure:
+		_close_weakpoint()
+
+
+func _hit_matches_weakpoint(kind: StringName) -> bool:
+	var authored: Dictionary = _row.get("stagger", {})
+	var wanted: StringName = authored.get("kind", &"")
+	if wanted == BossDb.STAGGER_ARROW:
+		return kind == Hit.ARROW or kind == Hit.ARROW_FIRE
+	return kind == wanted
+
+
+func _break_weakpoint() -> void:
+	if not _weakpoint_open:
+		return
+	var broken_beat := _weakpoint_beat
+	_close_weakpoint()
+	_end_charge()
+	_cancel_leap()
+	_clear_marker()
+	_cancel_zones_for_beat(broken_beat)
+	_enter_true_stagger()
+
+
+func _enter_true_stagger() -> void:
+	if _vulnerable or state == State.DEAD or state == State.IDLE:
+		return
+	var authored: Dictionary = _row.get("stagger", {})
+	_vulnerable = true
+	_vulnerable_timer = float(authored.get("window", 2.4))
+	_segment_damage_done = 0
+	_stagger_windows += 1
+	state = State.RECOVER
+	_punishing = false
+	_timer = 0.0
+	_stop()
+	_kill_recoil()
+	_hold_stagger_pose()
+	if _anim != null and _anim.has_animation(&"hurt_heavy"):
+		_play(&"hurt_heavy")
+	elif _anim != null and _anim.has_animation(&"hurt"):
+		_play(&"hurt")
+	if is_instance_valid(_weakpoint_marker):
+		_weakpoint_marker.position = Vector3(0.0, _height() * 0.28,
+			_weakpoint_front_z())
+		_weakpoint_marker.visible = true
+		_weakpoint_marker.scale = Vector3.ONE * 1.10
+	Bus.request_sfx.emit(&"parry_clang", global_position)
+	Bus.request_hitstop.emit(K.HITSTOP_HEAVY)
+	staggered.emit(_stagger_windows, stagger_goal(), _vulnerable_timer)
+
+
+func _finish_true_stagger() -> void:
+	if not _vulnerable:
+		return
+	_vulnerable = false
+	_vulnerable_timer = 0.0
+	_pose_reset()
+	if is_instance_valid(_weakpoint_marker):
+		_weakpoint_marker.visible = false
+		_weakpoint_marker.scale = Vector3.ONE
+		_weakpoint_marker.position = _weakpoint_rest_position()
+	if state != State.DEAD:
+		state = State.CHASE
+		_cooldown = 0.0
+		_reposition_left = _reposition_duration()
+	if _phase_two_pending:
+		call_deferred("enter_phase_two")
+
+
+func _hold_stagger_pose() -> void:
+	if _model == null:
+		return
+	_pose_reset()
+	_model.scale.y = _fit_scale.y * 0.62
+	_model.position.y = _fit_pos.y - _height() * 0.16
+	_model.rotation.x = _model_rest.x + deg_to_rad(14.0)
+
+
+func _cancel_zones_for_beat(beat_id: StringName) -> void:
+	var i := _zones.size() - 1
+	while i >= 0:
+		var zone: Dictionary = _zones[i]
+		var b: Dictionary = zone["beat"]
+		if b["id"] == beat_id:
+			var node_ref: Variant = zone["node"]
+			var projectile_ref: Variant = zone["projectile"]
+			if is_instance_valid(node_ref):
+				(node_ref as Node3D).queue_free()
+			if is_instance_valid(projectile_ref):
+				(projectile_ref as Node3D).queue_free()
+			_zones.remove_at(i)
+		i -= 1
+
+
+func _update_weakpoint_marker(delta: float) -> void:
+	if not is_instance_valid(_weakpoint_marker):
+		return
+	_weakpoint_clock += delta
+	if _vulnerable:
+		_weakpoint_marker.visible = true
+		_weakpoint_marker.position = Vector3(0.0, _height() * 0.28,
+			_weakpoint_front_z())
+		_weakpoint_marker.scale = Vector3.ONE * 1.10
+	elif _weakpoint_open:
+		_weakpoint_marker.visible = true
+		_weakpoint_marker.position = _weakpoint_rest_position()
+		var pulse := 1.0 + sin(_weakpoint_clock * TAU * WEAKPOINT_PULSE_HZ) * 0.18
+		_weakpoint_marker.scale = Vector3.ONE * pulse
+	else:
+		_weakpoint_marker.visible = false
+		_weakpoint_marker.scale = Vector3.ONE
+
+
+func _weakpoint_rest_position() -> Vector3:
+	return Vector3(0.0, _height() * 0.58, _weakpoint_front_z())
+
+
+func _weakpoint_front_z() -> float:
+	return -clampf(_height() * 0.32, 0.45, 1.25)
+
+
+## The actor-owned damage gate. Weapon scanners find this before the health
+## child, so every damaging weapon shares one armour and segment-budget rule.
+func apply_hit(hit: Hit) -> bool:
+	if hit == null or health == null or health.dead or state == State.DEAD \
+			or health.is_invulnerable():
+		return false
+	if _weakpoint_open and _hit_matches_weakpoint(hit.kind):
+		_break_weakpoint()
+		return false
+	if not _vulnerable:
+		_armor_feedback(hit)
+		return false
+
+	var remaining := maxi(segment_capacity() - _segment_damage_done, 0)
+	var stagger_row: Dictionary = _row.get("stagger", {})
+	var multiplier := float(stagger_row.get("multiplier", 2.0))
+	var scaled := maxi(int(roundf(float(hit.amount) * multiplier)), 0)
+	var amount := mini(scaled, mini(remaining, health.health_points))
+	if amount <= 0:
+		_finish_true_stagger()
+		return false
+	var copied := Hit.make(amount, hit.from, hit.kind, hit.knockback, hit.stun,
+		hit.source, hit.mass, hit.commitment)
+	copied.odds_knockdown = hit.odds_knockdown
+	copied.odds_stagger = hit.odds_stagger
+	if not health.apply_hit(copied):
+		return false
+	_segment_damage_done += amount
+	if _segment_damage_done >= segment_capacity() and state != State.DEAD:
+		_finish_true_stagger()
+	return true
+
+
+func _armor_feedback(hit: Hit) -> void:
+	Bus.request_sfx.emit(&"hit_armor", global_position)
+	ImpactVfx.spawn(get_tree().current_scene, _impact_point(hit.from), 0.12)
+
+
+func enter_phase_two() -> void:
+	if _phase >= 2 or state == State.DEAD:
+		return
+	# Crossing half health must never amputate the player's earned damage window.
+	# Miniboss segment sizes can cross 50% midway through the 2+2+4 sword chain;
+	# queue the escalation until that full segment is spent or times out.
+	if _vulnerable:
+		_phase_two_pending = true
+		return
+	_phase_two_pending = false
+	_phase = 2
+	_close_weakpoint()
+	_cancel_leap()
+	_end_charge()
+	_pose_reset()
+	if _phase_flash != null and _phase_flash.is_valid():
+		_phase_flash.kill()
+	var authored: Dictionary = _row.get("stagger", {})
+	var color: Color = authored.get("color", Pal.BONE)
+	_flash.glow(color, 0.9)
+	Bus.request_sfx.emit(&"glint_bell", global_position)
+	_phase_flash = create_tween()
+	_phase_flash.tween_interval(0.20)
+	_phase_flash.tween_callback(Callable(self, "_finish_phase_flash"))
+	phase_changed.emit(2)
+	Bus.boss_phase_changed.emit(2)
+
+
+func _finish_phase_flash() -> void:
+	_phase_flash = null
+	if state != State.DEAD:
+		_flash.restore()
+
+
+func _phase_threshold_fallback() -> void:
+	if _phase >= 2 or health == null or health.dead:
+		return
+	var phase_row: Dictionary = _row.get("phase", {})
+	if health.fraction() <= float(phase_row.get("at", 0.50)):
+		enter_phase_two()
+
+
 func _physics_process(delta: float) -> void:
 	_tick_zones(delta)
+	_update_weakpoint_marker(delta)
 	super(delta)
 
 
-## Poise. A blow lands, and the beat carries on.
+## Feedback for health damage that passed the true-stagger gate.
 ##
 ## `Enemy._on_damaged` throws the body into `HURT`, pushes the cooldown and
 ## reels -- correct for a skeleton, and it would delete this fight. The window
@@ -1115,9 +1613,6 @@ func _physics_process(delta: float) -> void:
 ## would also make the telegraph a lie: read the tell, hit first, and the attack
 ## you read never arrives.
 ##
-## Everything the player receives from a blow is still here, in the same order --
-## the world stops, the body goes white, the camera kicks, it makes a noise -- so
-## hitting it feels identical. Only the STATE is untouched.
 func _on_damaged(hit: Hit) -> void:
 	if state == State.DEAD:
 		return
@@ -1145,46 +1640,17 @@ func _on_damaged(hit: Hit) -> void:
 	_glowing = false
 	_flash.hit()
 	Bus.hit_landed.emit(self, hit.amount, global_position)
-	# THE RECEPTACLE, and it is the one thing that gets past poise from a weapon
-	# (`docs/BOSSES.md` §6.2). Deliberately AFTER the impact block rather than
-	# instead of it: the blow is still a blow -- the hitstop, the shake, the scuff
-	# and `hit_landed` all happen exactly as they would for any other arrow -- and
-	# what the branch adds is the state change on top. Routed through `stagger()`
-	# and never by writing `state` here, so a receptacle hit and a parry are the
-	# same transition and cannot drift apart.
-	if _is_receptacle_hit(hit):
-		stagger(hit.from, K.PARRY_STAGGER, 0.0)
+	call_deferred("_phase_threshold_fallback")
 
 
-## An arrow into a charge that is already crossing the floor.
-##
-## `docs/BOSSES.md` §6.2, exactly: **`State.STRIKE` with `_charging` true**, which
-## is the travel and not the tell. The tell is the wrong window and the doc says
-## why at length -- a tell that never lands makes the telegraph a lie, and
-## `freeze` refuses the hookshot a tell-cut on that same argument (§6.4), so
-## granting the bow one would be an exception with a name on it rather than a
-## rule. Scoped to the travel it is the parry's own shape: the beat committed,
-## the lane is real, and the player is answering something already in the air.
-##
-## **It is scoped by SHAPE, not by beat id, and that is worth saying out loud.**
-## `_charging` is only ever true for a `SHAPE_CHARGE` commit, so this reads as
-## "one beat" on floor 2 -- `bellows_charge` is the Slag Ogre's only charge -- and
-## it equally answers the Riven Knight's `gate_lunge` and the Bellows-Hand's
-## `plate_advance`. That is the rule §6.2 specifies and it is the honest one: a
-## body committed to eleven metres of travel is the same receptacle whoever is
-## wearing it, and a branch that named `bellows_charge` by id would be a
-## per-boss special case for a shape the game implements once.
-func _is_receptacle_hit(hit: Hit) -> bool:
-	return state == State.STRIKE and _charging \
-		and (hit.kind == Hit.ARROW or hit.kind == Hit.ARROW_FIRE)
-
-
-## The chain does not stop it. Same reason as poise: a hookshot that could cut a
-## tell short would let the player delete the beat they were supposed to read,
-## and one that could cut a PUNISH short would take the window away from them.
-## The barb rings off the plate and buys nothing.
+## The hookshot opens only the authored hookshot aperture. At every other time
+## the barb rings off plate and cannot cut a tell or ordinary recovery short.
 func freeze(_seconds: float = K.HOOK_FREEZE) -> void:
 	if state == State.DEAD:
+		return
+	var authored: Dictionary = _row.get("stagger", {})
+	if _weakpoint_open and authored.get("kind", &"") == BossDb.STAGGER_HOOKSHOT:
+		_break_weakpoint()
 		return
 	Bus.request_sfx.emit(&"hit_armor", global_position)
 
@@ -1198,16 +1664,12 @@ func _can_launch() -> bool:
 	return false
 
 
-## **The parry is the one thing that DOES move it, and that is deliberate.**
+## **Parry buys poise time, not health damage.**
 ##
-## Poise refuses the hookshot and refuses every blow, on the argument above: a
-## beat the player can interrupt is a beat they can delete. A parry is the one
-## input in the game that cannot delete a beat, because it can only be thrown
-## AFTER the beat has committed — the blow is already in the air by the time
-## `HeroCombat.parries` can be true. So this does not shorten a telegraph or skip
-## a phase; it takes the swing the boss has already spent and turns it into a
-## window, which is exactly what a parry is for and the only reason a player
-## would ever risk one against something this big.
+## A parry can only arrive after the beat committed, so it never deletes a tell.
+## It cuts the animation tail to a short recovery and then returns the boss to
+## motion. If that exact beat owns a recover weak point, the aperture still
+## appears and still requires its floor item; the parry itself never opens HP.
 ##
 ## What it does NOT do is throw the body. `_can_launch` is still false and this
 ## does not go near it: a boss that slid across its own arena would take its
@@ -1219,11 +1681,10 @@ func stagger(from: Vector3, seconds: float, _shove: float) -> void:
 	if state == State.DEAD or state == State.IDLE:
 		return
 	_end_charge()
-	# Into RECOVER with the punish NOT yet open, which is the fight's own
-	# vocabulary rather than a second one bolted on: `_tick_recover` runs the
-	# short timer down and then opens the beat's authored punish window and emits
-	# `punish_opened` exactly as it would have. A parry therefore does not invent
-	# an opening — it brings the one the beat already owed forward.
+	_cancel_leap()
+	# Into RECOVER with the aperture not yet open. `_tick_recover` runs the short
+	# timer down, then either exposes the beat's authored recover weak point or
+	# returns to orbit. Parry never invents a damage window.
 	state = State.RECOVER
 	_punishing = false
 	_timer = seconds * 0.66
@@ -1238,11 +1699,25 @@ func stagger(from: Vector3, seconds: float, _shove: float) -> void:
 func _on_died() -> void:
 	_clear_marker()
 	_end_charge()
+	_cancel_leap()
+	_weakpoint_open = false
+	_weakpoint_beat = &""
+	_vulnerable = false
+	if _phase_flash != null and _phase_flash.is_valid():
+		_phase_flash.kill()
+	_phase_flash = null
+	if is_instance_valid(_weakpoint_marker):
+		_weakpoint_marker.visible = false
+		_weakpoint_marker.scale = Vector3.ONE
 	_pose_reset()
+	_dismiss_summons()
 	for z in _zones:
-		var node := z["node"] as Node3D
-		if is_instance_valid(node):
-			node.queue_free()
+		var node_ref: Variant = z["node"]
+		var projectile_ref: Variant = z["projectile"]
+		if is_instance_valid(node_ref):
+			(node_ref as Node3D).queue_free()
+		if is_instance_valid(projectile_ref):
+			(projectile_ref as Node3D).queue_free()
 	_zones.clear()
 	# Before `super()`, because `Enemy._on_died` awaits a 2.2 s timer partway
 	# through: anything that has to be true the moment the boss dies -- the music
@@ -1253,6 +1728,13 @@ func _on_died() -> void:
 		Bus.field_observation_recorded.emit(observation_id)
 	Bus.boss_defeated.emit()
 	super()
+
+
+func _dismiss_summons() -> void:
+	for summon in _summons:
+		if is_instance_valid(summon):
+			summon.queue_free()
+	_summons.clear()
 
 
 ## The authored drop, not a roll.

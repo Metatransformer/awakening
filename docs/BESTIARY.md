@@ -419,126 +419,73 @@ nothing but the chest behind them", and card #91 is the amendment: a token is
 still not a verb and still not power, so the rule the sentence was protecting is
 intact. `docs/PUZZLES.md` §4 owns it.
 
-**The audit.** Against `docs/OOT_CATALOGUE.md` §3's five boss shapes, the four
-minibosses cover two:
+**The audit.** The minibosses now teach the same Zelda-style grammar at a
+lower tier: two learned attacks, one authored item aperture, three damage
+segments, and a movement-pressure phase change at half health. They do not add
+a second health bar or an arena turn.
 
-| Miniboss | Floor verb | Shape it takes |
+| Miniboss | Floor verb | Authored break |
 |---|---|---|
-| Sluice-Keeper | T0 | **Positional** — block, then roll |
-| Bellows-Hand | T1 bow | **Exposed weak point** — the bellows, when it turns |
-| Second Voice | T2 burst | **Positional** — break the pillar it anchors to |
-| Gate-Hound | T3 hookshot | **Positional** — it retreats, you close |
+| Sluice-Keeper | sword | Strike after `flood_stomp` enters recovery |
+| Bellows-Hand | Bow | Shoot during live `plate_advance` travel |
+| Second Voice | Burst/bomb | Break during live thrown `keening` zones; a baited self-burst is the renewable fallback |
+| Gate-Hound | Hookshot | Hook during the thrown `overhand` aperture |
 
-Three of four are the same shape wearing different verbs. That is fine for a
-miniboss — it is the *floor's* verb that varies, and that is what the branch is
-for — but it means **receptacle and reflect have to come from the bosses**, which
-is §5.
+This is deliberately a compressed rehearsal, not four disposable health bars:
+the lower health, shorter windows, smaller arenas, and three-cycle promise let
+the branch teach the floor verb without spending the full boss's four-cycle
+arc.
 
 ---
 
-## 5. Bosses — one fight shape each, and no new beats
+## 5. Bosses — one health bar, two pressure phases
 
-`BossDb` has five *attack* shapes (`arc`, `slam`, `charge`, `zone`, `summon`) and
-twelve authored beats. Ocarina's five are not attack shapes, they are **fight
-shapes** — the sentence the whole fight is — and our four have never had one
-named.
+`BossDb` still has five attack shapes (`arc`, `slam`, `charge`, `zone`,
+`summon`) and twelve authored boss beats. The issue #203 refinement changes
+how those existing pieces are sequenced: bosses now run and orbit between
+beats, commit moving charges, leaps, sweeps and thrown hazards, expose one
+item-specific weak point, and accept health damage only during true stagger.
 
-Naming one per boss costs nothing: **it is a re-reading of a beat that already
-exists, not a fourth beat and not a second phase.** `docs/SCOPE.md` §1's one-phase
-three-beat cap is untouched, and so is *new monster models: 0*.
+| Boss | Floor tool | Authored break | Full-window goal |
+|---|---|---|---:|
+| **The Cistern Warden** | sword | Strike after `cistern_drop` recovery | 4 |
+| **The Slag Ogre** | Bow | Shoot during live `bellows_charge` travel | 4 |
+| **The Bellwake** | Burst/bomb | Break during a live `undertow` zone; baiting its own burst is the renewable fallback | 4 |
+| **The Riven Knight** | Hookshot | Hook after `call_the_iron` recovery | 4 |
 
-| Boss | Floor | The player is carrying | Fight shape | The beat that carries it |
-|---|---|---|---|---|
-| **The Cistern Warden** | 1 | sword, shield, rope | **Reflect** — the one blow whose band you choose to stand in; caught on the beat, the force goes back and staggers it | `cistern_drop` |
-| **The Slag Ogre** | 2 | **the Bow** | **Receptacle** — the bellows draw before it charges; an arrow in the open intake stops the charge before it starts | `bellows_charge` |
-| **The Bellwake** | 3 | **the Burst** | **Exposed weak point, on a timer** — *the aspiration; neither half of it is built.* It sings through the choir it calls, and a blast into the pair buys about a second before they are back on you. There is no core to open (`Boss._on_damaged` has no gate) and one blast strips nothing (2 HP of 9 HP). Measured, board card 73 — **`docs/BOSSES.md` §6.3 is the design of record and §7 grades this floor *pressure, not a lock*.** | `hushing_choir` |
-| **The Riven Knight** | 4 | **the Hookshot** | **Positional** — it holds the far side of the gate ring; hookshot is both the way across and the way back | `gate_lunge` |
+The floor sequence is therefore Sword → Bow → Bombs/Burst → Hookshot. The
+correct tool breaks the aperture for zero HP, after which a short vulnerable
+stagger accepts one capped damage segment. Wrong tools, ordinary attacks, and
+parries outside true stagger deal zero HP. Parry remains useful for poise and
+timing, but it does not bypass the authored solve.
 
-**Read that table the same way `docs/PUZZLES.md` §1 asks you to read its
-diagonal**: each fight shape is meant to be answered by the item the *previous*
-boss dropped. **Walked against the code rather than against this prose, it holds
-once — and this section used to claim four.** `docs/BOSSES.md` §7 is the audit;
-the grades, so nobody re-derives them from the table above:
+At half health every encounter enters phase 2 on the same health bar. Movement
+gets faster, the preferred orbit closes, reposition time shortens, and dangerous
+beats receive more weight. Full bosses also turn their arena at that threshold;
+minibosses do not. Phase 2 preserves the learned counter instead of replacing
+it with an unrelated trick.
 
-| Floor | Grade | Why |
-|---|---|---|
-| 2 Slag Ogre | **Holds.** The item acts on the boss, on a named beat, with a cue, and the boss is measurably worse off | Built — `Boss._is_receptacle_hit`, and the frames are in §7 |
-| 1 Warden | **A *teaching* diagonal, not a mechanical one** | The parry path is identical on all twelve boss beats and on every ordinary enemy; nothing in it tells `cistern_drop` from a goblin. `cistern_drop` is still the beat best *shaped* to teach the parry, and a beat-specific reward is refused |
-| 3 Bellwake | **No wall.** Pressure, not a lock | The core is open whether or not the Burst is ever fired. The gate that would shut it is refused on GDD pillar 2 |
-| 4 Riven Knight | **Not a diagonal.** The item changes nothing about how the fight plays | The furniture it answers through does not exist until half health, and a sidestep — now also an arrow — already answers `gate_lunge` |
+The catalogue comparison in `docs/OOT_CATALOGUE.md` is a vocabulary source,
+not a claim that these greybox fights reproduce Ocarina encounter-for-
+encounter. Gohma and King Dodongo support expose-then-punish and receptacle
+solves; Phantom Ganon and Ganondorf support projectile timing before a damage
+window; Volvagia and Bongo Bongo support spatial alternation and explicit
+vulnerability; Iron Knuckle supports a pressure-changing second half. The
+current implementation selects mechanics that remain answerable with the
+four-item floor sequence and the existing five attack shapes.
 
-The Warden's row is still the one worth keeping in the pitch: floor 1, nothing
-earned yet, and the answer is the shield the player has always had and has never
-been asked to use offensively. That is where the shield stops being a wall — it
-is just a teaching claim rather than a mechanical one, and saying so is cheaper
-than being caught at it.
+**No second health bar.** The escalation is behavior and arena state, not a
+reset. There are two pressure phases, four fully spent stagger windows for a
+boss, and three for a miniboss. Partial staggers are not rounded up: failure to
+spend a segment can require another exposure.
 
-**Boss lore is not catalogue data.** Eight 40–60 word paragraphs used to live on
-the four boss and four miniboss rows in `BossDb`, but no surface read them. They
-were deleted on 2026-08-11 rather than wired to the wrong beat. A boss-door
-refusal is one line and exists to direct the player; the run-end screen is about
-the haul; the Lanternkeeper's prose surface owns relics. The current scope also
-forbids adding a bestiary or journal screen. If a future approved surface needs
-encounter prose, author copy to that surface's actual length and moment instead
-of restoring an unconsumed `lore` field to the combat catalogue.
+**Boss lore is not catalogue data.** Encounter prose previously stored on
+`BossDb` rows had no consuming surface and remains removed. If a future
+approved surface needs it, author copy to that surface's real moment and length.
 
-**Four of Ocarina's five shapes, one per floor.** The fifth is *disarm* in its
-full form — Ganon knocking the Master Sword out of the ring — and it belongs to
-the Riven Knight at the Chord Gate or to nothing at all. A boss that takes the
-sword away is a boss that has to be answerable without it, and floor 4 is the only
-floor where the player owns enough to be answerable without it. **It resolves to
-nothing at all**, for four reasons priced in `docs/BOSSES.md` §6.4 — the shortest
-of which is that the three items that are not the sword all spend counted
-charges, and a hero out of charges with no blade is a hero who is stuck.
-
-### The worked spec is `docs/BOSSES.md`
-
-**This section still owns the encounter design** — which shape each boss is, why
-the diagonal reads the way it does, and the two rules below. **`docs/BOSSES.md`
-owns the working**: each carrying beat's timings against the hero's own clock,
-where the parry and the roll land inside it, what the arena does at the health
-threshold, the exact rows to paste, and the manifest check. When the two
-disagree, this section says *what* and that file says *how*.
-
-**Two cells in the table above were corrected there rather than here**, and both
-corrections are the same kind — the fiction asked for something the five attack
-shapes cannot deliver:
-
-- **The Warden hurls nothing.** No attack shape in `BossDb` throws an object, and
-  a hurled, blockable, returning piece of debris needs a **sixth** — against a
-  table header that says there is no sixth shape and no thirteenth beat. What
-  goes back is the *force*: `cistern_drop`'s donut is the only beat whose damage
-  band the player chooses to stand in, so it is the only beat where catching it
-  is a decision rather than a consequence. The game gets reflect-with-an-object
-  anyway, and cheaper, from §3's Thrower.
-- **The Bellwake has no pillar.** Its arena is authored `cover: false` and its own
-  row says why; and `_shape_slam` is a distance query and would hit *through* a
-  pillar anyway, teaching a false rule. (A third reason used to stand here — that
-  the pillar was already floor 3's *miniboss* wall — and it is **withdrawn**: the
-  Second Voice's pillar was deleted on 2026-08-10 and replaced with geometry,
-  `docs/PUZZLES.md`:721-725. The two reasons above never needed it.) The shell
-  is the choir it summons — Barinade exactly — and the reform clock is the beat's
-  own 6 s cooldown.
-
-The cost of the disarm refusal, stated there and not softened: across the four
-bosses and the four minibosses, **positional is five of the eight fights** and
-disarm is none of them.
-
-### The two rules the catalogue is emphatic about
-
-**No second health bar, ever.** Not one Ocarina boss has one. The escalation is
-always **the arena changing** — Ganon rings the floor with fire, Volvagia takes to
-the air, Morpha withdraws the nucleus. `docs/SCOPE.md` §1 caps us at one phase for
-budget reasons and it turns out to be the *design* answer too: an arena that
-changes at a health threshold costs one signal and no new beats, and it reads as a
-turn in the fight rather than as a longer fight.
-
-**The boss is a receptacle for something the player already owns.** King Dodongo
-is a bomb you throw into a mouth. That is the entire fight, it is the second
-dungeon in the game, and it is still the most-remembered boss in it — because the
-player is not learning a boss, they are **discovering that the toy from the
-dungeon works on the thing at the end of it.** That is what the middle column of
-the table above is for.
+The worked timings, segment caps, movement rows, critical quality assessment,
+and mechanical proof contract live in `docs/BOSSES.md`. When this bestiary
+summary and that file disagree, `docs/BOSSES.md` owns combat truth.
 
 ---
 
@@ -550,8 +497,8 @@ the table above is for.
 |---|---|---|
 | **New monster models** | **0** | **No.** §1's biped rule is why, and it is the row this document exists to protect |
 | Enemy kinds in rotation | **9** | **No.** A behaviour is a key on a row, not a tenth row |
-| Boss beats | **12** | **No.** §5 re-reads four beats that already exist |
-| Boss phases | **1** | **No** |
+| Boss beats | **12** | **No.** Issue #203 sequences the existing vocabulary into authored apertures |
+| Boss phases | **2 pressure phases per row** | **Yes, inside issue #203's fixed roster amendment** |
 | Minibosses | **4** | **No** |
 | New UI screens | **0** | **No** |
 | **Enemy behaviours** | **8**, of which **4 committed** | **New row.** This is the one to argue about |
