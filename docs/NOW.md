@@ -88,6 +88,18 @@ barrels, plus one shared world-space lob landing marker used by both Burst and a
 carried barrel. The barrel is never inventory, persistent gear, or a ring stop;
 its existing fuse, impact, chain, and blast rules remain authoritative.
 
+Issue #206 is a fifth explicit owner-authorised experiment alongside the freeze:
+one Floor-1 Glint Trial prototype behind `--glint-mvp`. It may replace the normal
+gate/puzzle anchors only in that flagged run, put one existing puzzle on an
+optional post-guardian side branch beside a valid boss route, persist one solve,
+and offer one derived Glimmer for one health, stamina, or magic choice at the
+existing garrison statue. Its human question and stop conditions are fixed in
+[design-tests/GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md).
+
+This override authorises no production rollout, random scheduler, additional
+trial, new screen, new autoload, repeatable reward, or broader key-cycle rewrite.
+Default runs remain evidence for the current puzzle and Field Notes proofs.
+
 ## Authorized Field Notes implementation
 
 > Do players connect filed notes to observed Cistern events, compare finite
@@ -125,6 +137,8 @@ additional observations, additional doctrines, repeatable faucet or item.
   or tool types, fishing gear collections, and profession progression.
 - Any currency beyond gold and Field Notes, UI screen beyond #197's one Quests
   page, voiced line, or enemy model.
+- Any Glint Trial expansion beyond #206's flagged one-trial prototype and its
+  single derived Glimmer.
 - Floors, bosses, production content, broad lore, or unrelated polish.
 
 Implementation proves only that each bounded system works. It does not prove

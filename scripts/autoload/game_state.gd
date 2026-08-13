@@ -82,6 +82,9 @@ var gold_earned: int = 0
 var field_notes: int = 0
 var completed_field_observations: Dictionary[StringName, bool] = {}
 var awarded_field_observations: Dictionary[StringName, bool] = {}
+## Permanent Glint Trial completions. Glimmer is derived from this finite set
+## minus the three one-rung purchases; it is never stored as mutable currency.
+var solved_glint_trials: Dictionary[StringName, bool] = {}
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
 var bag_slots: int = K.START_BAG_SLOTS
@@ -591,6 +594,7 @@ func reset() -> void:
 	field_notes = 0
 	completed_field_observations.clear()
 	awarded_field_observations.clear()
+	solved_glint_trials.clear()
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
 	wishlist_lines.clear()
@@ -656,6 +660,30 @@ func reset() -> void:
 func has_field_observation(id: StringName) -> bool:
 	return FieldNotesDb.is_observation(id) \
 		and bool(awarded_field_observations.get(id, false))
+
+
+## Record one authored finite trial exactly once. The bool is a transaction
+## result so a trial presenter can distinguish a first solve from a retry.
+func solve_glint_trial(id: StringName) -> bool:
+	if not GlintDb.TRIAL_IDS.has(id) or solved_glint_trials.get(id, false):
+		return false
+	solved_glint_trials[id] = true
+	return true
+
+
+func glint_spent() -> int:
+	var spent := 0
+	for id: StringName in GlintDb.UPGRADE_IDS:
+		spent += clampi(int(upgrades.get(id, 0)), 0, GlintDb.RANKS)
+	return spent
+
+
+func glimmer_balance() -> int:
+	var solved := 0
+	for id: StringName in GlintDb.TRIAL_IDS:
+		if solved_glint_trials.get(id, false):
+			solved += 1
+	return maxi(0, solved - glint_spent())
 
 
 func has_completed_field_observation(id: StringName) -> bool:
@@ -1313,8 +1341,8 @@ func set_temporary_overhealth(amount_health_points: int) -> void:
 ## `hurt` and by `heal`, and `max_stamina` by every `spend_stamina` caller. What
 ## follows is the one function that writes them.
 ##
-## **Re-derive both stored maxima from `upgrades`.** The one place that knows how
-## much max HP and stamina the ladders add up to.
+## **Re-derive all three stored maxima from `upgrades`.** The one place that
+## knows how much max HP, stamina and magic the ladders add up to.
 ##
 ## It used to be two `+=` calls -- a health line that added 4 HP and a Focus
 ## rung that added points -- and that shape can only ever count UP. Recut (GDD
@@ -1323,27 +1351,38 @@ func set_temporary_overhealth(amount_health_points: int) -> void:
 ## getting the odd Vigor rung wrong. Derived, the answer is the same however you
 ## arrived at it, and Recut is one call.
 ##
-## `fill` tops both bars up, which is what a PURCHASE does -- a health upgrade you
-## just paid for arrives full. A Recut passes false: the maxima come down, the bars are
-## clamped to them, and nobody is healed for changing their mind.
+## `fill` preserves the existing purchase contract for health and stamina. Glint
+## purchases pass false and then fill only their selected stat themselves. A
+## Recut also passes false: maxima come down, bars clamp, and nobody is healed.
 func resync_maxima(fill: bool = false) -> void:
 	var permanent_health_points := K.START_HEALTH_POINTS \
 		+ int(upgrades.get(&"health", 0)) * K.HEALTH_UPGRADE_POINTS \
 		+ jewel_level(jewel_track(&"amulet", &"vigor")) \
-		* K.JEWEL_VIGOR_HEALTH_POINTS
+		* K.JEWEL_VIGOR_HEALTH_POINTS \
+		+ clampi(int(upgrades.get(GlintDb.HEALTH_ID, 0)), 0, GlintDb.RANKS) \
+		* K.GLINT_HEALTH_POINTS
 	# Ceiling enforced HERE rather than in the two shops, so a third source cannot
 	# arrive and quietly raise it (K.MAX_HEALTH_POINTS, and the note over
 	# K.SOAK_MAX about why ceilings belong to the number).
 	max_health_points = mini(permanent_health_points, K.MAX_HEALTH_POINTS)
 	health_points = max_health_points if fill \
 		else clampi(health_points, 0, max_health_points)
-	var permanent_stamina := minf(K.STAMINA_MAX, K.MAX_STAMINA
+	var permanent_stamina := minf(K.STAMINA_MAX, K.MAX_STAMINA \
 		+ K.JEWEL_FOCUS_STAMINA
-		* float(jewel_level(jewel_track(&"amulet", &"focus"))))
+		* float(jewel_level(jewel_track(&"amulet", &"focus"))) \
+		+ float(clampi(int(upgrades.get(GlintDb.STAMINA_ID, 0)),
+			0, GlintDb.RANKS)) * K.GLINT_STAMINA_POINTS)
+	# Well Fed remains a temporary trip bonus above the permanent ceiling, as it
+	# was before Glint. It must not make the permanent rung appear already capped.
 	max_stamina = permanent_stamina + well_fed_bonus()
 	stamina = max_stamina if fill else minf(stamina, max_stamina)
+	max_magic = mini(K.MAX_MAGIC
+		+ clampi(int(upgrades.get(GlintDb.MAGIC_ID, 0)), 0, GlintDb.RANKS)
+		* K.GLINT_MAGIC_POINTS, K.MAGIC_MAX)
+	magic = clampi(magic, 0, max_magic)
 	Bus.player_health_changed.emit(health_points, max_health_points)
 	Bus.stamina_changed.emit(stamina, max_stamina)
+	Bus.magic_changed.emit(magic, max_magic)
 
 
 # --- Magic ------------------------------------------------------------------

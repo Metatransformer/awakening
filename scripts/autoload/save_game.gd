@@ -101,13 +101,15 @@ const SLOTS := 3
 ## Older slots have no planted sites and reconstruct as an empty garden.
 ## Bumped to 21 for the additive quest payload. Older slots reconstruct only the
 ## quest outcomes already proved by their story, raid, tool, and supply state.
-const VERSION := 21
+## Bumped to 22 for finite Glint Trial completion ids. v21 and older have no
+## solved trial and therefore reconstruct with no Glint ranks or Glimmer.
+const VERSION := 22
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -212,6 +214,7 @@ func save(slot: int) -> bool:
 		"field_notes": Game.field_notes,
 		"completed_field_observations": Game.completed_field_observations.keys(),
 		"awarded_field_observations": Game.awarded_field_observations.keys(),
+		"solved_glint_trials": Game.solved_glint_trials.keys(),
 		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
 		# Every permanent purchase, forge rungs included -- the ladders live in
@@ -365,15 +368,13 @@ func load_slot(slot: int) -> Dictionary:
 	# Garrison/legacy default. A valid v10 dungeon snapshot overwrites this after
 	# all permanent fields have been rebuilt.
 	Game.stamina = Game.max_stamina
-	# A slot written before the blue bar was switched on holds `max_magic: 0`, and
-	# restoring that verbatim gives a returning player a HUD row that is a black
-	# slot for ever and a spin they can never throw. Clamped up to the ceiling and
-	# then FILLED, for the reason stamina above is filled: a load puts you in the
-	# garrison, and the garrison is where the bar is full (`Run.extract`).
-	Game.max_magic = maxi(int(d.get("max_magic", K.MAX_MAGIC)), K.MAX_MAGIC)
-	# This is likewise the garrison/legacy default. A valid dungeon snapshot
-	# restores the half-spent trip budget instead of turning load into a refill.
-	Game.fill_magic()
+	# Keep reading the compatibility field so a pre-blue-bar zero remains valid,
+	# but never let a saved larger number define the live ceiling. Upgrade ranks
+	# are loaded below and `resync_maxima` is the sole authority after that.
+	var saved_max_magic := int(d.get("max_magic", K.MAX_MAGIC))
+	Game.max_magic = K.MAX_MAGIC if saved_max_magic <= 0 \
+		else clampi(saved_max_magic, K.MAX_MAGIC, K.MAGIC_MAX)
+	Game.magic = Game.max_magic
 	Game.gold = d.get("gold", 0)
 	# A v5 slot has no lifetime tally and falls back to the purse — see the note on
 	# VERSION. NOT clamped up to `gold` on a v6 slot, which would be the obvious
@@ -422,6 +423,34 @@ func load_slot(slot: int) -> Dictionary:
 		else:
 			Game.upgrades[doctrine_id] = rank
 			owned_doctrines += rank
+	# Glint ranks are one-rung purchases. Trial ids are the only backing value,
+	# so sanitize both sides and remove any edited excess in reverse authored
+	# order before the derived balance or maxima can observe it.
+	for glint_id: StringName in GlintDb.UPGRADE_IDS:
+		var glint_rank := clampi(
+			int(Game.upgrades.get(glint_id, 0)), 0, GlintDb.RANKS)
+		if glint_rank <= 0:
+			Game.upgrades.erase(glint_id)
+		else:
+			Game.upgrades[glint_id] = glint_rank
+	Game.solved_glint_trials.clear()
+	var raw_glint_trials: Variant = d.get("solved_glint_trials", [])
+	if raw_glint_trials is Array:
+		for raw_id: Variant in raw_glint_trials:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var trial_id := StringName(raw_id)
+			if GlintDb.TRIAL_IDS.has(trial_id):
+				Game.solved_glint_trials[trial_id] = true
+	var excess_glint_spent := Game.glint_spent() - Game.solved_glint_trials.size()
+	for i: int in range(GlintDb.UPGRADE_IDS.size() - 1, -1, -1):
+		if excess_glint_spent <= 0:
+			break
+		var remove_id: StringName = GlintDb.UPGRADE_IDS[i]
+		if int(Game.upgrades.get(remove_id, 0)) <= 0:
+			continue
+		Game.upgrades.erase(remove_id)
+		excess_glint_spent -= 1
 	# JSON rebuild and catalogue validation are both required: a plain String key
 	# would never match a StringName observation, and an unknown id must not mint a
 	# note merely because it appeared in a hand-edited slot.
@@ -461,11 +490,13 @@ func load_slot(slot: int) -> Dictionary:
 		and raw_garrison is Dictionary \
 		and bool((raw_garrison as Dictionary).get("carrying_firewood", false))
 	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})
-	# Upgrades own the permanent ceiling; the garrison payload owns the temporary
-	# trip bit. Derive their combined maximum without healing saved health, then
-	# fill only stamina before Run.restore optionally replaces the trip amount.
+	# Upgrades own the permanent ceilings; the garrison payload owns the temporary
+	# trip bit. Derive them without healing saved health, then fill the two
+	# garrison-default resources before Run.restore optionally replaces a valid
+	# dungeon snapshot's spent amounts.
 	Game.resync_maxima(false)
 	Game.stamina = Game.max_stamina
+	Game.fill_magic()
 	Clock.restore(d.get("clock", {}) as Dictionary)
 	Game.restore_wishlist_lines(d.get("wishlist_lines", []) as Array)
 	Game.components.clear()

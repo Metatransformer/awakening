@@ -83,6 +83,16 @@ and three one-rank doctrine tracks. It adds no item, pickup, UI screen, NPC,
 stat category, dialogue tree or repeatable system. The exact five-observation,
 five-note boundary is owned by [FIELD_NOTES.md](FIELD_NOTES.md).
 
+Issue #206 is an explicit owner-authorised test exception, not a production cap
+increase. Behind `--glint-mvp`, Floor 1 may replace its normal gate/puzzle
+anchors with one optional post-guardian annex containing one existing authored
+puzzle. Its one Glimmer is derived from a permanent solved id minus one purchased
+stat rank; it is not a saved, repeatable, convertible, or production currency.
+The three choices are one-rank extensions of the existing health, stamina, and
+magic stats through the existing Trade screen and garrison statue. The exception
+adds no screen, autoload, item, dialogue tree, puzzle atom, boss, miniboss, room
+kit, or production content.
+
 Issue #197 is the explicit owner amendment for one reusable quest-state seam,
 one Quests inspection page, and `!` / `?` world-attention punctuation. Its two
 entries wrap existing authorised work: Keep the Hearth and West Gate Defence.
@@ -142,6 +152,12 @@ Issue #197 is separately owner-authorised implementation sequencing debt: the
 bounded two-entry quest journal and its `!` / `?` NPC-and-target feedback. It
 does not supersede either authorised human proof.
 
+Issue #206 is separately owner-authorised implementation sequencing debt: only
+the flagged one-trial Floor-1 experiment defined in
+[design-tests/GLINT_TRIAL_MVP.md](design-tests/GLINT_TRIAL_MVP.md). It does not
+supersede the raid or Field Notes tests and cannot roll into default generation
+until its five cold sessions pass.
+
 Raid, Field Notes, fishing/provisions, #184's bounded tool/mining, #197's
 bounded quest journal, and #198's bounded player-barrel extension are complete;
 their precommitted human tests remain pending.
@@ -190,7 +206,8 @@ The current build contains more implemented work than has been validated by
 human evidence. That is sequencing debt, not permission to continue.
 
 Do not expand production until the pending five-session human tests are
-resolved.
+resolved. Issue #206's explicit flagged experiment is permitted alongside this
+freeze; its result can authorise or reject Glint planning only, not production.
 Directors and automated checks can prove implementation; only observed human
 play can answer either design question. A result from one cannot prove the
 other. After a result, update the owning design test first, then amend current

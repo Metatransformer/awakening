@@ -119,7 +119,9 @@ func _fill_recipe(line: Dictionary, catalogue: GDScript, is_owned: bool) -> void
 		return
 	var parts: Dictionary = line.get("parts", {})
 	if parts.is_empty():
-		_add_recipe_note("Gold only" if int(line.get("cost", 0)) > 0 else "No materials")
+		var currency: String = catalogue.currency_label()
+		_add_recipe_note(("Gold" if currency == "Purse" else currency) + " only"
+			if int(line.get("cost", 0)) > 0 else "No materials")
 		return
 	for id: StringName in parts:
 		var definition := ItemDb.get_def(id)

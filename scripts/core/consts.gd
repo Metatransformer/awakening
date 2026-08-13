@@ -188,6 +188,12 @@ const HEALTH_POINT := 1
 const START_HEALTH_POINTS := 12
 ## One permanent health purchase adds the former container-sized amount.
 const HEALTH_UPGRADE_POINTS := 4
+## One one-rung Glint Statue awakening per permanent bar.
+const GLINT_HEALTH_POINTS := 2
+const GLINT_STAMINA_POINTS := 10.0
+const GLINT_MAGIC_POINTS := 12
+## Baseline magic remains 48; this is the shared permanent prototype ceiling.
+const MAGIC_MAX := 60
 const MAX_MAGIC := 48
 ## What one charged spin costs out of that 48.
 ##
@@ -885,8 +891,8 @@ const JEWEL_MAX := 4
 ## most needs it.
 const SOAK_MAX := 4.0          ## HP, all permanent sources
 const EDGE_MAX := 5            ## HP a swing, forge + rings
-const MAX_HEALTH_POINTS := 32  ## 12 start + 12 quartermaster + 8 Vigor
-const STAMINA_MAX := 160.0     ## MAX_STAMINA 100 + four Focus rungs
+const MAX_HEALTH_POINTS := 34  ## 12 start + 12 quartermaster + 8 Vigor + 2 Glint
+const STAMINA_MAX := 170.0     ## 100 start + 60 Focus + 10 Glint; Well Fed is temporary
 
 ## **The slider that goes the other way** (GDD §7.1). A fraction of every blow
 ## the hero takes, forgiven, when the player has switched mercy on in options.
