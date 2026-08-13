@@ -75,12 +75,12 @@ func run(rig) -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():
-		print("BF FAIL no node in group `player`")
+		rig.fail("BF FAIL no node in group `player`")
 		return
 	var hero: Node3D = players[0]
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("BF FAIL no camera")
+		rig.fail("BF FAIL no camera")
 		return
 	# A key-cap legend across the bottom of twenty-odd pose frames helps nobody.
 	if Hud != null:
@@ -123,12 +123,12 @@ func _take(rig, hero: Node3D, cam: Camera3D, out: String, bf_time: float) -> voi
 	Input.action_release(&"context")
 	if not started:
 		Engine.time_scale = 1.0
-		print("BF FAIL %s no dodge started" % tag)
+		rig.fail("BF FAIL %s no dodge started" % tag)
 		return
 	var fired := int(hero.get(&"_dodge"))
 	if fired != DODGE_BACK:
 		Engine.time_scale = 1.0
-		print("BF FAIL %s fired Dodge %d, wanted BACK — the lens has drifted off "
+		rig.fail("BF FAIL %s fired Dodge %d, wanted BACK — the lens has drifted off "
 			% [tag, fired] + "the facing again; see the note on DODGE_BACK")
 		return
 

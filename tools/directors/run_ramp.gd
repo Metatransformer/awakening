@@ -92,7 +92,7 @@ func run(rig) -> void:
 
 	var players: Array = rig.get_nodes_in_group(&"player")
 	if players.is_empty():
-		print("RAMP FAIL no node in group `player`")
+		rig.fail("RAMP FAIL no node in group `player`")
 		return
 	var hero: Node3D = players[0]
 	# Everything below runs down −Z, which is the one axis here with a straight
@@ -107,7 +107,7 @@ func run(rig) -> void:
 
 	var cam := hero.get_viewport().get_camera_3d()
 	if cam == null:
-		print("RAMP FAIL no camera")
+		rig.fail("RAMP FAIL no camera")
 		return
 	cam.set_physics_process(false)
 

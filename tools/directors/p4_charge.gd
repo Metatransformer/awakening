@@ -56,16 +56,15 @@ func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/p4h/x.png").get_base_dir()
 	var scene: Node = rig.scene()
 	var hero: Node3D = scene.get_node_or_null(^"Hero") as Node3D
-	var fails := 0
 
 	if hero == null:
-		print("CHARGE FAIL no Hero in the scene")
+		rig.fail("CHARGE FAIL no Hero in the scene")
 		return
 	# The hero owns its combat node and publishes it; do not go fishing in the
 	# scene tree for it (docs/CONTRACT.md §8).
 	var combat: Node = hero.get(&"combat")
 	if combat == null:
-		print("CHARGE FAIL no HeroCombat on the Hero")
+		rig.fail("CHARGE FAIL no HeroCombat on the Hero")
 		return
 
 	# The layout, before anything else is worth measuring. This is the check that
@@ -74,17 +73,15 @@ func run(rig) -> void:
 	# every press of the button that is now the light chain.
 	for action in [&"attack", &"heavy", &"shield"]:
 		if not InputMap.has_action(action):
-			print("CHARGE FAIL action missing from the InputMap: ", action)
-			fails += 1
+			rig.fail("CHARGE FAIL action missing from the InputMap: %s" % action)
 	if InputMap.has_action(&"heavy_attack"):
-		print("CHARGE FAIL `heavy_attack` still exists — the heavy is the hold now")
-		fails += 1
+		rig.fail("CHARGE FAIL `heavy_attack` still exists — the heavy is the hold now")
 	print("CHARGE binds attack=%s heavy=%s shield=%s"
 		% [_binds(&"attack"), _binds(&"heavy"), _binds(&"shield")])
 
 	var post: Node = scene.get_node_or_null(^"PostA")
 	if post == null:
-		print("CHARGE FAIL no PostA to hit")
+		rig.fail("CHARGE FAIL no PostA to hit")
 		return
 	post.connect(&"struck", _on_struck)
 
@@ -226,46 +223,46 @@ func run(rig) -> void:
 	print("CHARGE empty bar blows=%d (light %d)" % [spent_blows, light_on_empty])
 
 	if light_dmg <= 0:
-		print("CHARGE FAIL the light tap did not land"); fails += 1
+		rig.fail("CHARGE FAIL the light tap did not land")
 	if light_frames < 0:
-		print("CHARGE FAIL the light tap never connected"); fails += 1
+		rig.fail("CHARGE FAIL the light tap never connected")
 	if heavy_dmg <= light_dmg:
-		print("CHARGE FAIL the heavy dealt %d against a light's %d"
-			% [heavy_dmg, light_dmg]); fails += 1
+		rig.fail("CHARGE FAIL the heavy dealt %d against a light's %d"
+			% [heavy_dmg, light_dmg])
 	if heavy_frames <= light_frames:
-		print("CHARGE FAIL heavy lands on frame %d, light on %d — no commitment"
-			% [heavy_frames, light_frames]); fails += 1
+		rig.fail("CHARGE FAIL heavy lands on frame %d, light on %d — no commitment"
+			% [heavy_frames, light_frames])
 	if short_charged:
-		print("CHARGE FAIL a hold of %.2f s charged, under a charge_time of %.2f"
-			% [charge_time * 0.6, charge_time]); fails += 1
+		rig.fail("CHARGE FAIL a hold of %.2f s charged, under a charge_time of %.2f"
+			% [charge_time * 0.6, charge_time])
 	if short_blows != 1:
-		print("CHARGE FAIL a short hold threw %d blows, not 1 — the release is not free"
-			% short_blows); fails += 1
+		rig.fail("CHARGE FAIL a short hold threw %d blows, not 1 — the release is not free"
+			% short_blows)
 	if short_dmg != heavy_dmg:
-		print("CHARGE FAIL a short hold dealt %d against the heavy tap's %d — it is not a tap"
-			% [short_dmg, heavy_dmg]); fails += 1
+		rig.fail("CHARGE FAIL a short hold dealt %d against the heavy tap's %d — it is not a tap"
+			% [short_dmg, heavy_dmg])
 	if not charged:
-		print("CHARGE FAIL holding past charge_time never armed the charge"); fails += 1
+		rig.fail("CHARGE FAIL holding past charge_time never armed the charge")
 	if not sheet_charged:
-		print("CHARGE FAIL the photographed hold never armed — the sheet shows nothing"); fails += 1
+		rig.fail("CHARGE FAIL the photographed hold never armed — the sheet shows nothing")
 	if blows_during_hold != 0:
-		print("CHARGE FAIL %d blow(s) landed DURING the hold — the press is swinging again"
-			% blows_during_hold); fails += 1
+		rig.fail("CHARGE FAIL %d blow(s) landed DURING the hold — the press is swinging again"
+			% blows_during_hold)
 	if long_blows != 1:
-		print("CHARGE FAIL a charged pull threw %d blows, not 1 — there are two power attacks again"
-			% long_blows); fails += 1
+		rig.fail("CHARGE FAIL a charged pull threw %d blows, not 1 — there are two power attacks again"
+			% long_blows)
 	if spin_dmg <= heavy_dmg:
-		print("CHARGE FAIL the charged release dealt %d against a tapped heavy's %d"
-			% [spin_dmg, heavy_dmg]); fails += 1
+		rig.fail("CHARGE FAIL the charged release dealt %d against a tapped heavy's %d"
+			% [spin_dmg, heavy_dmg])
 	if spent_blows != 0:
-		print("CHARGE FAIL an empty stamina bar still threw %d blow(s)"
-			% spent_blows); fails += 1
+		rig.fail("CHARGE FAIL an empty stamina bar still threw %d blow(s)"
+			% spent_blows)
 	if not blocked_up:
-		print("CHARGE FAIL shield never rose"); fails += 1
+		rig.fail("CHARGE FAIL shield never rose")
 	if blocked_down:
-		print("CHARGE FAIL shield never lowered"); fails += 1
+		rig.fail("CHARGE FAIL shield never lowered")
 
-	print("CHARGE %s (fails=%d)" % ["OK" if fails == 0 else "FAIL", fails])
+	print("CHARGE checks complete")
 
 
 func _on_struck(amount: int, _from: Vector3) -> void:
