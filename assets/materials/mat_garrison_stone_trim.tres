@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/garrison/defensive_slate_blocks_v1.png" id="1_wall"]
+
+[resource]
+resource_name = "mat_garrison_stone_trim"
+albedo_color = Color(0.72, 0.67, 0.62, 1)
+albedo_texture = ExtResource("1_wall")
+metallic_specular = 0.08
+roughness = 0.98
+uv1_scale = Vector3(0.52, 0.52, 0.52)
+uv1_offset = Vector3(0.08, 0.24, 0)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5

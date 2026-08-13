@@ -5,14 +5,14 @@
 
 [resource]
 resource_name = "mat_garrison_earth"
-albedo_color = Color(0.31, 0.22, 0.14, 1)
+albedo_color = Color(0.34, 0.24, 0.14, 1)
 albedo_texture = ExtResource("1_alb")
-metallic_specular = 0.08
+metallic_specular = 0.06
 roughness = 0.98
 normal_enabled = true
-normal_scale = 0.7
+normal_scale = 0.16
 normal_texture = ExtResource("2_nrm")
-uv1_scale = Vector3(0.38, 0.38, 0.38)
+uv1_scale = Vector3(0.72, 0.72, 0.72)
 uv1_triplanar = true
 uv1_world_triplanar = true
 texture_filter = 5
