@@ -3,7 +3,6 @@ extends Control
 ## Draw-only vocabulary for the fishing interaction. Gameplay owns every value;
 ## this control only turns the current snapshot into bounded, readable shapes.
 
-const MODE_CHOOSE: StringName = &"choose"
 const MODE_CASTING: StringName = &"casting"
 const MODE_WAITING: StringName = &"waiting"
 const MODE_BITE: StringName = &"bite"
@@ -11,19 +10,17 @@ const MODE_HOOKED: StringName = &"hooked"
 const MODE_RESULT_SUCCESS: StringName = &"result_success"
 const MODE_RESULT_FAILURE: StringName = &"result_failure"
 
-var mode: StringName = MODE_CHOOSE
-var selected_target: StringName = &"near"
-var selected_yield: int = 1
-var near_ready: bool = true
-var deep_ready: bool = true
-var reserve_available: int = 3
+var mode: StringName = MODE_CASTING
 var fish_run_direction: int = 0
 var desired_steer_direction: int = 0
 var actual_steering: int = 0
 var reeling: bool = false
 var tension: float = 0.0
 var landing_progress: float = 0.0
-var caught_quantity: int = 0
+var reaction_fraction: float = 0.0
+var caught_name: String = ""
+var caught_tier: int = 0
+var caught_tint: Color = Pal.GOLD
 var failure_result: StringName = &""
 var animation_phase: float = 0.0
 
@@ -43,22 +40,21 @@ func reaction_name() -> StringName:
 ## old prose even though CanvasItem draw strings are not Label nodes.
 func visual_text() -> String:
 	match mode:
-		MODE_CHOOSE:
-			return "NEAR x1 DEEP x2 RESERVE %d" % reserve_available
 		MODE_CASTING:
 			return "CAST"
 		MODE_HOOKED:
 			return "L R TENSION LAND"
 		MODE_RESULT_SUCCESS:
-			return "x%d" % caught_quantity
+			var pips := ""
+			for _i: int in caught_tier:
+				pips += " •"
+			return caught_name.to_upper() + pips
 	return ""
 
 
 func _draw() -> void:
 	var centre := size * Vector2(0.5, 0.46)
 	match mode:
-		MODE_CHOOSE:
-			_draw_choose(centre)
 		MODE_CASTING:
 			_draw_casting(centre)
 		MODE_WAITING:
@@ -71,31 +67,6 @@ func _draw() -> void:
 			_draw_success(centre)
 		MODE_RESULT_FAILURE:
 			_draw_failure(centre)
-
-
-func _draw_choose(centre: Vector2) -> void:
-	var near_at := centre + Vector2(-88.0, -6.0)
-	var deep_at := centre + Vector2(88.0, -6.0)
-	_draw_target(near_at, &"near", 1, near_ready)
-	_draw_target(deep_at, &"deep", 2, deep_ready)
-	CanvasText.draw_centred(self, "RESERVE %d" % reserve_available,
-		centre + Vector2(0.0, 49.0), 0.72, UITheme.TEXT_DIM)
-
-
-func _draw_target(at: Vector2, target: StringName, amount: int, ready: bool) -> void:
-	var selected: bool = selected_target == target
-	var color: Color = Pal.GOLD if selected else Pal.BONE
-	if not ready:
-		color = Color(Pal.MOTH, 0.42)
-	var pulse: float = 1.0 + sin(animation_phase * 4.0) * 0.05 if selected else 1.0
-	if selected:
-		draw_arc(at, 37.0 * pulse, 0.0, TAU, 24, Color(Pal.GOLD, 0.74), 3.0)
-	_draw_fish(at + Vector2(0.0, -3.0), 22.0 * pulse, 1, color)
-	CanvasText.draw_centred(self, "%s x%d" % [String(target).to_upper(), amount],
-		at + Vector2(0.0, 27.0), 0.72, color)
-	if not ready:
-		draw_line(at + Vector2(-31.0, -25.0), at + Vector2(31.0, 25.0),
-			Color(Pal.VITAL, 0.85), 4.0, true)
 
 
 func _draw_casting(centre: Vector2) -> void:
@@ -111,7 +82,8 @@ func _draw_casting(centre: Vector2) -> void:
 
 func _draw_waiting(centre: Vector2, is_bite: bool) -> void:
 	var speed: float = 4.8 if is_bite else 1.5
-	var spread: float = 54.0 if is_bite else 38.0
+	var urgency := clampf(reaction_fraction, 0.0, 1.0)
+	var spread: float = lerpf(14.0, 54.0, urgency) if is_bite else 38.0
 	var phase: float = fmod(animation_phase * speed, 1.0)
 	for i: int in 3:
 		var ring_phase: float = fmod(phase + float(i) / 3.0, 1.0)
@@ -126,7 +98,11 @@ func _draw_waiting(centre: Vector2, is_bite: bool) -> void:
 	_draw_fish(centre + Vector2(sin(animation_phase * speed) * 10.0, 7.0),
 		fish_scale, -1, Color(Pal.BONE, 0.78 if is_bite else 0.42))
 	if is_bite:
-		_draw_hook(centre + Vector2(0.0, -61.0), 1.0 + sin(animation_phase * 18.0) * 0.08)
+		# The cue contracts from the exact hook window rather than an unrelated
+		# loop, so its remaining size is the remaining reaction time.
+		draw_arc(centre, 16.0 + urgency * 46.0, 0.0, TAU, 28,
+			Color(Pal.GOLD, 0.42 + urgency * 0.48), 4.0, true)
+		_draw_hook(centre + Vector2(0.0, -61.0), 0.84 + urgency * 0.24)
 
 
 func _draw_hooked(centre: Vector2) -> void:
@@ -151,9 +127,14 @@ func _draw_success(centre: Vector2) -> void:
 	for i: int in 2:
 		draw_arc(centre, 42.0 + float(i) * 14.0 + reveal * 10.0, 0.0, TAU, 24,
 			Color(Pal.GOLD, (1.0 - reveal) * 0.5), 3.0)
-	_draw_fish(centre + Vector2(0.0, -8.0), 38.0 * pop, 1, Pal.GOLD)
-	CanvasText.draw_centred(self, "x%d" % caught_quantity,
-		centre + Vector2(0.0, 48.0), 1.05, Pal.CYAN)
+	_draw_fish(centre + Vector2(0.0, -12.0), 38.0 * pop, 1, caught_tint)
+	CanvasText.draw_centred(self, caught_name.to_upper(),
+		centre + Vector2(0.0, 39.0), 0.82, caught_tint)
+	var pip_count := clampi(caught_tier, 1, 4)
+	var pip_start := -float(pip_count - 1) * 7.0
+	for i: int in pip_count:
+		draw_circle(centre + Vector2(pip_start + float(i) * 14.0, 62.0),
+			4.5, caught_tint)
 
 
 func _draw_failure(centre: Vector2) -> void:

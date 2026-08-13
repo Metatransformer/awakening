@@ -74,6 +74,9 @@ func _commit_at_impact(hero: Hero) -> void:
 	# Game still gets the last word on the exact frame the axe meets the trunk.
 	if not Game.chop_firewood(Clock.day, Clock.garrison_phase()):
 		enabled = true
+		var refusal := _refusal()
+		if not refusal.is_empty():
+			Bus.request_message.emit(refusal)
 		return
 
 	# Both cues belong to the contact point. The utility animation can be
@@ -83,7 +86,7 @@ func _commit_at_impact(hero: Hero) -> void:
 	_stump.visible = true
 	_fall_away_from(hero.global_position)
 	Bus.request_sfx.emit(SFX_TREE_FALL, global_position)
-	Bus.request_message.emit("FIREWOOD CUT. CARRY IT TO THE GARRISON HEARTH.")
+	Bus.request_message.emit("FIREWOOD CUT. TAKE THE BUNDLE TO THE GATE SUPPLY BOX.")
 
 
 func _refusal() -> String:
@@ -93,12 +96,10 @@ func _refusal() -> String:
 		return "BRANNOC FORGES THE WOODSMAN'S AXE."
 	if Clock.garrison_phase() != WorldClock.GARRISON_DAYTIME:
 		return "CHOP FIREWOOD DURING DAYTIME."
-	if Game.carrying_firewood:
-		return "YOU ARE ALREADY CARRYING FIREWOOD."
-	if Game.firewood_stock >= Game.FIREWOOD_CAP:
-		return "THE GARRISON HEARTH IS FULL."
 	if Game.timber_completed_day == Clock.day:
 		return "TODAY'S BUNDLE IS ALREADY CUT."
+	if Run.room_for(SupplyCargoDb.FIREWOOD_ID) <= 0:
+		return "BAG FULL — MAKE ROOM FOR FIREWOOD."
 	return ""
 
 

@@ -1275,6 +1275,25 @@ func is_full() -> bool:
 	return slots_used() >= Game.bag_slots
 
 
+## How many more of one catalogue item fit without changing the bag. A full bag
+## may still have room in an existing part-stack, which is why gathering gates
+## ask this rather than the coarser `is_full()`.
+func room_for(id: StringName) -> int:
+	var def := ItemDb.get_def(id)
+	if def == null:
+		return 0
+	var per := stack_of(id)
+	var packed := in_case(id)
+	var held := in_hold(id)
+	var room := 0
+	if case_fits(id):
+		room += (per - packed % per) % per
+		room += maxi(CASE_SLOTS - case_slots_used(), 0) * per
+	room += (per - held % per) % per
+	room += maxi(hold_slots() - hold_slots_used(), 0) * per
+	return room
+
+
 ## What the vendor would pay for everything in the bag, heat included. This is
 ## THE number: the HUD headline, the extraction fee, and the vendor's SELL
 ## EVERYTHING line are all this function, which is why the premium is folded in
