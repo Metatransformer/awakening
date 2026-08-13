@@ -1,8 +1,8 @@
 class_name ScreenPresent
 extends Node
-## `docs/STYLEGUIDE.md` §4.5 made real: the world renders into a fixed
+## Legacy migration diagnostic: the world renders into a fixed
 ## **480 x 270** buffer and is presented to the window sharp-bilinear, with
-## §4.4's Bayer RGB555 quantizer applied at that internal resolution, while the
+## a Bayer RGB555 quantizer applied at that internal resolution, while the
 ## HUD, the menus and Flow's fade stay at native.
 ##
 ## Owned by `Settings` (it is instanced in `Settings._ready` and driven from
@@ -43,7 +43,7 @@ extends Node
 ## renderer exactly: `disable_3d` off, the present layer hidden, the SubViewport
 ## parked. Nothing else in the project branches on it.
 
-## §4.5, fixed and not a fraction. PSX was 320x240 = 76.8k px; this is 129.6k,
+## Fixed legacy comparison buffer. PSX was 320x240 = 76.8k px; this is 129.6k,
 ## the smallest buffer where the over-the-shoulder camera still resolves an enemy
 ## wind-up at the 9 m lock-on range.
 const INTERNAL := Vector2i(480, 270)
@@ -87,14 +87,14 @@ func _build() -> void:
 	_sub.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_sub.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	_sub.transparent_bg = false
-	# §4.5's list, spelled out rather than inherited: this viewport is created in
-	# code and gets none of `project.godot`'s rendering defaults for free.
+	# The diagnostic viewport is created in code and gets none of
+	# `project.godot`'s rendering defaults for free.
 	_sub.msaa_3d = Viewport.MSAA_DISABLED
 	_sub.msaa_2d = Viewport.MSAA_DISABLED
-	_sub.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	_sub.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA
 	_sub.use_taa = false
-	# §4.4: Godot's debanding is a noise dither over the whole frame and it fights
-	# ours pixel for pixel.
+	# Godot's debanding is a noise dither over the whole frame and it fights the
+	# diagnostic quantizer pixel for pixel.
 	_sub.use_debanding = false
 	_sub.use_hdr_2d = false
 	_sub.scaling_3d_scale = 1.0
@@ -119,12 +119,12 @@ func _build() -> void:
 	_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# **LINEAR, deliberately, and it is not a contradiction of §4.5's NEAREST.**
+	# **LINEAR, deliberately; the diagnostic SubViewport's own 2D is NEAREST.**
 	# Sharp bilinear IS a bilinear tap -- the shader snaps the sample to the texel
 	# centre and only lets it cross the boundary over one output pixel, and it
 	# needs the hardware blend to do that. Set NEAREST here and the shader
-	# degenerates to raw nearest, which is what §4.5 rules out for shimmering at
-	# 720p's 2.67x. NEAREST is what the SubViewport's own 2D uses, above.
+	# degenerates to raw nearest and shimmers at 720p's 2.67x. NEAREST is what the
+	# SubViewport's own 2D uses, above.
 	_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_rect.material = _mat
 	_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -161,15 +161,15 @@ func internal_size() -> Vector2i:
 
 ## The SubViewport's RID, so a director can put
 ## `RenderingServer.viewport_set_measure_render_time` on the viewport that is
-## actually drawing the world. With §4.5 on, the ROOT's measured render time is
-## the cost of one textured quad and says nothing about the frame.
+## actually drawing the world. With the diagnostic on, the ROOT's measured
+## render time is the cost of one textured quad and says nothing about the frame.
 func viewport_rid() -> RID:
 	return _sub.get_viewport_rid() if _sub != null else RID()
 
 
-## `Settings.apply_video`'s three viewport knobs, routed to whichever viewport is
-## drawing 3D. Called whether or not the pipeline is on, so flipping the field
-## does not lose the player's shadow or MSAA choice.
+## `Settings.apply_video`'s three viewport knobs, mirrored onto the diagnostic
+## viewport. Called whether or not the pipeline is on, so flipping the field does
+## not lose the player's shadow or MSAA choice.
 func apply_video(msaa: int, shadow_atlas: int, scale_3d: float) -> void:
 	if _sub == null:
 		return

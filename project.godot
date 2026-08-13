@@ -757,18 +757,13 @@ rendering_device/driver.windows="d3d12"
 ; grows and so does the export. That is the price of an Apple Silicon build that
 ; is not Rosetta-only, and on this project's texture count it is worth it.
 textures/vram_compression/import_etc2_astc=true
-; STYLEGUIDE 8's deltas, applied 2026-08-10 after card #20 measured a baseline
-; rather than guessing at one. These four were never chosen -- they are what the
-; project happened to have -- and they are the four most expensive settings in
-; the file. They are ALSO what the PSX treatment wants: MSAA and FXAA both fight
-; the hard pixel edge STYLEGUIDE 2 is built on, so turning them off is the art
-; direction and the frame budget agreeing for once.
-;
-; The shadow map was 8192x8192 -- 64 megatexels, re-rendered every frame from a
-; scene with 713 draw calls in it -- behind soft_shadow_filter_quality=4, the
-; most expensive filter Godot has. 1024 is STYLEGUIDE 8's number and it is four
-; texels per centimetre at this game's metric.
-lights_and_shadows/directional_shadow/size=1024
+; Native PS2 stylized realism: preserve silhouettes with SMAA, mipmapped 4x
+; anisotropic world sampling, and medium shadow atlases. Area cards own the
+; light composition; these are only the shared viewport defaults (#207).
+lights_and_shadows/directional_shadow/size=4096
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
+lights_and_shadows/positional_shadow/atlas_size=2048
 anti_aliasing/quality/msaa_3d=0
-anti_aliasing/quality/screen_space_aa=0
+anti_aliasing/quality/screen_space_aa=2
+textures/default_filters/anisotropic_filtering_level=2
+textures/default_filters/use_nearest_mipmap_filter=false
