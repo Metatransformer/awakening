@@ -14,6 +14,13 @@ func run(rig) -> void:
 	Clock.running = false
 	Clock.set_time(1, 9.0)
 	Game.restore_garrison({})
+	Game.tool_durabilities.erase(ToolDb.FISHING_ROD_ID)
+	Game.items.erase(ToolDb.FISHING_ROD_ID)
+	Game.grant(ToolDb.FISHING_ROD_ID)
+	var rod_maximum: int = Game.tool_max_durability(ToolDb.FISHING_ROD_ID)
+	rig.check(rod_maximum == 10
+		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == rod_maximum,
+		"the granted Fishing Rod begins at its exact 10 / 10 durability")
 	await rig.wait_frames(6)
 
 	var fishing := outskirts.fishing_hole as FishingHole
@@ -40,12 +47,16 @@ func run(rig) -> void:
 	await rig.capture("fishing_00_pond_wide.png")
 
 	var before_begin_cancel: int = _civil_minute()
+	var durability_before_cancel: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	rig.check(fishing.begin_for_test(&"near"), "near water enters the fishing FSM")
 	rig.check(fishing.state_name() == &"choose" and Prompt.blocked,
 		"begin_for_test enters CHOOSE and blocks Prompt")
 	rig.check(_civil_minute() == before_begin_cancel,
 		"opening the fishing choice costs no civil time")
 	await rig.wait_frames(3)
+	var choose_text := " ".join(_all_text(fishing))
+	rig.check(choose_text.contains("ROD %d / %d" % [durability_before_cancel,
+		rod_maximum]), "the live fishing overlay reports Rod durability")
 	await rig.capture("fishing_01_choose.png")
 	var before_cancel: int = _civil_minute()
 	await rig.tap([&"ui_cancel"])
@@ -55,9 +66,12 @@ func run(rig) -> void:
 		"real ui_cancel exits to IDLE and releases Prompt")
 	rig.check(_civil_minute() == before_cancel,
 		"a cancelled attempt costs zero civil minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID) == durability_before_cancel,
+		"a cancelled attempt spends no Rod durability")
 
 	Game.restore_garrison({})
 	Clock.set_time(1, 9.0)
+	var durability_before_near: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var near_started: int = _civil_minute()
 	rig.check(fishing.begin_for_test(&"near"), "a fresh near attempt begins")
 	rig.check(_civil_minute() == near_started,
@@ -91,6 +105,9 @@ func run(rig) -> void:
 		"a near catch banks exactly one Fish and one daily unit")
 	rig.check(_civil_minute() == before_near_land + 10,
 		"the near outcome advances civil time by exactly ten minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== durability_before_near - 1,
+		"the resolved near catch spends exactly one Rod durability")
 	await rig.wait_frames(4)
 	await rig.capture("fishing_03_result_creel.png")
 	var near_closed: bool = await rig.until(
@@ -100,6 +117,7 @@ func run(rig) -> void:
 
 	Game.restore_garrison({})
 	Clock.set_time(2, 11.0)
+	var durability_before_deep: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
 	var deep_started: int = _civil_minute()
 	rig.check(fishing.begin_for_test(&"deep"), "deep water begins on a fresh day and state")
 	rig.check(_civil_minute() == deep_started,
@@ -130,10 +148,43 @@ func run(rig) -> void:
 		"a deep catch banks exactly two Fish and two daily units")
 	rig.check(_civil_minute() == before_deep_land + 10,
 		"the deep outcome advances civil time by exactly ten minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== durability_before_deep - 1,
+		"the resolved deep catch spends exactly one Rod durability")
 	var deep_closed: bool = await rig.until(
 		func() -> bool: return fishing.state_name() == &"idle", 3.0)
 	rig.check(deep_closed and not Prompt.blocked,
 		"the deep RESULT exits and releases Prompt after its result delay")
+
+	# A missed bite is a resolved attempt too: no fish enters the reserve, while
+	# the same outcome transaction spends ten civil minutes and one Rod use.
+	Game.restore_garrison({})
+	Clock.set_time(3, 12.0)
+	var failure_stock_before: int = Game.fish_stock
+	var failure_time_before: int = _civil_minute()
+	var failure_durability_before: int = Game.tool_durability(
+		ToolDb.FISHING_ROD_ID)
+	rig.check(fishing.begin_for_test(&"near"),
+		"a deterministic failure attempt begins through the real Rod gate")
+	await rig.wait_frames(3)
+	await rig.tap([&"interact"])
+	var failure_waiting: bool = await rig.until(
+		func() -> bool: return fishing.state_name() == &"waiting", 1.0)
+	rig.check(failure_waiting, "the failure probe casts through real input")
+	fishing.debug_force_bite()
+	var failure_resolved: bool = await rig.until(
+		func() -> bool: return fishing.state_name() == &"result", 2.0)
+	rig.check(failure_resolved and Game.fish_stock == failure_stock_before,
+		"letting the deterministic bite expire resolves failure without a catch")
+	rig.check(_civil_minute() == failure_time_before + 10,
+		"the resolved failure advances civil time by exactly ten minutes")
+	rig.check(Game.tool_durability(ToolDb.FISHING_ROD_ID)
+		== failure_durability_before - 1,
+		"the resolved failure spends exactly one Rod durability")
+	var failure_closed: bool = await rig.until(
+		func() -> bool: return fishing.state_name() == &"idle", 3.0)
+	rig.check(failure_closed and not Prompt.blocked,
+		"the failed RESULT exits and releases Prompt after its result delay")
 
 	Clock.set_time(3, 13.0)
 	Game.restore_garrison({
@@ -183,3 +234,13 @@ func run(rig) -> void:
 
 func _civil_minute() -> int:
 	return (Clock.day - 1) * 24 * 60 + int(floor(Clock.hour * 60.0 + 0.0001))
+
+
+func _all_text(root: Node) -> PackedStringArray:
+	var out := PackedStringArray()
+	var label := root as Label
+	if label != null and not label.text.strip_edges().is_empty():
+		out.append(label.text)
+	for child: Node in root.get_children():
+		out.append_array(_all_text(child))
+	return out

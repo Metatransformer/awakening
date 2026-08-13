@@ -91,6 +91,7 @@ func _ready() -> void:
 	# And the wheel can change without this screen touching it: picking something
 	# up auto-binds it, and a save loaded from the Saves screen replaces all eight.
 	Bus.wheel_changed.connect(func(_s: Array) -> void: refresh())
+	Game.garrison_changed.connect(refresh)
 	refresh()
 
 
@@ -782,14 +783,21 @@ func _refresh_tools() -> void:
 	UITheme.clear_children(_tools)
 	var any := false
 	for definition: Dictionary in ToolDb.all():
-		if not bool(definition.get("owned", false)):
+		if not bool(definition.get("known", false)) \
+				and not bool(definition.get("usable", false)):
 			continue
 		var row := VBoxContainer.new()
 		row.add_theme_constant_override(&"separation", 1)
 		_tools.add_child(row)
 		var title := Label.new()
-		title.text = String(definition.get("display_name", ""))
-		UITheme.apply_text_style(title, UITheme.TYPE_LABEL_MD, UITheme.TEXT)
+		var durability := int(definition.get("durability", 0))
+		var maximum := int(definition.get("max_durability", 0))
+		var broken := bool(definition.get("known", false)) and durability <= 0
+		title.text = "%s  ·  %d / %d%s" % [
+			definition.get("display_name", ""), durability, maximum,
+			"  ·  BROKEN" if broken else ""]
+		UITheme.apply_text_style(title, UITheme.TYPE_LABEL_MD,
+			UITheme.DANGER if broken else UITheme.TEXT)
 		row.add_child(title)
 		var blurb := Label.new()
 		blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

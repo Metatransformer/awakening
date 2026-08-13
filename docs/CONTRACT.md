@@ -1790,6 +1790,99 @@ Rules:
   design and scope gate are `docs/GARRISON_LIFE.md`; the panel never chops,
   deposits, buys, donates or advances time.
 
+### Durable utility tools — three ids outside every carried-item path
+
+`ToolDb` (`scripts/items/tool_db.gd`) is the fixed manifest. `ShopDb` presents
+its rows at Brannoc, but does not own a second copy of their tuning.
+
+```gdscript
+ToolDb.WOODSMAN_AXE_ID   # &"woodsman_axe": 8 uses, 60 gold + 3 Iron Scrap
+ToolDb.PICKAXE_ID        # &"pickaxe":     12 uses, 75 gold + 3 Iron Scrap
+ToolDb.FISHING_ROD_ID    # &"fishing_rod": 10 uses, 45 gold + 1 Iron Scrap
+                           #                + 1 stored Firewood bundle
+
+ToolDb.has(id) -> bool
+ToolDb.max_durability(id) -> int
+ToolDb.definition(id) -> Dictionary
+ToolDb.all() -> Array[Dictionary]
+
+# scripts/autoload/game_state.gd
+var tool_durabilities: Dictionary[StringName, int] = {}
+func tool_durability(id: StringName) -> int
+func tool_max_durability(id: StringName) -> int
+func tool_known(id: StringName) -> bool
+func tool_usable(id: StringName) -> bool
+func craft_tool(id: StringName) -> bool       # first forge and reforge: full
+func spend_tool_use(id: StringName) -> bool   # checked decrement, never below 0
+```
+
+Durability has three distinct states: no dictionary key means never forged; a
+stored zero means known and **BROKEN**; a positive value means usable. Positive
+durability is mirrored into `Game.items` only so legacy ownership readers keep
+working. Spending the last use erases that compatibility entry but preserves
+the zero in `tool_durabilities`, and forging or reforging restores both full
+durability and the compatibility entry.
+
+**No carried-item system may infer a tool from that mirror.** Utility tools are
+never in `RIGHT_POOL`, `LEFT_POOL`, `Game.wheel`, `carry_ids`, `Run.bag`,
+`Run.cased`, `Game.stash`, Trade sales, hand models, loadouts, armaments, or the
+combat input path. The Equipment page lists known tools as read-only labels;
+Brannoc is the only transaction surface.
+
+`ShopDb` takes the complete tool bill before `Game.craft_tool`. Iron Scrap is
+read and consumed from `Run.bag`, not `Game.components`; the Rod additionally
+checks and consumes `Game.firewood_stock`. A ready positive-durability row is
+inspection-only. A never-forged or broken row offers the same full bill, and a
+successful transaction always returns the maximum—there is no partial repair.
+
+Each consumer owns exactly one commitment point:
+
+- `HarvestTree` spends the Axe only after `Game.chop_firewood` accepts the
+  current day's impact. A refused or cancelled chop spends nothing.
+- `FishingHole` spends the Rod in its shared resolved-outcome transaction:
+  landed catch or failure each spend one; `cancel()` spends none.
+- `MiningVein` spends the Pickaxe only on the impact frame after it wins the
+  stable site's depletion commit. Cancelling before impact, finding an already
+  depleted site, or losing the commit race spends nothing.
+
+#### Mining veins — private deterministic placement and Run-owned depletion
+
+Every ordinary non-entrance, non-maze generated room has its own **65%** vein
+roll. `Dungeon._place_mining_vein` uses a fresh `RandomNumberGenerator` seeded
+from the floor/cell `mining_vein` salt. That private stream chooses presence,
+blank wall, signed wall offset, and payout without advancing the floor `_rng`,
+so adding or depleting mining cannot reshuffle layout, population, chests,
+furniture, or other rewards.
+
+The payout table is fixed and reuses existing ids:
+
+| Id | Weight | Physical `LootMote` count |
+|---|---:|---:|
+| `iron_scrap` | **65** | **3** |
+| `riveted_plate` | **22** | **2** |
+| `tension_coil` | **13** | **1** |
+
+Enemy Iron Scrap drops are unchanged. `MiningVein.configure(site_id,
+reward_item_id, reward_count)` receives the stable id
+`mining_vein:<floor>:<cell_x>:<cell_y>`. A successful committed impact replaces
+the intact seam with rubble and drops one ordinary physical stack into the
+room. It creates no map marker, gate, annex, room, currency, item id, or direct
+banking path.
+
+```gdscript
+# scripts/autoload/run_state.gd
+const SNAPSHOT_VERSION: int = 3
+var depleted_resource_sites: Dictionary[StringName, bool] = {}
+func is_resource_site_depleted(site_id: StringName) -> bool
+func commit_resource_site_depletion(site_id: StringName) -> bool
+```
+
+Only canonical `mining_vein:<floor>:<x>:<y>` ids pass the Run validator. The
+set spans floor changes and deterministic rebuilds, is written in resumable Run
+snapshot v3, and clears in both `Run.reset()` and a fresh `Run.enter()`. Rebuild
+therefore restores rubble for mined sites during the same run and restores
+intact deterministic veins only when a new run begins.
+
 ### The document case — `Run.cased`, three of the bag's slots
 
 ```gdscript
@@ -3070,7 +3163,7 @@ heart at once) and leave it false on a Recut, where clamping down is the point.
 
 ```gdscript
 Saves.peek(slot: int) -> Dictionary       # readable list header; empty=true if unused
-Saves.save(slot: int) -> bool             # Game + destination/transform + v12 Run/garrison state
+Saves.save(slot: int) -> bool             # Game + destination/transform + v16 Run/garrison/tool state
 Saves.load_slot(slot: int) -> Dictionary  # restores data and returns the travel destination
 Saves.erase(slot: int) -> void            # 3 slots, 0..2
 Saves.autosave() -> bool                  # active slot, else first empty, else decline
@@ -3086,17 +3179,20 @@ garrison load. v4-v8 transforms are deliberately omitted because their owner is
 unknown; v9 introduced `position_scene`, and a transform is returned only when
 that owner matches the destination.
 
-The save file is at **`VERSION = 12`**, and `READABLE` — not `VERSION` — is what
+The save file is at **`VERSION = 16`**, and `READABLE` — not `VERSION` — is what
 `load_slot` checks. v4 split the old `plate` rung into eight gear tracks and is
 why **v3 is refused rather than migrated**: its `plate` key has no honest mapping
 to the new pieces. The later bumps are additive: v5 added `deaths`, v6
 `gold_earned`, v7 the kit `wheel`, v8 `rations`, v9 transform ownership, and
 v10 `last_played_unix` plus the single versioned `run` snapshot, v11 manual
-wishlist tracks, and v12 the additive `garrison` payload. `READABLE` is therefore
-`[4, 5, 6, 7, 8, 9, 10, 11, 12]`; absent fields take their version-appropriate
-defaults instead of making those slots unreadable. In particular, v11 and older
-slots restore an empty, cold hearth. `save_game.gd`'s header carries the full
-version history.
+wishlist tracks, v12 the additive `garrison` payload, v13 Field Notes, v14
+temporary overhealth, v15 fishing/supper/Well Fed/Connected state, and v16
+durable utility-tool state. `READABLE` is therefore every version from **4
+through 16**; absent fields take their version-appropriate defaults instead of
+making those slots unreadable. A pre-v16 slot that owns the Woodsman's Axe
+migrates it at full eight-use durability. v16 writes all three durability
+entries, including a known broken zero, and rebuilds `Game.items` only for
+positive values. `save_game.gd`'s header carries the full version history.
 
 Every one of those dictionaries is rebuilt on load with `StringName` keys — JSON
 hands back `String` keys, and a `String` key makes `forge_level(&"edge")` and
@@ -3105,11 +3201,13 @@ on the shelf vanishes.
 
 `Saves.load_slot()` deliberately does **not** change scenes — it restores the
 save data, hands back where the hero belongs and lets `Flow` perform the
-transition. A v10 `run` is one versioned data snapshot, not a scene tree:
+transition. A v10+ `run` is one separately versioned data snapshot, not a scene tree:
 `in_dungeon`, `seed_used`, `level`, `depth`, `bag`, `cased`, the `premium` and
 `kills` counters, current magic/stamina trip budgets, `visited_rooms`, and the
-generator's `rng_state`. The dungeon regenerates from seed plus level before
-`Flow` restores the hero transform.
+generator's `rng_state`. Run snapshot v2 added pending Field Notes observations;
+v3 adds stable `depleted_resource_sites`. The dungeon regenerates from seed plus
+level before `Flow` restores the hero transform, and v3 reapplies mined rubble
+without advancing or replacing the saved generator state.
 Legacy v4–v9 slots have no snapshot, return to the garrison, and reset `Run`.
 Whoever owns room transitions should set `Saves.current_room` as rooms change.
 

@@ -31,7 +31,8 @@ func run(rig) -> void:
 
 	Menu.close()
 	Clock.running = true
-	print("GARRISON LIFE OK")
+	if rig.fails == 0:
+		print("GARRISON LIFE OK")
 
 
 func _assignment_and_axe(rig) -> void:
@@ -40,10 +41,21 @@ func _assignment_and_axe(rig) -> void:
 	var haul := StoryDb.told_flag(&"elder", &"first_haul")
 	Game.flags.erase(duty)
 	Game.flags.erase(haul)
-	Game.items.erase(ShopDb.WOODSMAN_AXE_ID)
+	for id: StringName in ToolDb.TOOL_IDS:
+		Game.items.erase(id)
+		Game.tool_durabilities.erase(id)
+		Run.bag.erase(id)
+		Game.stash.erase(id)
 	Game.set_flag(briefing)
 	Game.grant(StoryDb.SMITH_TOKEN)
 	Game.gold_earned = maxi(Game.gold_earned, 300)
+
+	for id: StringName in ToolDb.TOOL_IDS:
+		var unmade: Dictionary = ToolDb.definition(id)
+		rig.check(not Game.tool_known(id) and not Game.tool_usable(id)
+			and not Game.has(id) and Game.tool_durability(id) == 0
+			and not bool(unmade.get("known", true)),
+			"%s starts unmade rather than broken" % unmade.get("display_name", id))
 
 	var pending: Dictionary = StoryDb.pending(&"elder")
 	rig.check(StringName(pending.get("id", &"")) == &"timber_duty",
@@ -57,14 +69,6 @@ func _assignment_and_axe(rig) -> void:
 	rig.check(StringName(pending.get("id", &"")) == &"first_haul",
 		"the first-haul beat remains waiting behind the duty")
 
-	var axe_line := _catalogue_line(ShopDb.lines(), ShopDb.WOODSMAN_AXE_ID)
-	rig.check(not axe_line.is_empty(), "Brannoc has a Woodsman's Axe line")
-	rig.check(int(axe_line.get("cost", -1)) == 60,
-		"the Woodsman's Axe costs 60 gold")
-	var parts: Dictionary = axe_line.get("parts", {})
-	rig.check(int(parts.get(&"iron_scrap", 0)) == 3,
-		"the Woodsman's Axe asks for three Iron Scrap")
-
 	var yard := HarvestTree.new()
 	Game.restore_garrison({})
 	yard.activate(null)
@@ -72,24 +76,82 @@ func _assignment_and_axe(rig) -> void:
 		"an assigned duty without an axe cannot cut a bundle")
 	yard.free()
 
-	Game.gold = 100
-	Run.bag[&"iron_scrap"] = 3
+	# All three lines are the smith's actual public catalogue transactions. Tool
+	# materials come from the returned run bag; only the Rod also reaches into
+	# stored hearth stock, and every successful forge fills durability outright.
+	var recipes := {
+		ToolDb.WOODSMAN_AXE_ID: {"gold": 60, "scrap": 3, "firewood": 0, "max": 8},
+		ToolDb.PICKAXE_ID: {"gold": 75, "scrap": 3, "firewood": 0, "max": 12},
+		ToolDb.FISHING_ROD_ID: {"gold": 45, "scrap": 1, "firewood": 1, "max": 10},
+	}
+	Game.gold = 180
+	Run.bag.clear()
+	Run.bag[&"iron_scrap"] = 7
 	Run.premium = 0
+	Game.restore_garrison({"firewood_stock": 1})
 	var wheel_before: Array[StringName] = Game.wheel.duplicate()
-	rig.check(ShopDb.can_buy(axe_line), "the seeded axe recipe is affordable")
-	rig.check(ShopDb.buy(axe_line), "Brannoc crafts the Woodsman's Axe")
-	rig.check(Game.gold == 40 and not Run.bag.has(&"iron_scrap"),
-		"crafting consumes 60 gold and the returned bag's three Iron Scrap")
-	rig.check(Game.has(ShopDb.WOODSMAN_AXE_ID),
-		"the Woodsman's Axe is permanent equipment")
-	rig.check(Game.wheel == wheel_before and not Game.wheel.has(ShopDb.WOODSMAN_AXE_ID),
-		"the tool never enters the hand wheel")
-	var tool: Dictionary = ToolDb.definition(ShopDb.WOODSMAN_AXE_ID)
-	rig.check(bool(tool.get("owned", false)), "Equipment's tool manifest sees the axe")
-	var completed := _catalogue_line(ShopDb.lines(), ShopDb.WOODSMAN_AXE_ID)
-	rig.check(int(completed.get("cost", -1)) == 0
-		and ShopDb.remaining(ShopDb.WOODSMAN_AXE_ID) == 0,
-		"the completed one-rung axe line cannot be crafted twice")
+	for id: StringName in ToolDb.TOOL_IDS:
+		var expected: Dictionary = recipes[id]
+		var line := _catalogue_line(ShopDb.lines(), id)
+		var parts: Dictionary = line.get("parts", {})
+		var name := String(ToolDb.definition(id).get("display_name", id))
+		rig.check(not line.is_empty() and int(line.get("cost", -1))
+			== int(expected["gold"]), "%s has its exact gold recipe" % name)
+		rig.check(parts.size() == 1 and int(parts.get(&"iron_scrap", 0))
+			== int(expected["scrap"]),
+			"%s has its exact returned-bag Iron Scrap recipe" % name)
+		rig.check(int(line.get("stored_firewood", -1)) == int(expected["firewood"]),
+			"%s has its exact stored-firewood recipe" % name)
+		var gold_before: int = Game.gold
+		var scrap_before: int = int(Run.bag.get(&"iron_scrap", 0))
+		var firewood_before: int = Game.firewood_stock
+		rig.check(ShopDb.can_buy(line), "%s's seeded bill is affordable" % name)
+		rig.check(ShopDb.buy(line), "Brannoc forges %s" % name)
+		rig.check(Game.gold == gold_before - int(expected["gold"])
+			and int(Run.bag.get(&"iron_scrap", 0))
+			== scrap_before - int(expected["scrap"])
+			and Game.firewood_stock == firewood_before - int(expected["firewood"]),
+			"%s consumes gold, returned-bag scrap, and stored firewood exactly" % name)
+		rig.check(Game.tool_known(id) and Game.tool_usable(id) and Game.has(id)
+			and Game.tool_durability(id) == int(expected["max"])
+			and Game.tool_max_durability(id) == int(expected["max"]),
+			"%s is forged at full durability" % name)
+		var completed := _catalogue_line(ShopDb.lines(), id)
+		rig.check(int(completed.get("cost", -1)) == 0
+			and ShopDb.remaining(id) == 0,
+			"the ready %s line cannot be crafted twice" % name)
+
+	rig.check(Game.gold == 0 and not Run.bag.has(&"iron_scrap")
+		and Game.firewood_stock == 0,
+		"the combined three-tool bill is exactly 180g, seven Scrap, and one firewood")
+	rig.check(Game.wheel == wheel_before and _tools_outside_equipment_graphs(rig),
+		"utility tools never enter the wheel, bag, stash, hands, or combat armaments")
+
+	# Spend a Rod through its public durability API. Known-at-zero is BROKEN,
+	# unlike the never-crafted state above, and the smith exposes a fresh bill.
+	while Game.tool_usable(ToolDb.FISHING_ROD_ID):
+		Game.spend_tool_use(ToolDb.FISHING_ROD_ID)
+	var broken: Dictionary = ToolDb.definition(ToolDb.FISHING_ROD_ID)
+	var broken_line := _catalogue_line(ShopDb.lines(), ToolDb.FISHING_ROD_ID)
+	rig.check(Game.tool_known(ToolDb.FISHING_ROD_ID)
+		and not Game.tool_usable(ToolDb.FISHING_ROD_ID)
+		and not Game.has(ToolDb.FISHING_ROD_ID)
+		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == 0
+		and bool(broken.get("known", false))
+		and String(broken_line.get("detail", "")).contains("BROKEN"),
+		"a spent Rod is known BROKEN at 0 / 10, not unmade")
+	Game.gold = 45
+	Run.bag[&"iron_scrap"] = 1
+	Game.restore_garrison({"firewood_stock": 1})
+	rig.check(ShopDb.can_buy(broken_line) and ShopDb.buy(broken_line),
+		"the public smith transaction reforges the broken Rod")
+	rig.check(Game.tool_usable(ToolDb.FISHING_ROD_ID)
+		and Game.tool_durability(ToolDb.FISHING_ROD_ID) == 10
+		and Game.gold == 0 and not Run.bag.has(&"iron_scrap")
+		and Game.firewood_stock == 0,
+		"reforging pays the exact recipe and restores the Rod to full")
+	rig.check(_tools_outside_equipment_graphs(rig),
+		"reforging still leaves every utility tool outside equipment graphs")
 
 
 func _timber_view(rig, garrison: Garrison) -> void:
@@ -195,7 +257,8 @@ func _daily_state(rig) -> void:
 	var restored_key: Variant = restored_keys[0] if not restored_keys.is_empty() else null
 	rig.check(restored_key is StringName and restored_key == &"elder",
 		"JSON-style Connected String keys restore as typed StringName keys")
-	rig.check(Saves.VERSION == 15, "the additive save contract is version 15")
+	rig.check(Saves.VERSION == 16,
+		"the durable-tool additive save contract is version 16")
 
 	Game.restore_garrison({
 		"fish_stock": 2,
@@ -484,6 +547,23 @@ func _catalogue_line(lines: Array[Dictionary], id: StringName) -> Dictionary:
 		if StringName(line.get("id", &"")) == id:
 			return line
 	return {}
+
+
+func _tools_outside_equipment_graphs(rig) -> bool:
+	var players: Array = rig.get_nodes_in_group(&"player")
+	var hero: Hero = players[0] as Hero if not players.is_empty() else null
+	if hero == null or hero.combat == null:
+		return false
+	var combat_items: Dictionary = hero.combat._items
+	for id: StringName in ToolDb.TOOL_IDS:
+		if Game.wheel.has(id) or Run.bag.has(id) or Game.stash.has(id) \
+				or Game.carry_ids().has(id) or Game.RIGHT_POOL.has(id) \
+				or Game.LEFT_POOL.has(id) or combat_items.has(id):
+			return false
+		for set_data: Dictionary in Game.loadout:
+			if set_data.values().has(id):
+				return false
+	return true
 
 
 func _default_raid() -> Dictionary:

@@ -33,6 +33,7 @@ var _run_index: int = 0
 var _result_text: String = ""
 var _mode_active: bool = false
 var _clock_was_running: bool = true
+var _attempt_spent: bool = false
 
 ## Release-gated edges are deliberate. The interact press that Prompt used to
 ## open this mode is still down when our first `_process` runs, and polling it as
@@ -48,6 +49,7 @@ var _water: MeshInstance3D
 var _near_fish: Node3D
 var _deep_fish: Node3D
 var _splash: Node3D
+var _rack_rods: Array[Node3D] = []
 var _creel_meals: Array[Node3D] = []
 
 var _overlay: CanvasLayer
@@ -146,7 +148,7 @@ func activate(_by: Node3D) -> void:
 	_start_mode(first_target)
 
 
-## Director seam: enter through the same capacity gate as ordinary activation,
+## Director seam: enter through the same tool and capacity gates as activation,
 ## but begin with the authored target already selected.
 func begin_for_test(target: StringName) -> bool:
 	if _mode_active or not _valid_target(target):
@@ -205,6 +207,13 @@ func cancel() -> void:
 
 
 func _start_mode(target: StringName) -> bool:
+	if not Game.tool_known(ToolDb.FISHING_ROD_ID):
+		Bus.request_message.emit("BRANNOC FORGES THE FISHING ROD.")
+		return false
+	if not Game.tool_usable(ToolDb.FISHING_ROD_ID):
+		Bus.request_message.emit(
+			"THE FISHING ROD IS BROKEN. BRANNOC MUST REFORGE IT.")
+		return false
 	if Game.fish_space() <= 0:
 		Bus.request_message.emit("THE CREEL IS FULL. SUPPER MUST USE THE RESERVE.")
 		return false
@@ -216,6 +225,7 @@ func _start_mode(target: StringName) -> bool:
 		return false
 
 	_target = target
+	_attempt_spent = false
 	_mode_active = true
 	_clock_was_running = Clock.running
 	# The world clock normally advances in real time. Holding it here is what
@@ -339,13 +349,25 @@ func _land_catch() -> void:
 		# Capacity is reserved when the mode starts, so this can only describe an
 		# external state change. It still resolves as the attempt the player made.
 		_result_text = "THE CATCH COULD NOT ENTER THE CREEL."
+	_result_text += _spend_attempt_use()
 	_transition(State.RESULT)
 
 
 func _finish_failure(text: String) -> void:
 	Clock.advance_hours(ATTEMPT_MINUTES / 60.0)
-	_result_text = text + " · 10 MINUTES PASS"
+	_result_text = text + " · 10 MINUTES PASS" + _spend_attempt_use()
 	_transition(State.RESULT)
+
+
+func _spend_attempt_use() -> String:
+	if not _attempt_spent:
+		_attempt_spent = true
+		Game.spend_tool_use(ToolDb.FISHING_ROD_ID)
+	var remaining: int = Game.tool_durability(ToolDb.FISHING_ROD_ID)
+	if remaining <= 0:
+		return " · ROD BROKEN — BRANNOC MUST REFORGE IT"
+	return " · ROD %d / %d" % [remaining,
+		Game.tool_max_durability(ToolDb.FISHING_ROD_ID)]
 
 
 func _yield_for(target: StringName) -> int:
@@ -405,6 +427,9 @@ func _set_selected_fish_visible(value: bool) -> void:
 func _repaint_creel() -> void:
 	for i: int in _creel_meals.size():
 		_creel_meals[i].visible = i < Game.fish_stock
+	var rods_visible: bool = Game.tool_usable(ToolDb.FISHING_ROD_ID)
+	for rod: Node3D in _rack_rods:
+		rod.visible = rods_visible
 	if _mode_active:
 		_refresh_overlay()
 
@@ -513,6 +538,8 @@ func _refresh_overlay() -> void:
 		return
 	var reserve: String = "RESERVE %d / %d · TODAY %d LEFT" % [Game.fish_stock,
 		Game.FISH_CAP, Game.fishing_remaining_today(Clock.day)]
+	var rod: String = "ROD %d / %d" % [Game.tool_durability(
+		ToolDb.FISHING_ROD_ID), Game.tool_max_durability(ToolDb.FISHING_ROD_ID)]
 	_cast_row.visible = _state == State.CASTING
 	_tension_row.visible = _state == State.HOOKED
 	_line_row.visible = _state == State.HOOKED
@@ -533,24 +560,24 @@ func _refresh_overlay() -> void:
 				+ "%s DEEP · 2 FISH · HARDER / LONGER · %s") % [
 				">" if _target == TARGET_NEAR else " ", near_ready,
 				">" if _target == TARGET_DEEP else " ", deep_ready]
-			_status_label.text = reserve
+			_status_label.text = reserve + " · " + rod
 			_controls_label.text = "MOVE LEFT / RIGHT: TARGET · INTERACT: CAST · CANCEL: LEAVE"
 		State.CASTING:
 			_title_label.text = "CASTING · %s WATER" % _target.to_upper()
 			_detail_label.text = "%d FISH · %s" % [_yield_for(_target),
 				"DEEP, STRONG RUNS" if _target == TARGET_DEEP else "NEAR, FORGIVING RUNS"]
-			_status_label.text = reserve
+			_status_label.text = reserve + " · " + rod
 			_controls_label.text = "HOLD INTERACT TO CHARGE · RELEASE TO CAST"
 		State.WAITING:
 			_title_label.text = "LINE SET · WATCH THE WATER"
 			_detail_label.text = "%s WATER · THE FISH IS CIRCLING" % _target.to_upper()
-			_status_label.text = reserve
+			_status_label.text = reserve + " · " + rod
 			_controls_label.text = "WAIT FOR THE SPLASH · CANCEL: LEAVE"
 		State.BITE:
 			_title_label.text = "BITE — HOOK NOW"
 			_detail_label.text = "THE FLOAT IS UNDER · %.1f SECONDS" \
 				% maxf(0.0, BITE_WINDOW - _state_elapsed)
-			_status_label.text = reserve
+			_status_label.text = reserve + " · " + rod
 			_controls_label.text = "PRESS INTERACT"
 		State.HOOKED:
 			var run_word: String = "LEFT" if _run_direction < 0 else "RIGHT"
@@ -558,13 +585,15 @@ func _refresh_overlay() -> void:
 			_title_label.text = "FISH RUNS %s · STEER %s" % [run_word, steer_word]
 			_detail_label.text = "%s WATER · %d FISH ON THE LINE" % [
 				_target.to_upper(), _yield_for(_target)]
-			_status_label.text = "TENSION %d%% · LANDED %d%%" % [
-				roundi(_tension_value * 100.0), roundi((1.0 - _line_value) * 100.0)]
+			_status_label.text = "TENSION %d%% · LANDED %d%% · %s" % [
+				roundi(_tension_value * 100.0), roundi((1.0 - _line_value) * 100.0),
+				rod]
 			_controls_label.text = "HOLD INTERACT TO REEL · STEER AGAINST THE RUN · RELEASE TO EASE"
 		State.RESULT:
 			_title_label.text = "ATTEMPT COMPLETE"
 			_detail_label.text = _result_text
-			_status_label.text = "RESERVE %d / %d" % [Game.fish_stock, Game.FISH_CAP]
+			_status_label.text = "RESERVE %d / %d · %s" % [Game.fish_stock,
+				Game.FISH_CAP, rod]
 			_controls_label.text = "CANCEL: CLOSE"
 		State.IDLE:
 			pass
@@ -656,10 +685,10 @@ func _build_rod_rack() -> void:
 		Transform3D(Basis.IDENTITY, Vector3(0.0, 0.82, 0.0)), false)
 	for x: float in [-0.24, 0.24]:
 		var rod_basis := Basis(Vector3.RIGHT, deg_to_rad(-12.0))
-		_cylinder(rack, &"Rod", MAT_WOOD, 0.035, 2.15,
-			Transform3D(rod_basis, Vector3(x, 1.28, -0.10)), false, 7)
-		_cylinder(rack, &"IronGrip", MAT_IRON, 0.055, 0.42,
-			Transform3D(rod_basis, Vector3(x, 0.36, 0.10)), false, 7)
+		_rack_rods.append(_cylinder(rack, &"Rod", MAT_WOOD, 0.035, 2.15,
+			Transform3D(rod_basis, Vector3(x, 1.28, -0.10)), false, 7))
+		_rack_rods.append(_cylinder(rack, &"IronGrip", MAT_IRON, 0.055, 0.42,
+			Transform3D(rod_basis, Vector3(x, 0.36, 0.10)), false, 7))
 
 
 func _build_creel() -> void:

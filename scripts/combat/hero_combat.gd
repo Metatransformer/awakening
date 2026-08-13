@@ -477,13 +477,16 @@ var hookshot: Node3D
 ## Utility-only right-hand mount. It has no item id and is never read by the
 ## weapon cycling code below.
 var woodsman_axe: Node3D
+var pickaxe: Node3D
+var _utility_models: Dictionary[StringName, Node3D] = {}
+var _active_utility_tool: StringName = &""
 ## id -> {"hand": Node3D, "stow": Node3D}. Exactly one of the pair is visible.
 var _items: Dictionary = {}
 ## Exact mounted-model visibility while a presentation temporarily clears the
 ## hero's silhouette. Kept here because the sockets are children of `_skel`, not
 ## of this component, so hiding `HeroCombat` itself does not hide the gear.
 var _presentation_visibility: Dictionary = {}
-var _woodsman_visibility: Dictionary = {}
+var _utility_visibility: Dictionary = {}
 var _hitbox: Area3D
 var _swing_t: float = -1.0
 ## The numbers of the swing currently in flight, captured when it starts. A
@@ -749,6 +752,9 @@ func _mount_loadout() -> void:
 	hookshot = _items[&"hookshot"]["hand"]
 	bow = _items[&"bow"]["hand"]
 	woodsman_axe = _mount_woodsman_axe()
+	pickaxe = _mount_pickaxe()
+	_utility_models[ToolDb.WOODSMAN_AXE_ID] = woodsman_axe
+	_utility_models[ToolDb.PICKAXE_ID] = pickaxe
 	_show_equipped()
 
 
@@ -783,7 +789,7 @@ func set_presentation_hidden(hidden: bool) -> void:
 	if hidden:
 		if not _presentation_visibility.is_empty():
 			return
-		for model: Node3D in _presentation_models():
+		for model: Node3D in _all_presentation_models():
 			_presentation_visibility[model] = model.visible
 			model.visible = false
 		return
@@ -795,31 +801,58 @@ func set_presentation_hidden(hidden: bool) -> void:
 	_presentation_visibility.clear()
 
 
-## Temporarily replace every ordinary mounted loadout model with the utility
-## axe, restoring the exact visibility snapshot when the chop commitment ends.
-func set_woodsman_axe_visible(visible: bool) -> void:
-	if woodsman_axe == null:
-		return
+## Temporarily replace every ordinary mounted loadout model with one utility
+## tool, restoring the exact visibility snapshot when the commitment ends.
+func set_utility_tool_visible(tool_id: StringName, visible: bool) -> bool:
+	var requested: Node3D = _utility_models.get(tool_id)
+	if requested == null:
+		return false
 	if visible:
-		if woodsman_axe.visible:
-			return
-		_woodsman_visibility.clear()
+		if _active_utility_tool == tool_id:
+			return true
+		if _active_utility_tool != &"":
+			set_utility_tool_visible(_active_utility_tool, false)
+		_utility_visibility.clear()
 		for model: Node3D in _presentation_models():
-			_woodsman_visibility[model] = model.visible
-			model.visible = false
-		woodsman_axe.visible = true
+			_utility_visibility[model] = _desired_visibility(model)
+			_set_desired_visibility(model, false)
+		for model: Node3D in _utility_models.values():
+			_set_desired_visibility(model, model == requested)
+		_active_utility_tool = tool_id
 		if blocking:
 			blocking = false
 			_hero.set_blocking(false)
 			Bus.guard_changed.emit(false)
-		return
-	if not woodsman_axe.visible:
-		return
-	woodsman_axe.visible = false
-	for model: Node3D in _woodsman_visibility:
+		return true
+	if _active_utility_tool != tool_id:
+		return false
+	for model: Node3D in _utility_models.values():
+		_set_desired_visibility(model, false)
+	for model: Node3D in _utility_visibility:
 		if is_instance_valid(model):
-			model.visible = bool(_woodsman_visibility[model])
-	_woodsman_visibility.clear()
+			_set_desired_visibility(model, bool(_utility_visibility[model]))
+	_utility_visibility.clear()
+	_active_utility_tool = &""
+	return true
+
+
+## Compatibility surface retained for the grove and its proof director.
+func set_woodsman_axe_visible(visible: bool) -> void:
+	set_utility_tool_visible(ToolDb.WOODSMAN_AXE_ID, visible)
+
+
+func _desired_visibility(model: Node3D) -> bool:
+	if _presentation_visibility.has(model):
+		return bool(_presentation_visibility[model])
+	return model.visible
+
+
+func _set_desired_visibility(model: Node3D, visible: bool) -> void:
+	if _presentation_visibility.has(model):
+		_presentation_visibility[model] = visible
+		model.visible = false
+	else:
+		model.visible = visible
 
 
 func _presentation_models() -> Array[Node3D]:
@@ -832,6 +865,14 @@ func _presentation_models() -> Array[Node3D]:
 			var model := value.get(key) as Node3D
 			if model != null and not models.has(model):
 				models.append(model)
+	return models
+
+
+func _all_presentation_models() -> Array[Node3D]:
+	var models := _presentation_models()
+	for model: Node3D in _utility_models.values():
+		if model != null and not models.has(model):
+			models.append(model)
 	return models
 
 
@@ -887,7 +928,7 @@ func _show_equipped() -> void:
 		sword.visible = drawn
 	if sword_stow != null:
 		sword_stow.visible = not drawn
-	_hide_loadout_for_woodsman()
+	_hide_loadout_for_utility()
 
 
 ## The left hand. Only the shield has a model, so anything else empties the arm
@@ -901,11 +942,11 @@ func _show_left(left: StringName) -> void:
 		# bowstring. You cannot draw a bow with a shield strapped to the hand that
 		# holds it, so the shield comes off for as long as the bow is out.
 		shield.visible = left == &"shield" and equipped != &"bow"
-	_hide_loadout_for_woodsman()
+	_hide_loadout_for_utility()
 
 
-func _hide_loadout_for_woodsman() -> void:
-	if woodsman_axe == null or not woodsman_axe.visible:
+func _hide_loadout_for_utility() -> void:
+	if _active_utility_tool == &"":
 		return
 	for model: Node3D in _presentation_models():
 		model.visible = false
@@ -943,6 +984,56 @@ func _mount_woodsman_axe() -> Node3D:
 	holder.visible = false
 	socket.add_child(holder)
 	return holder
+
+
+## Same hand convention as the axe, but a long two-sided iron head makes the
+## requested tool readable even while both share the downward work reel.
+func _mount_pickaxe() -> Node3D:
+	var idx := _skel.find_bone(&"mixamorig_RightHand")
+	if idx < 0:
+		push_error("HeroCombat: no bone 'mixamorig_RightHand' on the rig")
+		return null
+
+	var socket := BoneAttachment3D.new()
+	socket.name = &"Socket_Pickaxe"
+	socket.bone_name = "mixamorig_RightHand"
+	socket.bone_idx = idx
+	_skel.add_child(socket)
+
+	var holder := Node3D.new()
+	holder.name = &"Pickaxe"
+	holder.position = Vector3(0.0, 0.04, 0.02)
+	holder.rotation_degrees = Vector3(-6.0, 6.0, -90.0)
+	var world_scale := socket.global_transform.basis.get_scale()
+	var scale_mean := (world_scale.x + world_scale.y + world_scale.z) / 3.0
+	if scale_mean > 0.0001:
+		holder.scale = Vector3.ONE / scale_mean
+
+	_axe_box(holder, &"Handle", MAT_WOOD, Vector3(0.055, 0.88, 0.055),
+		Vector3(0.0, 0.17, 0.0))
+	_axe_box(holder, &"Head", MAT_IRON, Vector3(0.68, 0.11, 0.10),
+		Vector3(0.0, 0.56, 0.0))
+	_pickaxe_tip(holder, &"PointLeft", -1.0)
+	_pickaxe_tip(holder, &"PointRight", 1.0)
+	holder.visible = false
+	socket.add_child(holder)
+	return holder
+
+
+func _pickaxe_tip(parent: Node3D, node_name: StringName, side: float) -> void:
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.015
+	mesh.bottom_radius = 0.075
+	mesh.height = 0.28
+	mesh.radial_segments = 5
+	mesh.rings = 1
+	instance.mesh = mesh
+	instance.material_override = MAT_IRON
+	instance.position = Vector3(side * 0.47, 0.56, 0.0)
+	instance.rotation.z = -side * PI * 0.5
+	parent.add_child(instance)
 
 
 func _axe_box(parent: Node3D, node_name: StringName, material: Material,
@@ -1102,7 +1193,7 @@ func _physics_process(delta: float) -> void:
 	# exception and is handled below -- guarding through the channel is the one
 	# defence he has left while rooted.
 	var locked := (Prompt != null and Prompt.blocked) \
-		or (woodsman_axe != null and woodsman_axe.visible)
+		or _active_utility_tool != &""
 	var leaving := _hero.rope != null and _hero.rope.active()
 
 	# The shield is held, not toggled, and it drops the moment you commit to

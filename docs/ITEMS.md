@@ -15,11 +15,12 @@ enter progression. It is a catalogue, not a development diary.
 > Every permanent item is an answer. If its whole effect is that a number rises,
 > it belongs on an upgrade ladder instead.
 
-The catalogue uses five distinct shelves:
+The catalogue uses six distinct shelves:
 
 | Shelf | Meaning |
 |---|---|
 | Starting tools | Sword, shield, and Escape Rope; always available |
+| Durable utility tools | Axe, Pickaxe, and Fishing Rod; permanent work access with finite uses |
 | Usable items | Permanent verbs or locks earned through progression |
 | Relics | Named, exposed artifacts carried home for one permanent consequence |
 | Blessings | Run-only rule bends that cost bag space |
@@ -59,6 +60,36 @@ passive armour number.
 The rope is the permanent way out. It is used from Inventory, not an equipment
 ring, and has no combat or puzzle verb. Its hold, channel, fee, and outcomes are
 owned by [METAGAME.md](METAGAME.md).
+
+## Three durable utility tools
+
+Brannoc forges and reforges exactly three permanent, non-combat utility tools.
+They are a separate catalogue from starting tools and the six usable items.
+
+| Tool | Maximum uses | Work answer | Forge/reforge bill |
+|---|---:|---|---|
+| **Woodsman's Axe** | **8** | One successful daily tree impact in the outskirts grove | **60 gold + 3 Iron Scrap** |
+| **Pickaxe** | **12** | One committed impact on a generated dungeon vein | **75 gold + 3 Iron Scrap** |
+| **Fishing Rod** | **10** | One resolved fishing attempt, successful or failed | **45 gold + 1 Iron Scrap + 1 stored Firewood bundle** |
+
+The first forge and every reforge restore the tool to its full maximum. A known
+tool at zero durability remains known, displays **BROKEN**, is removed from
+`Game.items`, and may be reforged; it is not destroyed or bought again as a
+different object. Positive durability mirrors into `Game.items` only for
+compatibility with existing ownership readers.
+
+Utility tools never occupy either hand, either loadout, the right-hand ring,
+the kit wheel, a bag or document-case cell, the locker, a sale line, an
+armament slot, or a combat attack. They are read-only entries on the Equipment
+page and forge/reforge lines at Brannoc. Pre-v16 Axe ownership migrates at full
+durability; v16 persists all three tools, including known broken zeroes.
+
+Spend timing is part of each identity. The Axe spends only when a valid daily
+tree chop reaches its successful impact. The Rod spends on every resolved
+attempt—catch or failure—and never on cancel. The Pickaxe spends only on the
+impact that commits a previously intact vein's depletion. Economy and resource
+allocation belong to [METAGAME.md](METAGAME.md); implementation interfaces and
+save shapes belong to [CONTRACT.md](CONTRACT.md).
 
 ## Six usable items
 
@@ -198,6 +229,8 @@ owns their total count.
 - No generic relic drops, random relic effects, relic sales, or permanent
   unique-artifact loss.
 - No second inventory for Blessings or components.
+- No fourth durable utility tool, utility-tool combat use, gear collection, or
+  profession ladder.
 - No armour or jewellery object catalogue while their art cap remains zero.
 - New entries require an interesting decision, a named owner, a smallest proof,
   and an explicit scope amendment. This catalogue does not authorise work;

@@ -26,6 +26,13 @@ remains the active test.
 - **Mechanics under test:** one near/deep fishing interaction, daily yield and
   reserve caps, 20:00 supper, derived morale causes, and one-descent Well Fed.
 
+Issue #184 supersedes the original location-owned rod assumption: access now
+requires Brannoc's ten-use Fishing Rod, forged or fully reforged for 45 gold,
+one Iron Scrap, and one stored Firewood bundle. A resolved success or failure
+spends one use; cancel spends none. This changes access and cost only. The
+near/deep hypothesis, observation plan, and evidence thresholds below are
+unchanged.
+
 ## Player-facing hypothesis
 
 After discovering the pond and seeing one catch become supper, players will
@@ -44,9 +51,13 @@ home.
 
 - Issue #168 is an owner-authorised implementation slice alongside the active
   raid test freeze.
+- Issue #184 is an owner-authorised override of the former location-owned rod:
+  the Rod is now one durable, non-carried utility tool at Brannoc, not a weapon,
+  bag item, wheel item, shop good, combat verb, profession, or collection.
 - Its rules are bounded in [../GARRISON_LIFE.md](../GARRISON_LIFE.md); it adds
-  no profession, inventory rod, cooking system, service lock, or new screen.
-- Implementation is in progress. No human session answers this question.
+  no carried rod, cooking system, service lock, or new screen.
+- Implementation is complete. No human session answers this question, and the
+  tool's implementation does not count as near/deep evidence.
 - This test must not begin until the Raid Loop Proof resolves or the owner
   explicitly changes [../NOW.md](../NOW.md).
 
