@@ -26,8 +26,8 @@ func run(rig) -> void:
 	garrison.add_child(cam)
 	cam.make_current()
 	var out: String = rig.out_base().get_base_dir()
-	cam.global_position = Vector3(4.5, 8.0, 10.5)
-	cam.look_at(Vector3(14.0, 1.1, -2.5), Vector3.UP)
+	cam.global_position = Vector3(0.0, 16.0, 18.0)
+	cam.look_at(Vector3(0.0, 1.1, -1.0), Vector3.UP)
 	await rig.capture(out.path_join("life_00_day_services.png"))
 
 	Clock.set_time(1, 23.25)
@@ -48,11 +48,15 @@ func run(rig) -> void:
 				if local_head_at.z > -15.45 or local_head_at.z < -15.95:
 					rig.fail("%s's head missed the elder bed head (z=%.2f)"
 						% [npc.name, local_head_at.z])
+			elif npc == garrison.builder:
+				if local_head_at.x < -15.20 or local_head_at.x > -14.95:
+					rig.fail("%s's head missed the builder bunk pillow (x=%.2f)"
+						% [npc.name, local_head_at.x])
 			elif local_head_at.x < -20.35 or local_head_at.x > -19.90:
 				rig.fail("%s's head missed the barracks pillow (x=%.2f)"
 					% [npc.name, local_head_at.x])
-	cam.global_position = Vector3(-15.3, 1.8, 10.4)
-	cam.look_at(Vector3(-19.2, 0.9, 2.0), Vector3.UP)
+	cam.global_position = Vector3(-14.1, 1.75, -10.2)
+	cam.look_at(Vector3(-19.0, 0.9, -13.0), Vector3.UP)
 	await rig.capture(out.path_join("life_01_barracks_night.png"))
 	cam.global_transform = garrison.compound.global_transform \
 		* garrison.compound.port(&"elder_room_camera")

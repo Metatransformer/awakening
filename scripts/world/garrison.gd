@@ -635,11 +635,12 @@ const STATUE_YAW := -45.0
 
 
 ## Build the existing roster into the generated compound's named destinations.
-## The four traders occupy separate service nooks instead of one counter line;
-## the Lanternkeeper has no stall and waits on the arrival axis to greet Kael.
-## The generator owns those spatial decisions while this scene owns who has
-## arrived and every gameplay node. `StoryDb.UNLOCKS` still controls the roster,
-## so unrecruited traders leave genuinely empty nooks rather than closed shops.
+## The traders occupy their own buildings around the compound, with the
+## alchemist working beneath the garden trellis. The Lanternkeeper has no stall
+## and waits on the arrival axis to greet Kael. The generator owns those spatial
+## decisions while this scene owns who has arrived and every gameplay node.
+## `StoryDb.UNLOCKS` still controls the roster, so unrecruited traders leave
+## genuinely empty workshops rather than closed shops.
 func _build_compound_people() -> void:
 	vendor = _compound_counter(Npc.Role.VENDOR, &"quartermaster",
 		&"quartermaster_day", Pal.GOLD)
