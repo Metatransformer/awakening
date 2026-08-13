@@ -1,5 +1,5 @@
 extends Node
-## What the four authored NPC bodies actually contain, next to the rig the
+## What the six authored NPC bodies actually contain, next to the rig the
 ## shared idle clips were authored on.
 ##
 ## They arrived as Tripo FBX and nothing about a Tripo rig is guessable: the
@@ -8,9 +8,11 @@ extends Node
 ## Whether the shared clip library can drive them is a question about names and
 ## about rest poses, and this prints both.
 ##
-##   godot --path . --headless res://tools/scenes/_npc_facts.tscn
+##   tools/quiet.sh --path . --headless res://tools/scenes/_npc_facts.tscn
 
-const BODIES := ["jewelcrafter", "quartermaster", "lanternkeeper", "smith"]
+const BODIES := [
+	"jewelcrafter", "quartermaster", "lanternkeeper", "smith", "alchemist", "builder",
+]
 const LIB := "res://assets/characters/races/_humanoid_anims.glb"
 
 
@@ -50,6 +52,9 @@ func _rig(label: String, path: String) -> void:
 	while n != null and n != rig:
 		to_rig = n.transform * to_rig
 		n = n.get_parent() as Node3D
+	print("  skeleton frame: x%v y%v z%v det=%.3f" % [
+		to_rig.basis.x.snappedf(0.01), to_rig.basis.y.snappedf(0.01),
+		to_rig.basis.z.snappedf(0.01), to_rig.basis.determinant()])
 	print("  crown: %.4f skeleton-space, %.4f m in rig space" % [
 		top, (to_rig * Vector3(0.0, top, 0.0)).y])
 
@@ -60,7 +65,7 @@ func _rig(label: String, path: String) -> void:
 		print("  mesh %s: %d surface(s), aabb %v, skin=%s" % [
 			mi.name, mi.mesh.get_surface_count(), mi.mesh.get_aabb().size, mi.skin != null])
 	var ap := rig.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	print("  clips: %d" % (ap.get_animation_list().size() if ap != null else -1))
+	print("  clips: %s" % [ap.get_animation_list() if ap != null else []])
 
 
 static func _all(n: Node) -> Array[Node]:

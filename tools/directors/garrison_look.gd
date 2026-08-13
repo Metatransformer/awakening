@@ -15,6 +15,10 @@ extends RefCounted
 func run(rig) -> void:
 	var out: String = rig.arg("out", "/tmp/tl/x.png").get_base_dir()
 	var garrison: Garrison = rig.scene()
+	# Tamsin arrives with the donated Ledger in ordinary play. A full roster proof
+	# must establish that same authored state before collecting its subjects.
+	Game.set_flag(RelicDb.flag_donated(RelicDb.TALLY_LEDGER_ID))
+	garrison._sync_raid()
 	# Long, on purpose. The bodies retarget a shared clip library at load and the
 	# booths instance about twenty GLBs between them; a shot taken too early
 	# catches bind-pose statues standing in an empty yard and looks like a bug in
@@ -74,7 +78,7 @@ func run(rig) -> void:
 	# keeper's own facing rather than hard-coded, so an NPC that is turned the
 	# wrong way photographs as a back, not as a mysteriously empty frame.
 	#
-	# All FIVE people, not the three this list carried while there were three. The
+	# All SIX people, not the three this list carried while there were three. The
 	# keeper and the jewelcrafter were added to the yard without being added here,
 	# so half the garrison had no proof shot at all -- which is how five authored
 	# bodies could have landed with only two of them ever photographed at the
@@ -86,6 +90,7 @@ func run(rig) -> void:
 		{"name": "alchemist", "at": garrison.alchemist, "back": 3.4, "high": 1.65},
 		{"name": "keeper", "at": garrison.keeper, "back": 3.4, "high": 1.65},
 		{"name": "jeweller", "at": garrison.jeweller, "back": 3.4, "high": 1.65},
+		{"name": "builder", "at": garrison.builder, "back": 3.4, "high": 1.65},
 		{"name": "gate", "at": garrison.gate, "back": 6.0, "high": 2.0},
 	]
 	for s in subjects:

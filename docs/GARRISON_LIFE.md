@@ -233,9 +233,9 @@ residents, create relationship levels, or start a failure spiral.
 
 ## Builder and Elder
 
-The one authorised sixth resident is an unvoiced Vyr Builder using the existing
-generic Vyr body and shared service patterns. She has written greeting/leave
-text and a painted dialogue portrait so her quest rows use the ordinary
+The one authorised sixth resident is Tamsin, an unvoiced Builder using her
+authored `NpcBody` and the shared service patterns. She has written greeting/
+leave text and a painted dialogue portrait so her quest rows use the ordinary
 conversation composition without adding recorded lines.
 
 - **Builder:** mechanisms, buildings, and the one West Gate Bolt-Thrower

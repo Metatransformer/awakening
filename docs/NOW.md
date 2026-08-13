@@ -20,8 +20,8 @@ The raid test and its criteria are in
 Test exactly one implemented vertical slice:
 
 - Trigger it after donation of the Tally-Ledger.
-- Add one unvoiced Vyr Builder using the existing generic Vyr body and shared
-  service patterns.
+- Add one unvoiced Builder using Tamsin's authored `NpcBody` and shared service
+  patterns.
 - Add one optional West Gate Bolt-Thrower build quest using existing gold and
   components.
 - Give one afternoon warning and one urgent 23:00 warning; the urgent warning

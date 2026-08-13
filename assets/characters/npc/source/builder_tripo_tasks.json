@@ -1,0 +1,25 @@
+{
+  "concept": "res://assets/characters/npc/concepts/tamsin_tpose.png",
+  "image_to_model": {
+    "task_id": "5ce645fa-11a5-431b-84e4-5bac6c9ffc98",
+    "model_version": "v3.1-20260211"
+  },
+  "rig_check": {
+    "task_id": "1739f396-2595-4e82-975c-046efc70044e",
+    "riggable": true,
+    "rig_type": "biped"
+  },
+  "rig": {
+    "task_id": "0ae3e285-6eda-459d-a176-ad97caaf9808",
+    "model_version": "v1.0-20240301",
+    "spec": "tripo",
+    "format": "fbx"
+  },
+  "idle": {
+    "task_id": "8591a0c8-02a7-4bf1-bb87-ffad1fc96500",
+    "animation": "preset:idle",
+    "in_place": true,
+    "geometry_included": true,
+    "format": "fbx"
+  }
+}

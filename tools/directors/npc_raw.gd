@@ -1,5 +1,5 @@
 extends RefCounted
-## The four authored NPC bodies exactly as they import, and nothing else.
+## The six authored NPC bodies exactly as they import, and nothing else.
 ##
 ## Before any of the interesting questions -- what they are scaled to, which way
 ## they face, what idle they hold -- there is one that has to be answered by
@@ -9,7 +9,7 @@ extends RefCounted
 ## the integration would otherwise guess (docs/CONTRACT.md §2.5: facing is
 ## measured).
 ##
-## So: four bodies, unscaled, unposed, unrotated, beside a 1.65 m post that is
+## So: six bodies, unscaled, unposed, unrotated, beside a 1.65 m post that is
 ## exactly the hero's height. Front, side and back.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
@@ -17,7 +17,7 @@ extends RefCounted
 ##     --director=res://tools/directors/npc_raw.gd --out=/tmp/npc/x.png
 
 const DIR := "res://assets/characters/npc/"
-const WHO: Array[String] = ["jewelcrafter", "quartermaster", "lanternkeeper", "smith", "alchemist"]
+const WHO: Array[String] = ["jewelcrafter", "quartermaster", "lanternkeeper", "smith", "alchemist", "builder"]
 ## Metres between bodies on the line-up. They import at roughly a unit tall, so
 ## this is generous on purpose -- a body that turns out to be five times its
 ## neighbours should overlap them visibly rather than vanish behind one.
@@ -73,10 +73,9 @@ func run(rig) -> void:
 	# Front. The camera is on +Z looking back down -Z, which is where the player
 	# stands relative to a shopkeeper (`Npc` yaws a keeper's +Z at the hero), so
 	# "do they look at me from here" is the whole question this frame answers.
-	# Derived from the line-up, not written down: the fifth body was added to WHO
-	# and every one of these three cameras was still framing the middle of four,
-	# which put the alchemist half out of the frame in the shot that is supposed
-	# to prove she arrived.
+	# Derived from the line-up, not written down: a body was once added to WHO
+	# while these cameras still framed the old count, putting the new arrival half
+	# out of the shot whose job was to prove she arrived.
 	var mid := STEP * float(made.size() - 1) * 0.5
 	var back := 3.4 + STEP * float(made.size())
 	_mid = mid

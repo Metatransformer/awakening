@@ -8,13 +8,12 @@ extends Interactable
 ## of the game. The loop works, so they are people now -- standing behind a
 ## `ShopBooth` full of their own trade, and built two different ways:
 ##
-##   * **Five use authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
+##   * **All six use authored bodies** (`NpcBody`) -- a dwarf smith, a warrior at
 ##     the quartermaster's stall, the hooded Lanternkeeper who is also the village
-##     elder, the jewelcrafter and the spectacled alchemist, each modelled as a
-##     whole dressed figure. They do not go near the suit system.
-##   * **The Builder is built** (`RaceBody`) from the imported Vyr and an existing
-##     leather suit. That branch is the machine that can put somebody new in the
-##     yard without commissioning a model, and it is what the monster roster uses.
+##     elder, the jewelcrafter, the spectacled alchemist and Tamsin the Builder,
+##     each modelled as a whole dressed figure. They do not go near the suit system.
+##   * `RaceBody` remains the compositional machine for the monster roster; a
+##     `LOOKS` row is always an authored `model` or a `race`/`suit`, never both.
 ##
 ## **What they DO did not change, either time, and that is the point.** Turn to
 ## face you, light up when addressed, open the right screen: all of it still lives
@@ -187,15 +186,14 @@ static var COUNTERS := {
 ## **There are two kinds of row here, and a row is one or the other.**
 ##
 ##  * **`model`** -- an AUTHORED person (`NpcBody.PEOPLE`). They were modelled as a
-##    whole figure, dressed, with their buckles and their beard painted into one
-##    atlas: the smith's apron, the Lanternkeeper's jewelled mail, the
+##    whole figure, dressed, with their buckles and other detail baked into their
+##    texture maps: the smith's apron, the Lanternkeeper's jewelled mail, the
 ##    jewelcrafter's gown. There is no bare body under them and no normalised UV
 ##    layout, so **`suit` and `tint` are meaningless on these rows and must not be
 ##    added.** Putting the clothing system anywhere near them seats a garment onto
 ##    a rig it was never fitted to and produces a person wearing another person.
 ##  * **`race`** -- a base from the Valenfeld pack, dressed by the suit system
-##    (`RaceBody.wear`). The Builder uses it: a person BUILT out of a race, a suit
-##    and a colour. It is also how the Vale's three peoples are cast and how the
+##    (`RaceBody.wear`). It is how the Vale's three peoples are cast and how the
 ##    monster roster is made.
 ##
 ## The casting is not at random on either side. Each body keeps the counter it
@@ -221,8 +219,8 @@ static var COUNTERS := {
 ##     lighter than a flat robe colour would. The first pass fed in the box
 ##     placeholders' robe colours directly and produced silhouettes in black.
 ##   * `idle`   -- their resting loop, so the garrison is not six people breathing
-##     in time. All from the standing family; see `RaceBody.CLIPS`, which is the
-##     same four clips either kind of body plays.
+##     in time. Legacy authored bodies and race bodies share `RaceBody.CLIPS`;
+##     generator-authored figures may keep their own proved in-place idle.
 ##   * `booth`  -- the shop they stand in. **Absent means none.** The
 ##     Lanternkeeper and Builder both work without one.
 static var LOOKS := {
@@ -297,8 +295,7 @@ static var LOOKS := {
 		"model": "jewelcrafter", "idle": &"idle4", "booth": ShopBooth.Kind.STALL,
 	},
 	Role.BUILDER: {
-		"race": "vyr", "suit": "leather", "idle": &"idle9",
-		"tint": Color(1.0, 0.84, 0.68),
+		"model": "builder", "idle": &"preset_idle",
 	},
 }
 

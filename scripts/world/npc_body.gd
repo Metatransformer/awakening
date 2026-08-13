@@ -1,45 +1,49 @@
 class_name NpcBody
 extends Node3D
-## One of the five AUTHORED people in the garrison -- a body that arrived already
+## One of the six AUTHORED people in the garrison -- a body that arrived already
 ## dressed, and is not allowed anywhere near the clothing system.
 ##
 ## `RaceBody` builds a shopkeeper out of parts: a bare race base from the
 ## Valenfeld pack plus a suit seated onto its skeleton, tinted so three people in
 ## the same cloth are still three people. That is the right machine for a pack of
-## interchangeable bases, and it is exactly the wrong machine for these five. The
-## smith, the quartermaster, the Lanternkeeper, the jewelcrafter and the alchemist
-## were each modelled as a whole person, dressed, with their buckles and
-## their beard painted into one atlas. There is no bare body underneath to seat a
+## interchangeable bases, and it is exactly the wrong machine for these six. The
+## smith, quartermaster, Lanternkeeper, jewelcrafter, alchemist and Builder were
+## each modelled as a whole person, dressed, with their buckles and other detail
+## baked into their textures. There is no bare body underneath to seat a
 ## suit onto, no normalised UV layout for a garment to share, and no seam that a
 ## fitting pass could close. **Do not call anything in `SuitSeater` on these.**
 ##
-## What they cost instead is a retarget, and that is the whole of this file. The
-## pack's idle clips are authored on a 24-bone Mixamo-named rig in a T-pose;
-## these are 41-bone Tripo rigs in an A-pose with different bone names, a
-## different spine order and their own bone rolls. `_install_clips` maps one onto
-## the other exactly (see the derivation there) so the garrison still breathes.
+## The original five cost a retarget. The pack's idle clips are authored on a
+## 24-bone Mixamo-named rig in a T-pose; those figures are 41-bone Tripo rigs in
+## an A-pose with different names, spine order, and bone rolls. `_install_clips`
+## maps one onto the other exactly. New generator-authored figures may instead
+## ship a proved in-place idle on their own rig, as Tamsin does below.
 ##
-## `Npc.LOOKS` picks the body. The elder is still built by `RaceBody`, and that
-## is not a transitional state waiting for a sixth model -- the two systems
-## answer different questions and both are wanted. `RaceBody` is also what the
-## dungeon and the monster roster run on, so it does not go anywhere.
+## `Npc.LOOKS` picks the body. `RaceBody` still builds the dungeon and monster
+## roster; the two systems answer different questions and both are wanted.
 
 const DIR := "res://assets/characters/npc/"
 ## The clip library, shared with `RaceBody`. Same four idles, same reason: these
 ## people stand at a counter, so a standing loop is the entire animation budget.
 const ANIMS := "res://assets/characters/races/_humanoid_anims.glb"
 const CLIPS: Array[StringName] = [&"idle", &"idle3", &"idle4", &"idle9"]
+## Animation authored by Tripo together with a generated body. Kept distinct
+## from the four shared idles: its skeleton frame is allowed to differ from the
+## older 41-bone exports because no cross-rig retarget happens on this path.
+const AUTHORED_IDLE: StringName = &"preset_idle"
 
-## Radians the imported art is turned away from the body it hangs on.
+## Default radians the imported art is turned away from the body it hangs on.
 ##
 ## ZERO, and **measured** (docs/CONTRACT.md §2.5, and this project has paid for
 ## guessing it four times). `tools/directors/npc_raw.gd` puts them all in front
-## of a camera on +Z and they look back at it: the art is modelled facing +Z.
+## of a camera on +Z and the original five look back at it: their art is +Z.
 ## `Npc` turns a shopkeeper with `_body.global_rotation.y = atan2(to.x, to.z)`,
 ## which sends +Z to the player, so art and holder already agree and the
 ## correction is nothing. Same number and same reasoning as `RaceBody.MODEL_YAW`
 ## -- and `enemy.gd` still needs `PI` for the same art, because it turns its
-## bodies the other way.
+## bodies the other way. A row may override this when the raw proof measures a
+## different export axis; Tripo exported Tamsin facing +X, so her measured
+## `-PI/2` correction sends that front to the holder's +Z.
 const MODEL_YAW := 0.0
 
 ## Who each body is, and how tall they stand.
@@ -48,13 +52,13 @@ const MODEL_YAW := 0.0
 ## normalised into a unit box (Tripo does that, and `npc_raw.gd` measured it:
 ## every one is 0.998047 tall), so the fit is very nearly a straight multiply --
 ## but it is still measured per body in `_native_height`, because "they all
-## happen to be 1.0 right now" is a fact about four files, not a contract.
+## happen to be 1.0 right now" is a fact about the current files, not a contract.
 ##
 ## The numbers do the same work heights have always done here (`RaceBody.RACES`):
 ## the hero is 1.65 m, so the smith reads a clear head SHORT of you and the
 ## Lanternkeeper a little over. Read the garrison as a row and it steps --
-## smith 1.44, jewelcrafter 1.63, elder 1.65, quartermaster 1.72, keeper 1.74,
-## alchemist 1.82 -- which is six people, not one body at six sizes.
+## smith 1.44, jewelcrafter 1.63, quartermaster 1.72, keeper 1.74, then alchemist
+## and Builder at 1.82 -- six people, not one body at six sizes.
 ##
 ## `static var`, not `const`: nothing here needs to be a constant expression, and
 ## a const Dictionary indexes as Variant (CLAUDE.md §3).
@@ -64,14 +68,16 @@ static var PEOPLE := {
 	# 1.41 he replaced rather than growing into the gap.
 	"smith": {"fbx": "smith.fbx", "height": 1.44},
 	"quartermaster": {"fbx": "quartermaster.fbx", "height": 1.72},
-	# Hooded, and the tallest of the four. The Far Lantern is the strange counter
-	# and she should read that way from across the flagstones.
+	# Hooded, and a little taller than the quartermaster. The Far Lantern is the
+	# strange counter and she should read that way from across the flagstones.
 	"lanternkeeper": {"fbx": "lanternkeeper.fbx", "height": 1.74},
 	"jewelcrafter": {"fbx": "jewelcrafter.fbx", "height": 1.63},
-	# The tallest person in the yard, and she keeps the 1.82 she had as a Vyr --
-	# the height was doing work (she looks DOWN at you over the alembics) and the
-	# model arriving is no reason to renegotiate it.
+	# One of the two tallest people in the yard, and she keeps the 1.82 she had as
+	# a Vyr -- the height was doing work (she looks DOWN at you over the alembics)
+	# and the model arriving is no reason to renegotiate it.
 	"alchemist": {"fbx": "alchemist.fbx", "height": 1.82},
+	"builder": {"fbx": "builder.fbx", "height": 1.82, "yaw": -PI * 0.5,
+		"authored_idle": AUTHORED_IDLE},
 }
 
 ## The retarget map: **this rig's bone -> `[the clip library's bone, the bone to
@@ -210,19 +216,52 @@ func _setup(who: String) -> bool:
 		return false
 
 	_rig = (load(path) as PackedScene).instantiate() as Node3D
-	_rig.rotation.y = MODEL_YAW
+	_rig.rotation.y = float(row.get("yaw", MODEL_YAW))
 	add_child(_rig)
 
 	_skel = _rig.find_child("Skeleton3D", true, false) as Skeleton3D
 	_anim = _rig.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	# A rig-only Tripo export can correctly contain mesh, skin and skeleton without
+	# an AnimationPlayer node. The shared clip installer owns playback on legacy
+	# bodies, so give it the same root their animated FBXs ship with instead of
+	# requiring a throwaway animation in every runtime asset.
+	if _anim == null and _skel != null:
+		_anim = AnimationPlayer.new()
+		_anim.name = "AnimationPlayer"
+		_anim.root_node = NodePath("..")
+		_rig.add_child(_anim)
 
 	height = float(row["height"])
 	var native := _native_height(_rig)
 	if native > 0.001:
 		_rig.scale = Vector3.ONE * (height / native)
 
-	_install_clips()
+	var authored_idle: StringName = row.get("authored_idle", &"")
+	if authored_idle != &"":
+		_install_authored_idle(authored_idle)
+	else:
+		_install_clips()
 	return true
+
+
+## Keep only the generator-authored in-place idle on a body whose rig frame is
+## not the legacy `NpcBody` frame. The export may contain several aliases for
+## the same baked take; normalize the selected one to the stable runtime name.
+func _install_authored_idle(source_name: StringName) -> void:
+	if _anim == null:
+		push_error("npc_body: %s has no AnimationPlayer for authored idle" % _who)
+		return
+	if not _anim.has_animation(source_name):
+		push_error("npc_body: %s has no authored idle '%s' (have %s)" % [
+			_who, source_name, _anim.get_animation_list()])
+		return
+	var idle: Animation = _anim.get_animation(source_name).duplicate(true)
+	idle.loop_mode = Animation.LOOP_LINEAR
+	for name in _anim.get_animation_library_list():
+		_anim.remove_animation_library(name)
+	var lib := AnimationLibrary.new()
+	lib.add_animation(AUTHORED_IDLE, idle)
+	_anim.add_animation_library(&"", lib)
 
 
 ## Crown height of the art as it ships, in `rig`'s own space.

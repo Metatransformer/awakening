@@ -39,7 +39,7 @@ defenses would multiply interruption rather than deepen responsibility.
 
 ## Current evidence
 
-- The implemented slice includes the Vyr Builder and optional West Gate
+- The implemented slice includes Tamsin the Builder and the optional West Gate
   Bolt-Thrower, the 15:00 warning and 23:00 horn, sleep interruption, and the
   four-raider main-gate route and wave.
 - Its normal HUD reports authoritative GARRISON integrity; the raid wave and
@@ -54,8 +54,8 @@ defenses would multiply interruption rather than deepen responsibility.
 Build one authored occurrence:
 
 1. Donating the **Tally-Ledger** arms the sequence.
-2. Add one unvoiced **Vyr Builder** using the existing generic Vyr body and
-   shared service patterns.
+2. Add unvoiced **Tamsin the Builder** using her authored `NpcBody` and shared
+   service patterns.
 3. The Builder owns mechanisms and buildings. Aldric owns scouts, guards,
    staffing, and morale.
 4. Offer one optional **West Gate Bolt-Thrower** build quest using existing gold

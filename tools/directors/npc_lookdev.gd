@@ -1,23 +1,24 @@
 extends RefCounted
-## The five authored bodies, fitted, retargeted, and holding every idle they
-## might be given.
+## The six authored bodies, fitted, and holding the idle each is given.
 ##
-## `NpcBody._install_clips` maps a 24-bone T-posed clip library onto a 41-bone
-## A-posed Tripo rig. The derivation there is exact, which is a claim about
-## algebra and not about a person -- a sign error in it produces a body that is
-## still perfectly animated and has its arms on backwards, and no log line
-## anywhere says so. So: every body, every idle, front and three-quarter, next
-## to a `RaceBody` that is known to work and a post at the hero's height.
+## `NpcBody._install_clips` maps a 24-bone T-posed clip library onto the original
+## 41-bone A-posed Tripo rigs. Tamsin instead keeps the Tripo-authored in-place
+## idle on the generated rig that owns it. Both paths are visual claims: a sign
+## error can produce a body that is animated and still wrong. So: every body in
+## its runtime idle, front and three-quarter, beside a known-good `RaceBody` and
+## a post at the hero's height.
 ##
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/_lookdev.tscn \
 ##     --director=res://tools/directors/npc_lookdev.gd --out=/tmp/npc/x.png
 
 ## Left to right, and in the order the garrison meets them.
-const WHO: Array[String] = ["smith", "quartermaster", "lanternkeeper", "jewelcrafter", "alchemist"]
+const WHO: Array[String] = ["smith", "quartermaster", "lanternkeeper", "jewelcrafter", "alchemist", "builder"]
 ## The idle each is actually given in `Npc.LOOKS`, so this sheet photographs the
 ## garrison and not a line of bodies in a pose nobody holds.
-const IDLE: Array[StringName] = [&"idle3", &"idle", &"idle9", &"idle4", &"idle3"]
+const IDLE: Array[StringName] = [
+	&"idle3", &"idle", &"idle9", &"idle4", &"idle3", &"preset_idle",
+]
 const STEP := 1.35
 ## The line-up sits a metre and a half forward of the origin, because
 ## `_lookdev.tscn` parks a one-metre green box there and the first sheet off this
@@ -47,9 +48,8 @@ func run(rig) -> void:
 	post.position = Vector3(-STEP, K.HERO_H * 0.5, FORWARD)
 	scene.add_child(post)
 
-	# The control -- a `RaceBody`, which is the kind the elder is still built as
-	# and the kind the whole monster roster runs on. It is here as the thing a
-	# broken retarget is told apart from: if every body in the frame looks stiff,
+	# The control -- a `RaceBody`, which the whole monster roster runs on. It is
+	# here as the thing a broken retarget is told apart from: if every body looks stiff,
 	# the frame is the problem and not the map. (It was the alchemist until she
 	# got a model of her own; it stays because the comparison is the point.)
 	var control := RaceBody.make("vyr")
@@ -86,9 +86,9 @@ func run(rig) -> void:
 	# the subject is mis-framed or missing.
 	#
 	# The centre and the distance are DERIVED from how many bodies are in the row
-	# (plus the control on the end), not written down. The fifth body went into
-	# WHO against a camera still centred on four and the alchemist stood half out
-	# of the frame -- in the sheet whose entire job is showing her.
+	# (plus the control on the end), not written down. A body once went into WHO
+	# against a camera still centred on the old count and stood half out of the
+	# frame -- in the sheet whose entire job is showing her.
 	var wide := STEP * float(made.size())
 	var mid := Vector3(wide * 0.5, 0.9, FORWARD)
 	await _shot(rig, cam, out, "npc_0_wide", mid + Vector3(0.0, 3.1, 6.0 + wide), mid)
@@ -103,11 +103,12 @@ func run(rig) -> void:
 	await _shot(rig, cam, out, "npc_2_threequarter", mid + Vector3(1.6 + wide * 0.5, 1.2, 1.6 + wide * 0.5), mid)
 	await _shot(rig, cam, out, "npc_3_behind", mid + Vector3(0.0, 0.7, -2.6 - wide), mid)
 
-	# Every idle on every body: the map has to survive all four, not the one each
-	# role happens to be given today.
+	# Every shared idle on every body that uses the shared retarget map. Tamsin's
+	# Tripo-authored idle is proved above and in her close read; her export frame
+	# is deliberately not fed through the legacy cross-rig map.
 	for clip in NpcBody.CLIPS:
-		for b in made:
-			b.play(clip)
+		for i in range(made.size() - 1):
+			made[i].play(clip)
 		await rig.wait_frames(34)
 		await _shot(rig, cam, out, "npc_pose_%s" % clip, mid + Vector3(0.0, 0.7, 2.6 + wide), mid)
 
@@ -117,9 +118,10 @@ func run(rig) -> void:
 		var b := made[i]
 		b.play(IDLE[i])
 		await rig.wait_frames(20)
+		var close_box := _world_box(b)
+		var close_look := close_box.get_center()
 		await _shot(rig, cam, out, "npc_10_%s" % WHO[i],
-			b.global_position + Vector3(0.45, 1.45, 2.0),
-			b.global_position + Vector3(0.0, b.height * 0.62, 0.0))
+			close_look + Vector3(0.45, close_box.size.y * 0.18, 2.0), close_look)
 	print("NPCLOOK done")
 
 

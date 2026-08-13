@@ -75,7 +75,7 @@ spine ordering: **`Spine02` is nearest the hips and `Spine` nearest the neck**,
 which is backwards from every other rig in this project, and reading it the
 obvious way puts a collar around the waist.
 
-**The five authored shopkeepers are not on it** — see §1c. Nothing in this
+**The six authored shopkeepers are not on it** — see §1c. Nothing in this
 section applies to them, and the suit system in particular must never be pointed
 at one.
 
@@ -111,22 +111,26 @@ outside and render correctly.
 
 ---
 
-## 1c. The five authored shopkeepers — a second rig, and no clothing system
+## 1c. The six authored shopkeepers — a second rig, and no clothing system
 
 The smith, the quartermaster, the Lanternkeeper (who is also the village elder),
-the jewelcrafter and the alchemist are single authored figures, dressed as they ship: one mesh, one surface, one baked atlas
-carrying the buckles, the beard and the gold. `NpcBody` owns them.
+the jewelcrafter, the alchemist and the Builder are single authored figures,
+dressed as they ship, with baked textures carrying the buckles, the beard and
+the gold. `NpcBody` owns them.
 
 | What | Where | Notes |
 |---|---|---|
-| Authored bodies | `assets/characters/npc/{smith,quartermaster,lanternkeeper,jewelcrafter,alchemist}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, quartermaster 1.72 m, keeper 1.74 m, alchemist 1.82 m. Each with its own extracted `*_0.png`. |
+| Authored bodies | `assets/characters/npc/{smith,quartermaster,lanternkeeper,jewelcrafter,alchemist,builder}.fbx` | Smith 1.44 m, jewelcrafter 1.63 m, quartermaster 1.72 m, keeper 1.74 m, alchemist 1.82 m, Builder 1.82 m. External textures keep the matching numbered `*_0.png`, `*_1.png`, ... names. |
 
 **Never point the suit system at one of these.** There is no bare body under the
 clothes to seat a garment onto, the UVs are not normalised against the pack's
 layout, and `SuitSeater` would fit a suit's skeleton to a rig that shares no bone
 name with it. A `LOOKS` row is `model` OR `race`, never both.
 
-The rig is Tripo's own, not §1b's, and it disagrees on all three axes at once:
+The rig is Tripo's own, not §1b's. Tripo rig version `v1.0-20240301` is pinned
+because its 41-bone named core is what `NpcBody` understands; newer v2 creates a
+different hierarchy. The generated idle export may append leaf end-bones. The
+pinned rig disagrees with §1b on all three axes at once:
 
 - **41 bones, different names** — `Root`→`Hip`→`Waist`→`Spine01`→`Spine02`,
   `NeckTwist01/02`, `Head`, `L_/R_Clavicle`→`Upperarm`→`Forearm`→`Hand`,
@@ -140,9 +144,15 @@ The rig is Tripo's own, not §1b's, and it disagrees on all three axes at once:
   the rest's, and the bodies come out wrong in as many different ways as there
   are bodies.
 
-They play the same four idles off the same `_humanoid_anims.glb` as everyone
-else, rotation tracks only, retargeted per body at load. Measured facing is
-**+Z**, same as §1b and the opposite of `enemy.gd` — `NpcBody.MODEL_YAW` is 0.
+The original five play the same four idles off `_humanoid_anims.glb`, rotation
+tracks only, retargeted per body at load. Tamsin keeps Tripo's generated in-place
+`preset_idle` on the geometry-bearing animation export; its added leaf bones and
+different skeleton frame are harmless because no cross-rig retarget is applied.
+The runtime-facing contract is **+Z**, same as §1b and the opposite of
+`enemy.gd`. `NpcBody.MODEL_YAW` is 0 for the original five. A measured per-row
+`yaw` is permitted when a generator exports a different art axis: Tamsin's raw
+Tripo FBX faces +X, so her `-PI/2` row correction turns that front to +Z. This is
+evidence from `npc_raw.gd`, not a guessed importer convention.
 
 ---
 

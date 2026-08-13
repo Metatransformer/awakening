@@ -35,6 +35,7 @@ A reference may be long only when its subject is narrow.
 | Shared Valenfeld canon | [CANON_BRIDGE.md](CANON_BRIDGE.md) |
 | Visual style and HUD presentation | [STYLEGUIDE.md](STYLEGUIDE.md) |
 | Units, interfaces, input, and implementation contracts | [CONTRACT.md](CONTRACT.md) |
+| Character asset production | [CHARACTER_PIPELINE.md](CHARACTER_PIPELINE.md) |
 | Design method | [DESIGN_PROCESS.md](DESIGN_PROCESS.md) |
 | Playtest method | [PLAYTESTING.md](PLAYTESTING.md) |
 

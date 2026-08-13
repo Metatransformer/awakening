@@ -30,7 +30,7 @@ unauthorised.
 | Added dungeon graph edges | **1 per floor** |
 | Blessings | **12** |
 | Relics | **12** |
-| Garrison NPCs | **6**: the existing five plus one Vyr Builder |
+| Garrison NPCs | **6**: the existing five plus Tamsin the Builder |
 | Authored build quests | **1**: West Gate Bolt-Thrower |
 | Authored quest-journal entries | **2**: Keep the Hearth, West Gate Defence |
 | Authored defensive structures | **1**: West Gate Bolt-Thrower |
@@ -52,9 +52,9 @@ unauthorised.
 | Gameplay cutscenes | **1 reusable item-get ceremony** |
 
 The raid amendment changes no currency, UI-screen, voiced-line, enemy-kind, or
-enemy-model cap. The Builder is unvoiced, uses the existing generic Vyr body,
-and uses shared service patterns. The raid reuses kobolds, an orc, the main
-gate, and existing resources.
+enemy-model cap. The Builder is unvoiced, uses Tamsin's authored `NpcBody`, and
+uses shared service patterns. The raid reuses kobolds, an orc, the main gate,
+and existing resources.
 
 The daily-life loop already counted in the four-mechanic cap contains the built
 Firewood/Hearth vignette and exactly one owner-authorised fishing/provisions

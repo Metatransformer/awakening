@@ -234,9 +234,16 @@ func _prove_builder_and_defense(rig, garrison: Garrison) -> void:
 	Game.raid_arm(3, 10.0)
 	Clock.restore({"day": 3, "hour": 12.0, "running": false})
 	await rig.wait_frames(5)
-	rig.check(garrison.builder != null and garrison.builder._person is RaceBody,
-		"the unvoiced Builder is present on the existing Vyr body")
-	rig.check(garrison.builder.voice_id() == &"", "the prototype Builder has no voice dependency")
+	var builder_body: NpcBody
+	if garrison.builder != null:
+		builder_body = garrison.builder._person as NpcBody
+	rig.check(builder_body != null and builder_body._who == "builder",
+		"the unvoiced Builder is present as Tamsin's authored NpcBody")
+	# `voice_id()` is also the written-dialogue person key. Unvoiced means there
+	# is no recorded-line table for that key, not that the person is anonymous.
+	rig.check(garrison.builder != null
+		and not Voice.LINES.has(garrison.builder.voice_id()),
+		"the prototype Builder has no recorded-voice dependency")
 
 	Game.gold = BuilderDb.COST
 	Game.components.clear()
@@ -259,9 +266,12 @@ func _prove_builder_and_defense(rig, garrison: Garrison) -> void:
 	if hero != null:
 		hero.global_position = garrison.to_global(Vector3(8.0, 0.05, -8.5))
 	await rig.wait_frames(4)
-	_camera.global_position = garrison.to_global(Vector3(8.0, 2.8, -8.8))
-	_camera.look_at(garrison.builder.global_position + Vector3.UP, Vector3.UP)
-	await rig.capture("raid_06_vyr_builder.png")
+	var builder_box := _world_box(garrison.builder)
+	var builder_center := builder_box.get_center()
+	var front := garrison.builder.global_transform.basis * Vector3.FORWARD
+	_camera.global_position = builder_center + front * 3.2 + Vector3.UP * 0.45
+	_camera.look_at(builder_center, Vector3.UP)
+	await rig.capture("raid_06_builder.png")
 
 	Game.restore_garrison({"raid": _raid_payload(
 		GarrisonRaidState.PHASE_ACTIVE, 100, false, false, 0.0)})
@@ -353,3 +363,23 @@ func _clear_live_raiders(rig, garrison: Garrison) -> void:
 
 func _hero(rig) -> Node3D:
 	return rig.root.get_tree().get_first_node_in_group(&"player") as Node3D
+
+
+func _world_box(root: Node) -> AABB:
+	var box := AABB()
+	var first := true
+	for node in _all(root):
+		var mesh := node as MeshInstance3D
+		if mesh == null or mesh.mesh == null:
+			continue
+		var drawn: AABB = mesh.global_transform * mesh.get_aabb()
+		box = drawn if first else box.merge(drawn)
+		first = false
+	return box
+
+
+func _all(root: Node) -> Array[Node]:
+	var found: Array[Node] = [root]
+	for child in root.get_children():
+		found.append_array(_all(child))
+	return found

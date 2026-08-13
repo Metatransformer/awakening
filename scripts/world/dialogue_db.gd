@@ -70,7 +70,7 @@ static var PEOPLE := {
 	# either to match the other would break the thing it was named for.
 	&"jewelcrafter": {"name": "Marisel", "model": "jewelcrafter",
 		"portrait": PORTRAITS + "jeweler.png"},
-	&"builder": {"name": "Tamsin", "model": "vyr",
+	&"builder": {"name": "Tamsin", "model": "builder",
 		"portrait": PORTRAITS + "builder.png"},
 }
 
