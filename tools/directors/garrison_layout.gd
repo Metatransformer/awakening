@@ -1,5 +1,5 @@
 extends RefCounted
-## Spatial proof for the garrison's room-and-nook layout.
+## Spatial and atmosphere proof for the authored garrison floor plan.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -18,9 +18,11 @@ func run(rig) -> void:
 	var compound: GarrisonCompound = garrison.compound
 	if not rig.check(compound != null, "the generated garrison compound exists"):
 		return
-	_prove_rooms(rig, compound)
-	_prove_service_nooks(rig, compound)
+	_prove_floor_plan(rig, compound)
+	_prove_furnished_interiors(rig, compound)
+	_prove_warm_lighting(rig, compound)
 	_prove_elder_arrival(rig, compound)
+	_prove_exit_backstop(rig, compound)
 
 	var camera := Camera3D.new()
 	camera.fov = 56.0
@@ -28,84 +30,121 @@ func run(rig) -> void:
 	camera.make_current()
 	var out: String = rig.out_base().get_base_dir()
 
-	# One architectural read, then the player's entrance read.
-	_frame(camera, compound, Vector3(0.0, 15.0, 21.0), Vector3(0.0, 1.0, -3.0), 62.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_00_compound.png"))
-	_frame(camera, compound, Vector3(0.0, 1.7, 12.8), Vector3(-0.9, 1.2, 7.9), 52.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_01_elder_at_entrance.png"))
+	# A plan-like overview and the player's south-gate arrival establish the
+	# compound's overall shape before the tour moves into individual districts.
+	_frame(camera, compound, Vector3(0.0, 30.0, 27.0), Vector3(0.0, 0.0, -1.0), 55.0)
+	await _capture(rig, out, "layout_00_floorplan.png")
+	_frame(camera, compound, Vector3(0.0, 1.75, 12.9), Vector3(-0.9, 1.2, 8.0), 52.0)
+	await _capture(rig, out, "layout_01_elder_at_entrance.png")
 
-	# The oblique angle is deliberate: it shows that the three east services and
-	# the north apothecary are separate destinations instead of one counter line.
-	_frame(camera, compound, Vector3(4.5, 9.0, 11.0), Vector3(14.0, 1.2, -2.5), 62.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_02_service_nooks.png"))
+	# The garden and craft district are deliberately separate destinations, not
+	# counters pushed into a row. These views show their paths and silhouettes.
+	_frame(camera, compound, Vector3(4.0, 9.5, 10.0), Vector3(-9.0, 0.8, 0.0), 58.0)
+	await _capture(rig, out, "layout_02_garden_and_west_district.png")
+	_frame(camera, compound, Vector3(-6.0, 5.2, 3.0), Vector3(-18.2, 1.2, -0.7), 62.0)
+	await _capture(rig, out, "layout_03_craft_buildings.png")
+	_frame(camera, compound, Vector3(4.5, 5.0, 10.5), Vector3(17.2, 1.3, 4.3), 60.0)
+	await _capture(rig, out, "layout_04_quartermaster.png")
 
-	# Exterior/interior pairs prove that these are rooms with usable doors, not
-	# roofed scenery that only reads from the aerial shot.
-	_frame(camera, compound, Vector3(-6.0, 2.4, 11.0), Vector3(-14.0, 1.45, 10.4), 55.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_03_barracks_door.png"))
-	_frame(camera, compound, Vector3(-15.3, 1.75, 10.4), Vector3(-19.2, 0.95, 1.5), 64.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_04_barracks_interior.png"))
-
-	_frame(camera, compound, Vector3(-18.2, 2.1, -10.8), Vector3(-18.2, 1.15, -14.0), 72.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_05_elder_room_door.png"))
+	# North wing exterior and enterable interiors.
+	_frame(camera, compound, Vector3(0.0, 7.5, -3.0), Vector3(-6.0, 1.1, -13.7), 61.0)
+	await _capture(rig, out, "layout_05_north_wing.png")
+	_frame(camera, compound, Vector3(-14.1, 1.65, -10.2), Vector3(-19.0, 1.0, -13.0), 66.0)
+	await _capture(rig, out, "layout_06_barracks_interior.png")
+	_frame(camera, compound, Vector3(-6.9, 2.15, -11.35), Vector3(-6.9, 0.65, -15.0), 72.0)
+	await _capture(rig, out, "layout_07_mess_hall_interior.png")
 	camera.global_transform = compound.global_transform * compound.port(&"elder_room_camera")
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_06_elder_room_interior.png"))
+	await _capture(rig, out, "layout_08_leader_quarters_interior.png")
 
-	_frame(camera, compound, Vector3(-9.0, 1.9, -7.4), Vector3(-9.0, 1.0, -14.5), 58.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_07_mess_hall.png"))
+	# Individual work interiors prove their own material identities and detail.
+	_frame(camera, compound, Vector3(-14.65, 1.6, -4.6), Vector3(-19.2, 1.0, -4.8), 68.0)
+	await _capture(rig, out, "layout_09_smithy_interior.png")
+	_frame(camera, compound, Vector3(-14.7, 1.6, 2.75), Vector3(-19.2, 1.0, 3.4), 68.0)
+	await _capture(rig, out, "layout_10_jewelcrafter_interior.png")
+	_frame(camera, compound, Vector3(-13.25, 1.6, 11.1), Vector3(-18.2, 1.0, 11.2), 68.0)
+	await _capture(rig, out, "layout_11_builder_interior.png")
+	_frame(camera, compound, Vector3(13.15, 1.6, 4.3), Vector3(18.3, 1.0, 4.3), 68.0)
+	await _capture(rig, out, "layout_12_quartermaster_interior.png")
 
-	_frame(camera, compound, Vector3(0.0, 1.7, 12.7), Vector3(0.0, 2.1, 18.0), 58.0)
-	await rig.wait_frames(4)
-	await rig.capture(out.path_join("layout_08_exit_backstop.png"))
-	print("GARRISON LAYOUT OK")
+	_frame(camera, compound, Vector3(0.0, 5.0, 7.0), Vector3(0.0, 1.8, 17.5), 61.0)
+	await _capture(rig, out, "layout_13_supply_gate_backstop.png")
 
-
-func _prove_rooms(rig, compound: GarrisonCompound) -> void:
-	rig.check(compound.get_node_or_null("BunkRoom/BarracksWestWall") != null
-		and compound.get_node_or_null("BunkRoom/BarracksEastNorthReturn") != null
-		and compound.get_node_or_null("BunkRoom/BarracksDoorLintel") != null,
-		"the barracks has four-sided enclosure with one framed courtyard door")
-	rig.check(compound.get_node_or_null("ElderQuarters/ElderWestWall") != null
-		and compound.get_node_or_null("ElderQuarters/ElderNorthWall") != null
-		and compound.get_node_or_null("ElderQuarters/ElderDoorLintel") != null,
-		"the elder quarters is a closed room with a centered doorway")
-	rig.check(compound.get_node_or_null("NorthCommunalAndWork/MessHall/MessTable") != null
-		and compound.get_node_or_null("NorthCommunalAndWork/MessHall/MessBench") != null
-		and compound.get_node_or_null("NorthCommunalAndWork/MessHall/ServingSideboard") != null,
-		"the north wing contains a furnished mess hall")
-	var backstop := compound.get_node_or_null(
-		"SouthGatehouse/ExitBackstop/Collision") as CollisionShape3D
-	var backstop_shape := backstop.shape as BoxShape3D if backstop != null else null
-	rig.check(backstop_shape != null and backstop_shape.size.x >= 5.8
-		and backstop_shape.size.y >= 4.8,
-		"the departure gate blocks walking or jumping into unloaded space")
+	# At night the courtyard stays comparatively cool while every enclosed room
+	# becomes an amber destination; the smithy retains its hotter orange identity.
+	Clock.set_time(1, 22.0)
+	await rig.wait_frames(45)
+	_frame(camera, compound, Vector3(0.0, 18.0, 21.0), Vector3(0.0, 0.8, -2.0), 58.0)
+	await _capture(rig, out, "layout_14_warm_interiors_night.png")
+	_frame(camera, compound, Vector3(-14.65, 1.6, -4.6), Vector3(-19.2, 1.0, -4.8), 68.0)
+	await _capture(rig, out, "layout_15_smithy_warm_night.png")
+	print("GARRISON FLOOR PLAN OK")
 
 
-func _prove_service_nooks(rig, compound: GarrisonCompound) -> void:
-	var names := [&"QuartermasterNook", &"JewelcrafterNook", &"SmithNook", &"AlchemistNook"]
-	for nook: StringName in names:
-		rig.check(compound.get_node_or_null("ServiceNooks/%s" % nook) != null,
-			"%s is a named service nook" % nook)
+func _prove_floor_plan(rig, compound: GarrisonCompound) -> void:
+	var expected := [
+		"Buildings/Barracks", "Buildings/MessHall", "Buildings/LeaderQuarters",
+		"Buildings/Smithy", "Buildings/Jewelcrafter", "Buildings/BuilderWorkshop",
+		"Buildings/Quartermaster", "Buildings/WestSupplyRoom",
+		"Buildings/EastSupplyRoom", "Garden",
+	]
+	for path: String in expected:
+		rig.check(compound.get_node_or_null(path) != null, "%s exists" % path)
 
-	var quartermaster := compound.port(&"quartermaster_day").origin
-	var jeweller := compound.port(&"jewelcrafter_day").origin
 	var smith := compound.port(&"smith_day").origin
+	var jeweller := compound.port(&"jewelcrafter_day").origin
+	var quartermaster := compound.port(&"quartermaster_day").origin
 	var alchemist := compound.port(&"alchemist_day").origin
-	var ports := [quartermaster, jeweller, smith, alchemist]
-	var separated := true
-	for first: int in ports.size():
-		for second: int in range(first + 1, ports.size()):
-			separated = separated and K.plane(ports[first] - ports[second]).length() > 6.0
-	rig.check(separated and alchemist.x < 12.0 and quartermaster.x > 14.0,
-		"service positions are separated and turn the north-east corner")
+	rig.check(smith.x < -14.0 and jeweller.x < -14.0 and smith.z < jeweller.z,
+		"smith and jeweller occupy distinct west-side buildings")
+	rig.check(quartermaster.x > 12.0 and alchemist.x < -4.0 and alchemist.x > -11.0,
+		"quartermaster anchors the east while alchemist works in the inner garden")
+	rig.check(compound.get_node_or_null("Garden/GardenCropRow01") != null
+		and compound.get_node_or_null("Garden/GardenWaterButt") != null
+		and compound.get_node_or_null("Garden/AlchemistTrellisCanopy") != null,
+		"the fenced garden has crops, water, paths, and an alchemist trellis")
+
+
+func _prove_furnished_interiors(rig, compound: GarrisonCompound) -> void:
+	rig.check(compound.get_node_or_null("Buildings/Barracks/BarracksDoorLintel") != null
+		and compound.get_node_or_null("Buildings/Barracks/WeaponLocker") != null
+		and compound.get_node_or_null("Buildings/Barracks/PlayerBunk") != null,
+		"the barracks is an enclosed furnished sleeping room")
+	rig.check(compound.get_node_or_null("Buildings/MessHall/MessTable") != null
+		and compound.get_node_or_null("Buildings/MessHall/MessBenchNorth") != null
+		and compound.get_node_or_null("Buildings/MessHall/ServingSideboard") != null,
+		"the mess hall has communal seating and food storage")
+	rig.check(compound.get_node_or_null("Buildings/LeaderQuarters/LeaderBedFrame") != null
+		and compound.get_node_or_null("Buildings/LeaderQuarters/MapDesk") != null
+		and compound.get_node_or_null("Buildings/LeaderQuarters/Bookcase") != null,
+		"the leader has a private, furnished room")
+	rig.check(compound.get_node_or_null("Buildings/Smithy/SmithChimney") != null
+		and compound.get_node_or_null("Buildings/Jewelcrafter/JewelDisplayPlinth") != null
+		and compound.get_node_or_null("Buildings/BuilderWorkshop/BuilderWorktable") != null
+		and compound.get_node_or_null("Buildings/Quartermaster/CargoStackNorth") != null,
+		"each trade building has profession-specific dressing")
+
+
+func _prove_warm_lighting(rig, compound: GarrisonCompound) -> void:
+	var paths := [
+		"Buildings/Barracks/InteriorLightNorth",
+		"Buildings/MessHall/InteriorLight",
+		"Buildings/LeaderQuarters/InteriorLight",
+		"Buildings/Smithy/InteriorLight",
+		"Buildings/Jewelcrafter/InteriorLight",
+		"Buildings/BuilderWorkshop/InteriorLight",
+		"Buildings/Quartermaster/InteriorLight",
+		"Buildings/WestSupplyRoom/InteriorLight",
+		"Buildings/EastSupplyRoom/InteriorLight",
+	]
+	for path: String in paths:
+		var light := compound.get_node_or_null(path) as OmniLight3D
+		rig.check(light != null and light.light_color.r > light.light_color.g
+			and light.light_color.g > light.light_color.b,
+			"%s uses a warm amber interior light" % path)
+	var smith_light := compound.get_node_or_null(
+		"Buildings/Smithy/InteriorLight") as OmniLight3D
+	rig.check(smith_light != null and smith_light.light_color.g < 0.5,
+		"the forge atmosphere is hotter orange than the other rooms")
 
 
 func _prove_elder_arrival(rig, compound: GarrisonCompound) -> void:
@@ -118,9 +157,24 @@ func _prove_elder_arrival(rig, compound: GarrisonCompound) -> void:
 	var to_arrival := K.plane(arrival.origin - elder.origin)
 	var elder_forward := K.plane(elder.basis.z).normalized()
 	rig.check(to_arrival.length() > 2.0 and to_arrival.length() < 2.6,
-		"the elder waits at conversation distance in front of the arrival")
+		"the elder waits in front of the garrison entrance")
 	rig.check(elder_forward.dot(to_arrival.normalized()) > 0.9,
 		"the elder faces the arriving hero")
+
+
+func _prove_exit_backstop(rig, compound: GarrisonCompound) -> void:
+	var backstop := compound.get_node_or_null(
+		"SouthGatehouse/ExitBackstop/Collision") as CollisionShape3D
+	var shape := backstop.shape as BoxShape3D if backstop != null else null
+	rig.check(shape != null and shape.size.x >= 5.8 and shape.size.y >= 4.8,
+		"the departure gate blocks walking or jumping into unloaded space")
+	rig.check(compound.get_node_or_null("SouthGatehouse/PortcullisBar") != null,
+		"the blocked edge is visibly communicated by a portcullis")
+
+
+func _capture(rig, out: String, file_name: String) -> void:
+	await rig.wait_frames(5)
+	await rig.capture(out.path_join(file_name))
 
 
 func _frame(camera: Camera3D, compound: GarrisonCompound, eye: Vector3,
