@@ -5,6 +5,8 @@ extends Interactable
 
 const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
 
+const SFX_AXE_HIT := &"axe_tree_hit"
+const SFX_TREE_FALL := &"tree_fall"
 const CHOP_HOLD: float = 0.85
 const CHOP_DURATION: float = 1.20
 const CHOP_IMPACT: float = 0.54
@@ -74,9 +76,13 @@ func _commit_at_impact(hero: Hero) -> void:
 		enabled = true
 		return
 
+	# Both cues belong to the contact point. The utility animation can be
+	# cancelled before this frame, while this is the one frame the tree commits.
+	Bus.request_sfx.emit(SFX_AXE_HIT, global_position)
 	_disable_trunk()
 	_stump.visible = true
 	_fall_away_from(hero.global_position)
+	Bus.request_sfx.emit(SFX_TREE_FALL, global_position)
 	Bus.request_message.emit("FIREWOOD CUT. CARRY IT TO THE GARRISON HEARTH.")
 
 
