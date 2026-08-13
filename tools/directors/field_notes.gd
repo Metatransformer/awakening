@@ -1,5 +1,6 @@
 extends RefCounted
-## Proof director for issue #112, the Society's finite Field Notes economy.
+## Proof director for issues #112 and #179, the Society's finite Field Notes
+## completion, filing and doctrine economy.
 ##
 ##   timeout 400 tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
@@ -7,8 +8,8 @@ extends RefCounted
 ##     --out=/tmp/field_notes/x.png --size=1280x720 --warmup=60
 ##
 ## This runs on the garrison because the two rendered claims are home-loop UI.
-## The award claims still go through real run endings: a pending observation is
-## not permanent until `Run.extract()` or `Run.die()` builds the debrief.
+## Completion still goes through real run endings. Filing is then exercised
+## separately because a return records knowledge but awards no currency.
 
 const SAVE_SLOT: int = 4
 const EPSILON: float = 0.001
@@ -60,9 +61,12 @@ func _definition_and_producers() -> void:
 		var row: Dictionary = FieldNotesDb.observation_definition(id)
 		if FieldNotesDb.is_observation(id) and row.get("id", &"") == id \
 				and not String(row.get("label", "")).is_empty() \
+				and not FieldNotesDb.observation_objective_text(id).is_empty() \
+				and not FieldNotesDb.observation_waiting_text(id).is_empty() \
+				and not FieldNotesDb.observation_note_body(id).is_empty() \
 				and int(row.get("notes", 0)) == 1:
 			defined_observations += 1
-	_ck("A4 every observation has one complete definition (%d/5)"
+	_ck("A4 every observation has objective, waiting, body and value (%d/5)"
 		% defined_observations, defined_observations == 5)
 
 	var defined_doctrines: int = 0
@@ -97,10 +101,15 @@ func _definition_and_producers() -> void:
 		FieldNotesDb.definition(&"not_a_field_note").is_empty())
 
 
-# --- B. Debrief award semantics --------------------------------------------
+# --- B. Completion and filing semantics ------------------------------------
 
 func _debrief_awards(rig) -> void:
 	_reset_state()
+	var completion_events: Array[Dictionary] = []
+	Bus.field_observations_completed.connect(
+		func(ids: Array[StringName]) -> void:
+			completion_events.append({"ids": ids.duplicate()}),
+		Object.CONNECT_ONE_SHOT)
 	Run.enter(11201)
 	Bus.field_observation_recorded.emit(
 		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID)
@@ -113,8 +122,9 @@ func _debrief_awards(rig) -> void:
 	]
 	_ck("B0 pending observations are deduplicated and invalid ids are ignored",
 		_same_ids(_pending_ids(), first_pending))
-	_ck("B1 pending run knowledge has not changed permanent Field Notes",
-		Game.field_notes == 0 and Game.awarded_field_observations.is_empty())
+	_ck("B1 pending run knowledge has changed no permanent Field Notes state",
+		Game.field_notes == 0 and Game.completed_field_observations.is_empty()
+		and Game.awarded_field_observations.is_empty())
 
 	# The relic goes through the actual run bag. `Run.extract()` banks it and is
 	# the producer of the ledger-home observation immediately before debrief.
@@ -122,51 +132,70 @@ func _debrief_awards(rig) -> void:
 	_ck("B2 the Tally-Ledger entered the real run bag", took == 1
 		and int(Run.bag.get(RelicDb.TALLY_LEDGER_ID, 0)) == 1)
 	_ck("B3 the real extraction completed", Run.extract())
-	var extraction_awards: Array[StringName] = _summary_ids()
+	var extraction_completions: Array[StringName] = _summary_ids()
 	var expected_extraction: Array[StringName] = [
 		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
 		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
 		FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID,
 	]
-	_ck("B4 extraction awarded first descent, gate and brought-home ledger once",
-		_same_ids(extraction_awards, expected_extraction))
-	_ck("B5 extraction stored only that new award set in Run.summary",
-		extraction_awards.size() == 3 and Game.field_notes == 3)
+	_ck("B4 extraction completed first descent, gate and brought-home ledger once",
+		_same_ids(extraction_completions, expected_extraction))
+	_ck("B5 completion grants no balance and leaves every entry ready to file",
+		Game.field_notes == 0 and _awarded_ids().is_empty()
+		and _same_ids(_completed_ids(), expected_extraction)
+		and _same_ids(Game.ready_field_observations(), expected_extraction))
 	_ck("B6 debrief cleared run-only pending knowledge",
 		Run.pending_field_observations.is_empty())
+	var event_ids: Array[StringName] = []
+	if completion_events.size() == 1:
+		var raw_event_ids: Variant = completion_events[0].get("ids", [])
+		if raw_event_ids is Array:
+			for raw_id: Variant in raw_event_ids:
+				if raw_id is String or raw_id is StringName:
+					event_ids.append(StringName(raw_id))
+	_ck("B7 completion emits one typed batch with the completed ids",
+		_same_ids(event_ids, expected_extraction))
+	_ck("B8 filing one completed entry grants its authored value once",
+		Game.file_field_observation(FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID)
+		and Game.field_notes == 1
+		and Game.has_field_observation(FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID))
+	var duplicate_completion: Array[StringName] = \
+		Game.complete_field_observations(expected_extraction)
+	_ck("B9 duplicate completion and filing grant nothing",
+		duplicate_completion.is_empty()
+		and not Game.file_field_observation(FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID)
+		and not Game.file_field_observation(&"invalid_observation")
+		and Game.field_notes == 1 and _awarded_ids().size() == 1)
 	await _settle_end(rig)
 
 	_reset_state()
 	Run.enter(11202)
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
 	Run.die()
-	var death_awards: Array[StringName] = _summary_ids()
+	var death_completions: Array[StringName] = _summary_ids()
 	var expected_death: Array[StringName] = [
 		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
 		FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID,
 	]
-	_ck("B7 a fresh real death debrief awards first descent and shortcut",
-		_same_ids(death_awards, expected_death))
-	_ck("B8 fresh death awarded exactly two permanent notes",
-		Game.field_notes == 2 and Game.awarded_field_observations.size() == 2)
+	_ck("B10 a fresh real death completes first descent and shortcut",
+		_same_ids(death_completions, expected_death))
+	_ck("B11 death completion also grants zero currency",
+		Game.field_notes == 0 and _same_ids(_completed_ids(), expected_death)
+		and Game.awarded_field_observations.is_empty())
+	_ck("B12 filing the completed shortcut grants exactly one note",
+		Game.file_field_observation(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
+		and Game.field_notes == 1)
 	await _settle_end(rig)
 
 	Run.enter(11203)
 	Bus.field_observation_recorded.emit(
 		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID)
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
-	_ck("B9 previously awarded observations never become pending again",
+	_ck("B13 completed observations never become pending again",
 		Run.pending_field_observations.is_empty())
-	_ck("B10 a later extraction completes", Run.extract())
-	_ck("B11 repeat extraction awards zero notes and an empty receipt list",
-		_summary_ids().is_empty() and Game.field_notes == 2)
-	await _settle_end(rig)
-
-	Run.enter(11204)
-	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
-	Run.die()
-	_ck("B12 repeat death awards zero notes and an empty receipt list",
-		_summary_ids().is_empty() and Game.field_notes == 2)
+	_ck("B14 a later extraction completes", Run.extract())
+	_ck("B15 repeat extraction completes nothing and grants nothing",
+		_summary_ids().is_empty() and Game.field_notes == 1)
 	await _settle_end(rig)
 
 	_reset_state()
@@ -176,19 +205,23 @@ func _debrief_awards(rig) -> void:
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_WARDEN_DEFEATED_ID)
 	var full_ledger_took: int = Run.collect(RelicDb.TALLY_LEDGER_ID, 1)
-	_ck("B13 the all-authored fixture carries the real Tally-Ledger",
+	_ck("B16 the all-authored fixture carries the real Tally-Ledger",
 		full_ledger_took == 1)
-	_ck("B14 the all-authored fixture settles through a real extraction",
+	_ck("B17 the all-authored fixture settles through a real extraction",
 		Run.extract())
-	_ck("B15 every authored observation awarded exactly once",
-		_same_ids(_awarded_ids(), FieldNotesDb.OBSERVATION_IDS)
-		and _same_ids(_summary_ids(), FieldNotesDb.OBSERVATION_IDS))
-	_ck("B16 total authored supply is exactly five and never exceeds five",
-		Game.field_notes == 5 and Game.field_notes <= FieldNotesDb.OBSERVATION_IDS.size())
+	_ck("B18 every authored observation completes with zero awarded balance",
+		_same_ids(_completed_ids(), FieldNotesDb.OBSERVATION_IDS)
+		and _same_ids(_summary_ids(), FieldNotesDb.OBSERVATION_IDS)
+		and _awarded_ids().is_empty() and Game.field_notes == 0)
+	var compatibility_awards: Array[StringName] = \
+		Game.award_field_observations(FieldNotesDb.OBSERVATION_IDS)
 	var overflow_awards: Array[StringName] = \
 		Game.award_field_observations(FieldNotesDb.OBSERVATION_IDS)
-	_ck("B17 replaying the full authored set cannot exceed the five-note supply",
-		overflow_awards.is_empty() and Game.field_notes == 5)
+	_ck("B19 compatibility batch files all five once and remains idempotent",
+		_same_ids(compatibility_awards, FieldNotesDb.OBSERVATION_IDS)
+		and overflow_awards.is_empty() and Game.field_notes == 5
+		and _same_ids(_completed_ids(), FieldNotesDb.OBSERVATION_IDS)
+		and _same_ids(_awarded_ids(), FieldNotesDb.OBSERVATION_IDS))
 	await _settle_end(rig)
 
 
@@ -197,14 +230,14 @@ func _debrief_awards(rig) -> void:
 func _save_round_trip(rig) -> void:
 	Saves.erase(SAVE_SLOT)
 	_reset_state()
-	var already_awarded: Array[StringName] = [
+	var completed_before_save: Array[StringName] = [
 		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
 		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
 		FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID,
 	]
-	Game.award_field_observations(already_awarded)
-	_ck("C0 save fixture bought Rope Drill through FieldNotesDb.buy()",
-		FieldNotesDb.buy(_doctrine_line(FieldNotesDb.ROPE_DRILL_ID)))
+	Game.complete_field_observations(completed_before_save)
+	_ck("C0 save fixture files exactly one of three completed entries",
+		Game.file_field_observation(FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID))
 	Run.enter(11206)
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID)
 	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_WARDEN_DEFEATED_ID)
@@ -212,10 +245,19 @@ func _save_round_trip(rig) -> void:
 		FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID,
 		FieldNotesDb.CISTERN_WARDEN_DEFEATED_ID,
 	]
-	_ck("C1 fixture has balance 1, three awarded, two pending and Rope rank 1",
-		Game.field_notes == 1 and _same_ids(_awarded_ids(), already_awarded)
-		and _same_ids(_pending_ids(), saved_pending)
-		and FieldNotesDb.doctrine_rank(FieldNotesDb.ROPE_DRILL_ID) == 1)
+	var ready_before_save: Array[StringName] = [
+		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
+		FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID,
+	]
+	var filed_before_save: Array[StringName] = [
+		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
+	]
+	_ck("C1 fixture separates completed, ready, filed and pending state",
+		Game.field_notes == 1
+		and _same_ids(_completed_ids(), completed_before_save)
+		and _same_ids(_awarded_ids(), filed_before_save)
+		and _same_ids(Game.ready_field_observations(), ready_before_save)
+		and _same_ids(_pending_ids(), saved_pending))
 	_ck("C2 the real Saves API wrote director slot 4", Saves.save(SAVE_SLOT)
 		and Saves.has_save(SAVE_SLOT))
 
@@ -223,38 +265,69 @@ func _save_round_trip(rig) -> void:
 	Run.reset()
 	var destination: Dictionary = Saves.load_slot(SAVE_SLOT)
 	_ck("C3 the real Saves API loaded director slot 4", not destination.is_empty())
-	_ck("C4 note balance survived save/load", Game.field_notes == 1)
-	_ck("C5 awarded observation ids survived save/load",
-		_same_ids(_awarded_ids(), already_awarded))
-	_ck("C6 pending run ids survived save/load",
+	_ck("C4 completed and ready observation ids survived save/load",
+		_same_ids(_completed_ids(), completed_before_save)
+		and _same_ids(Game.ready_field_observations(), ready_before_save))
+	_ck("C5 filed ids and their exact balance survived save/load",
+		Game.field_notes == 1 and _same_ids(_awarded_ids(), filed_before_save))
+	_ck("C6 run-pending ids survived save/load separately",
 		Run.in_dungeon and _same_ids(_pending_ids(), saved_pending))
-	_ck("C7 doctrine ranks survived save/load",
-		FieldNotesDb.doctrine_rank(FieldNotesDb.ROPE_DRILL_ID) == 1
-		and FieldNotesDb.doctrine_rank(FieldNotesDb.MEASURED_BREATH_ID) == 0
-		and FieldNotesDb.doctrine_rank(FieldNotesDb.SWEEP_PATTERN_ID) == 0)
 
-	# Replay an id that was already permanent into the loaded debrief. It must
-	# neither enter pending nor appear beside the two genuinely new loaded ids.
+	# Replay an id that was already completed into the loaded debrief. It must
+	# neither enter pending nor appear beside the two genuinely new completions.
 	Bus.field_observation_recorded.emit(
 		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID)
-	_ck("C8 replaying an awarded id after load does not enter pending",
+	_ck("C7 replaying a completed id after load does not enter pending",
 		_same_ids(_pending_ids(), saved_pending))
-	_ck("C9 the loaded run extracts", Run.extract())
-	_ck("C10 the loaded debrief awards only its two unawarded pending ids",
+	_ck("C8 the loaded run extracts", Run.extract())
+	_ck("C9 the loaded debrief completes only its two pending ids",
 		_same_ids(_summary_ids(), saved_pending))
-	_ck("C11 replay did not duplicate balance or the awarded set",
-		Game.field_notes == 3 and Game.awarded_field_observations.size() == 5)
+	var ready_after_extract: Array[StringName] = [
+		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
+		FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID,
+		FieldNotesDb.CISTERN_WARDEN_DEFEATED_ID,
+		FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID,
+	]
+	_ck("C10 completion after load still grants no balance",
+		Game.field_notes == 1
+		and _same_ids(_completed_ids(), FieldNotesDb.OBSERVATION_IDS)
+		and _same_ids(_awarded_ids(), filed_before_save)
+		and _same_ids(Game.ready_field_observations(), ready_after_extract))
+	_ck("C11 one post-load filing grants once and a duplicate grants nothing",
+		Game.file_field_observation(FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID)
+		and not Game.file_field_observation(FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID)
+		and Game.field_notes == 2 and _awarded_ids().size() == 2)
 	await _settle_end(rig)
 
-	Run.enter(11207)
-	Bus.field_observation_recorded.emit(FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID)
-	Run.die()
-	_ck("C12 replaying the same awarded debrief remains idempotent",
-		_summary_ids().is_empty() and Game.field_notes == 3
-		and Game.awarded_field_observations.size() == 5)
-	await _settle_end(rig)
+	# A v15 slot knows only filed ids. Migration must promote exactly those to
+	# completed, discard unknown ids and clamp a hand-edited balance to authored
+	# filed value minus the doctrine already bought.
+	_reset_state()
+	var legacy_awarded: Array[StringName] = [
+		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
+		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
+		FieldNotesDb.FAIR_WEIGHTS_LEDGER_HOME_ID,
+	]
+	Game.award_field_observations(legacy_awarded)
+	_ck("C12 legacy fixture buys Rope Drill before save",
+		FieldNotesDb.buy(_doctrine_line(FieldNotesDb.ROPE_DRILL_ID)))
+	_ck("C13 current save can be rewritten as a hand-edited v15 fixture",
+		Saves.save(SAVE_SLOT) and _rewrite_as_v15_fixture(SAVE_SLOT))
+	Game.reset()
+	Run.reset()
+	var legacy_destination: Dictionary = Saves.load_slot(SAVE_SLOT)
+	_ck("C14 v15 remains readable and promotes every filed id to completed",
+		not legacy_destination.is_empty()
+		and _same_ids(_completed_ids(), legacy_awarded)
+		and _same_ids(_awarded_ids(), legacy_awarded)
+		and Game.ready_field_observations().is_empty())
+	_ck("C15 v15 validation rejects unknown ids and clamps minted balance",
+		Game.field_notes == 1
+		and FieldNotesDb.doctrine_rank(FieldNotesDb.ROPE_DRILL_ID) == 1
+		and not Game.has_completed_field_observation(&"not_authored")
+		and not Game.file_field_observation(FieldNotesDb.CISTERN_SHORTCUT_OPENED_ID))
 	Saves.erase(SAVE_SLOT)
-	_ck("C13 slot 4 is erased after the save/load case",
+	_ck("C16 slot 4 is erased after the save/load cases",
 		not Saves.has_save(SAVE_SLOT))
 
 
@@ -376,7 +449,7 @@ func _rendered_ui(rig) -> void:
 		FieldNotesDb.FIRST_DESCENT_DEBRIEF_ID,
 		FieldNotesDb.CISTERN_GATE_CYCLE_SOLVED_ID,
 	]
-	_ck("E1 receipt fixture has exactly two newly awarded Field Notes",
+	_ck("E1 receipt fixture has exactly two newly completed Field Notes",
 		_same_ids(receipt_ids, expected_receipt))
 
 	# Flow opens its own receipt after a hold. Wait past that hold, stand it down,
@@ -396,11 +469,14 @@ func _rendered_ui(rig) -> void:
 		var wanted: int = 1 if expected_receipt.has(id) else 0
 		if receipt_text.count(FieldNotesDb.display_text(id)) != wanted:
 			exact_rows = false
-	_ck("E5 exactly the two awarded observation names are rendered", exact_rows)
-	_ck("E6 each rendered observation carries +1 Field Note",
-		receipt_text.count("+1 Field Note") == expected_receipt.size())
-	_ck("E7 receipt renders the new total",
-		receipt_text.has("New total: 2 Field Notes"))
+	_ck("E5 exactly the two completed observation names are rendered", exact_rows)
+	_ck("E6 receipt labels both observations ready to file",
+		receipt_text.count("READY TO FILE") == expected_receipt.size())
+	_ck("E7 receipt directs filing to the bedside book without claiming a total",
+		receipt_text.has("FIELD NOTES READY")
+		and receipt_text.has("FILE THEM IN THE BOOK BY THE BED")
+		and not "\n".join(receipt_text).contains("New total")
+		and not "\n".join(receipt_text).contains("+1 Field Note"))
 	_ck("E8 a known but unseen Warden observation is absent",
 		not receipt_text.has(FieldNotesDb.display_text(
 			FieldNotesDb.CISTERN_WARDEN_DEFEATED_ID)))
@@ -513,6 +589,37 @@ func _awarded_ids() -> Array[StringName]:
 		if bool(Game.awarded_field_observations[id]):
 			ids.append(id)
 	return ids
+
+
+func _completed_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for id: StringName in Game.completed_field_observations:
+		if bool(Game.completed_field_observations[id]):
+			ids.append(id)
+	return ids
+
+
+func _rewrite_as_v15_fixture(slot: int) -> bool:
+	var read_file: FileAccess = FileAccess.open(Saves.slot_path(slot), FileAccess.READ)
+	if read_file == null:
+		return false
+	var parsed: Variant = JSON.parse_string(read_file.get_as_text())
+	read_file.close()
+	if parsed is not Dictionary:
+		return false
+	var data: Dictionary = parsed as Dictionary
+	data["version"] = 15
+	data.erase("completed_field_observations")
+	data["field_notes"] = 999
+	var awarded: Array = (data.get("awarded_field_observations", []) as Array).duplicate()
+	awarded.append("not_authored")
+	data["awarded_field_observations"] = awarded
+	var write_file: FileAccess = FileAccess.open(Saves.slot_path(slot), FileAccess.WRITE)
+	if write_file == null:
+		return false
+	write_file.store_string(JSON.stringify(data, "  "))
+	write_file.close()
+	return true
 
 
 func _same_ids(actual: Array[StringName], expected: Array[StringName]) -> bool:

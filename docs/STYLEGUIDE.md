@@ -64,7 +64,7 @@ move it anyway.
 | MOTH | `#807868` | Muted text, disabled state, button glyphs, **and common-tier loot** — common items render in the "not worth reading" colour. |
 | VITAL | `#E04038` | Health fill. Dirty arterial, not fire-engine. |
 | RUST | `#B83818` | Danger: incoming damage, damage ghost, hostile lock-on, unaffordable cost. |
-| GOLD | `#F8C038` | Currency, the authored Boss Key/Boss Door progression mark, and the temporary-overhealth end-cap inside the health bar. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
+| GOLD | `#F8C038` | Currency, the authored Boss Key/Boss Door progression mark, the temporary-overhealth end-cap inside the health bar, and actionable progression availability. The most saturated colour in the build. Not a torch, title, or general UI highlight. |
 | EXTRACT CYAN | `#38D0C8` | The only cool saturated hue. Reserved for the way out: extraction nodes and the hookshot line — the two things that pull you somewhere. |
 | MOSS | `#68A050` | Rarity: uncommon. |
 | COBALT | `#5878C8` | Rarity: rare. |
@@ -1684,6 +1684,7 @@ point, and a fourth right edge is what made the column read as ragged.
 | Lock brackets | half-extent (26, 34), 2 px on a 1 px VOID keyline, quantized to 480×270; arm 8 inward / 12 outward / 5 on two corners (§5.5) |
 | Enemy health bar | 20 × 2 px (×2.2 locked), 1 px frame (BONE if elite), ASH@85% track, RUST fill, ≤ 22 m, LOS-gated |
 | World caption (`WorldCaption`) | §3.1b type at its own `ref_px` (14 body / 16 damage), World plate, cap TOP on the anchor, quantized to 480×270, ≤ `max_range` (18 m default) with a 3 m fade, LOS-gated, behind-camera culled, **de-collided against the other captions on the frame**. Billboarded captions only — see §4.3 |
+| World attention (`WorldAttentionMarker`) | Exactly `!` in GOLD at the 16 px HUD rung, on the World plate and through the same range, LOS and de-collision path as every `WorldCaption`. It may breathe only in alpha. It means **an actionable permanent-progression commit is available now**: an unfiled completed Field Note at the bedside book, or an affordable visible progression-catalogue row at an open NPC service. It disappears immediately when the last ready note is filed, the last qualifying bill is no longer affordable/remaining, or the service closes. Never use it for ordinary Trade stock, focus, proximity, undiscovered content or a general quest hint. |
 
 #### The caption de-collide — what does not shrink does not get out of the way
 

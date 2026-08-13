@@ -1461,6 +1461,26 @@ recipe column, the per-token affordability colouring, the refusal footer and the
 hold-to-craft gauge are written once; the last time this project grew a second
 copy of a system it cost more than either copy (CLAUDE.md §0).
 
+The yellow `!` over a staffed NPC is also a projection of this contract, not a
+second economy. `Npc.has_affordable_progression()` considers only counters whose
+mode is `TradeScreen.Mode.PROGRESSION`, applies that counter's optional `ids`
+filter to `catalogue.lines()`, and asks the catalogue itself for both
+`remaining(id) > 0` and `can_buy(line)`. At least one visible line must answer
+true, and services must be open with the NPC working. `TRADE` stock never
+qualifies. Economy, inventory, Field Note/doctrine and garrison signals call the
+public `refresh_attention_marker()` seam; `_process` may animate the already
+derived mark but never recomputes eligibility.
+
+Field Note observations are filed at the **physical Society ledger on the
+player bunk's bedside dresser**, exposed as `BunkBed.field_notes_book`. The
+book, not Aldric's doctrine counter, owns observation presentation: its
+`FieldNotesBookScreen` is one CanvasLayer above the HUD and service layer and
+below pause/fade, lists exactly `FieldNotesDb.OBSERVATION_IDS` in authored order,
+and files one READY entry only through `Game.file_field_observation(id)`.
+`Game.ready_field_observations()` alone drives the book's yellow `!`, refreshed
+by the typed completion and award signals. Aldric's `FieldNotesDb` progression
+counter continues to own doctrine purchases; the book never sells doctrine.
+
 Call the overridable statics **through the catalogue you were handed**
 (`_db().craft_verb()`, `_db().part_count(line, id)`). A bare static call inside `Catalogue` binds to
 `Catalogue` at parse time — there is no virtual dispatch back down to `ShopDb`,

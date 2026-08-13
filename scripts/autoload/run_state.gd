@@ -172,7 +172,7 @@ func _on_enemy_died(_enemy: Node3D, _position: Vector3) -> void:
 
 func _on_field_observation_recorded(observation_id: StringName) -> void:
 	if not in_dungeon or not FieldNotesDb.is_observation(observation_id) \
-			or Game.has_field_observation(observation_id):
+			or Game.has_completed_field_observation(observation_id):
 		return
 	pending_field_observations[observation_id] = true
 
@@ -333,7 +333,7 @@ func restore(saved: Dictionary) -> bool:
 					continue
 				var observation_id: StringName = StringName(raw_id)
 				if FieldNotesDb.is_observation(observation_id) \
-						and not Game.has_field_observation(observation_id):
+						and not Game.has_completed_field_observation(observation_id):
 					pending_field_observations[observation_id] = true
 	seed_next = 0
 	visited_rooms.clear()
@@ -634,8 +634,8 @@ func _end_summary(extracted: bool, contents: Dictionary, value: int,
 	var pending_ids: Array[StringName] = []
 	for id: StringName in pending_field_observations:
 		pending_ids.append(id)
-	var awarded_field_notes: Array[StringName] = \
-		Game.award_field_observations(pending_ids)
+	var completed_field_notes: Array[StringName] = \
+		Game.complete_field_observations(pending_ids)
 	summary = {
 		"extracted": extracted,
 		"contents": contents.duplicate(),
@@ -661,7 +661,7 @@ func _end_summary(extracted: bool, contents: Dictionary, value: int,
 		"level": level,
 		"depth": depth,
 		"killer": last_attacker,
-		"field_notes": awarded_field_notes,
+		"field_notes": completed_field_notes,
 	}
 	pending_field_observations.clear()
 

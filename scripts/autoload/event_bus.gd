@@ -316,5 +316,6 @@ signal request_global_sfx(id: StringName)
 
 # --- Field Notes ------------------------------------------------------------
 signal field_observation_recorded(observation_id: StringName)
+signal field_observations_completed(observation_ids: Array[StringName])
 signal field_notes_awarded(observation_ids: Array[StringName], balance: int)
 signal doctrine_purchased(doctrine_id: StringName, balance: int)

@@ -88,13 +88,15 @@ const SLOTS := 3
 ## health and reconstruct as zero.
 ## Bumped to 15 for the additive fishing, supper, Well Fed and Connected fields
 ## inside the existing garrison payload. A v14 slot reconstructs them empty.
-const VERSION := 15
+## Bumped to 16 for completed Field Notes. A v15 slot has only filed/awarded ids;
+## each of those is also completed, while no other completion can be inferred.
+const VERSION := 16
 ## Versions this build will still read. **Not every bump has to refuse the one
 ## before it** — a bump that only ADDS a key can list the older version here and
 ## let `d.get(key, default)` do the migration. v3 is absent only because the gear
 ## split changed the meaning of a key that was already in the file, which is the
 ## same reason v1 and v2 were refused.
-const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+const READABLE: Array[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
 const AUTOSAVE_INTERVAL := 300.0
 
 signal saved(slot: int)
@@ -192,6 +194,7 @@ func save(slot: int) -> bool:
 		# `gold` is what survived the spending — so it has to be its own key.
 		"gold_earned": Game.gold_earned,
 		"field_notes": Game.field_notes,
+		"completed_field_observations": Game.completed_field_observations.keys(),
 		"awarded_field_observations": Game.awarded_field_observations.keys(),
 		"deaths": Game.deaths,
 		"bag_slots": Game.bag_slots,
@@ -397,12 +400,27 @@ func load_slot(slot: int) -> Dictionary:
 			var observation_id: StringName = StringName(raw_id)
 			if FieldNotesDb.is_observation(observation_id):
 				Game.awarded_field_observations[observation_id] = true
+	# Completion is additive in v16. Earlier saves can prove only that every
+	# already-awarded entry was completed; missing state otherwise stays empty.
+	Game.completed_field_observations.clear()
+	var raw_completed: Variant = d.get("completed_field_observations", [])
+	if raw_completed is Array:
+		for raw_id: Variant in raw_completed:
+			if raw_id is not String and raw_id is not StringName:
+				continue
+			var observation_id: StringName = StringName(raw_id)
+			if FieldNotesDb.is_observation(observation_id):
+				Game.completed_field_observations[observation_id] = true
+	for observation_id: StringName in Game.awarded_field_observations:
+		Game.completed_field_observations[observation_id] = true
 	var raw_field_notes: Variant = d.get("field_notes", 0)
 	var saved_field_notes: int = int(raw_field_notes) \
 		if raw_field_notes is int or raw_field_notes is float else 0
+	var filed_value: int = 0
+	for observation_id: StringName in Game.awarded_field_observations:
+		filed_value += FieldNotesDb.observation_note_value(observation_id)
 	var maximum_balance: int = maxi(0,
-		Game.awarded_field_observations.size() \
-		- owned_doctrines * FieldNotesDb.DOCTRINE_COST)
+		filed_value - owned_doctrines * FieldNotesDb.DOCTRINE_COST)
 	Game.field_notes = clampi(saved_field_notes, 0, maximum_balance)
 	var raw_garrison: Variant = d.get("garrison", {})
 	Game.restore_garrison(raw_garrison as Dictionary if raw_garrison is Dictionary else {})

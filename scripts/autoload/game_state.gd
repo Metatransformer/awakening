@@ -74,9 +74,11 @@ var gold: int = K.START_GOLD
 ##
 ## Not seeded with `K.START_GOLD`: the purse you arrive with was not earned.
 var gold_earned: int = 0
-## Society Field Notes already settled from completed descents. Observations are
-## a permanent set so replayed run settlement cannot award one twice.
+## Society Field Notes already filed through the bedside book. Completion and
+## filing are separate permanent sets: a run-end records what happened, while
+## the book awards its authored value exactly once when the player files it.
 var field_notes: int = 0
+var completed_field_observations: Dictionary[StringName, bool] = {}
 var awarded_field_observations: Dictionary[StringName, bool] = {}
 ## Bag capacity, in slots. Bought from the shop, so it lives here with the rest
 ## of the metagame rather than in `Run`, which is wiped every time you die.
@@ -430,6 +432,7 @@ func reset() -> void:
 	gold = K.START_GOLD
 	gold_earned = 0
 	field_notes = 0
+	completed_field_observations.clear()
 	awarded_field_observations.clear()
 	bag_slots = K.START_BAG_SLOTS
 	upgrades.clear()
@@ -495,21 +498,72 @@ func has_field_observation(id: StringName) -> bool:
 		and bool(awarded_field_observations.get(id, false))
 
 
-## Settle observations carried home by a run. Input order is receipt order;
-## invalid, repeated and previously awarded ids are ignored. One batch emits one
-## signal so the Field Notes UI never observes a half-settled balance.
+func has_completed_field_observation(id: StringName) -> bool:
+	return FieldNotesDb.is_observation(id) \
+		and bool(completed_field_observations.get(id, false))
+
+
+func field_observation_ready_to_file(id: StringName) -> bool:
+	return has_completed_field_observation(id) and not has_field_observation(id)
+
+
+## Authored order is book order. The saved dictionaries remain sets so neither
+## JSON ordering nor the order producers happened to fire can reorder the book.
+func ready_field_observations() -> Array[StringName]:
+	var ready: Array[StringName] = []
+	for id: StringName in FieldNotesDb.OBSERVATION_IDS:
+		if field_observation_ready_to_file(id):
+			ready.append(id)
+	return ready
+
+
+## Finish observations carried home by a run without touching currency. Input
+## order is receipt order; invalid, repeated and already-completed ids are
+## ignored. One typed event exposes the completed transaction to the bedside
+## marker without making it poll permanent state.
+func complete_field_observations(ids: Array[StringName]) -> Array[StringName]:
+	var newly_completed: Array[StringName] = []
+	for id: StringName in ids:
+		if not FieldNotesDb.is_observation(id) \
+				or has_completed_field_observation(id) or newly_completed.has(id):
+			continue
+		completed_field_observations[id] = true
+		newly_completed.append(id)
+	if not newly_completed.is_empty():
+		Bus.field_observations_completed.emit(newly_completed)
+	return newly_completed
+
+
+## File one completed entry from the bedside book. The definition, not the UI,
+## owns its value; readiness makes retries and replayed input harmless.
+func file_field_observation(id: StringName) -> bool:
+	if not _file_field_observation(id):
+		return false
+	var filed: Array[StringName] = [id]
+	Bus.field_notes_awarded.emit(filed, field_notes)
+	return true
+
+
+## Compatibility/dev batch seam. It retains the old convenient behaviour while
+## preserving the new invariant: every awarded observation is completed first.
+## One batch emits one award signal so listeners never see a half-filed balance.
 func award_field_observations(ids: Array[StringName]) -> Array[StringName]:
+	complete_field_observations(ids)
 	var newly_awarded: Array[StringName] = []
 	for id: StringName in ids:
-		if not FieldNotesDb.is_observation(id) or has_field_observation(id) \
-				or newly_awarded.has(id):
-			continue
-		awarded_field_observations[id] = true
-		field_notes += FieldNotesDb.observation_note_value(id)
-		newly_awarded.append(id)
+		if not newly_awarded.has(id) and _file_field_observation(id):
+			newly_awarded.append(id)
 	if not newly_awarded.is_empty():
 		Bus.field_notes_awarded.emit(newly_awarded, field_notes)
 	return newly_awarded
+
+
+func _file_field_observation(id: StringName) -> bool:
+	if not field_observation_ready_to_file(id):
+		return false
+	awarded_field_observations[id] = true
+	field_notes += FieldNotesDb.observation_note_value(id)
+	return true
 
 
 func garrison_snapshot() -> Dictionary:
