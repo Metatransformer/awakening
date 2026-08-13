@@ -428,27 +428,20 @@ func activate(_by: Node3D) -> void:
 	var row := _row()
 	var who := StringName(row.get("voice", &""))
 
-	# **The story first, and only then the greeting.** `StoryDb` holds an ordered
-	# list per person -- the briefing, a trader's arrival, the thing an old man
-	# will only tell you once you have earned it -- and `pending` hands back the
-	# first one that is due. It is WRITTEN, so nothing is played: these are lines
-	# nobody has been in a booth for, and `Voice`'s "a speaker with no take is
-	# silent" rule is what lets that be normal rather than a gap.
+	# **The greeting first, and then the story.** The mouth picks the take and
+	# `DialogueDb` reads the words off the take that is playing, so the elder's two
+	# greetings alternate in the ear and on the screen together. `StoryDb` then
+	# hands back the first beat that is due; its WRITTEN pages follow that hello.
 	#
-	# `on_read` and not a `mark_told` here: the flag belongs on the last page
-	# actually being turned. Escaping out of Aldric's nine-page briefing has to
-	# leave it owed, or the one conversation that explains the game is one stray
-	# press from being gone for the save.
+	# `on_read` and not a `mark_told` here: the flag belongs on the last STORY page
+	# actually being turned. Because the opening is hello plus story, escaping
+	# during either part leaves Aldric's briefing owed instead of making the one
+	# conversation that explains the game one stray press from gone for the save.
 	var beat := StoryDb.pending(who)
-	var pages: PackedStringArray
+	var pages := DialogueDb.speak(who, &"hello")
 	var on_read := Callable()
-	if beat.is_empty():
-		# The mouth picks the take and `DialogueDb` reads the words off the take
-		# that is playing, so the elder's two greetings alternate in the ear and on
-		# the screen together. See `DialogueDb.speak`.
-		pages = DialogueDb.speak(who, &"hello")
-	else:
-		pages = StoryDb.pages_of(beat)
+	if not beat.is_empty():
+		pages.append_array(StoryDb.pages_of(beat))
 		var beat_id := StringName(beat.get("id", &""))
 		on_read = func() -> void:
 			StoryDb.mark_told(who, beat_id)
@@ -461,7 +454,8 @@ func activate(_by: Node3D) -> void:
 		# worse than no box.
 		_choose_trade(who, _counters(row), 0)
 		return
-	DialogueBox.open(self, who, pages, _options(who, row), on_read)
+	DialogueBox.open(self, who, pages, _options(who, row), on_read,
+		_choose_leave.bind(who))
 
 
 ## The screens this person will open, in order. Never null.
@@ -533,9 +527,11 @@ func _choose_trade(who: StringName, counters: Array, i: int) -> PackedStringArra
 
 
 ## Goodbye, said out loud and written down, and then the box closes on the next
-## press. The same `farewell` cue the trade screen says on its way out -- one cue,
-## two doors out of the same conversation.
+## press. Stop first because the elder's farewell is written-only: otherwise a
+## still-playing hello makes `DialogueDb.pages` resolve that take instead of
+## falling through to `WRITTEN`. The trade screen uses the same `farewell` cue.
 func _choose_leave(who: StringName) -> PackedStringArray:
+	Voice.stop()
 	return DialogueDb.speak(who, &"farewell")
 
 

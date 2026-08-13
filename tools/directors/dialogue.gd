@@ -203,7 +203,45 @@ func _story(rig) -> void:
 	if not up or box == null:
 		_ck("H2 he opens a box", false)
 		return
-	_ck("H2 and it is the briefing, not his greeting (%s)" % box.text(),
+	var greetings := {
+		"Hail!": "hail",
+		"How go your explorations?": "how_go_your_explorations",
+	}
+	var greeting_take := String(greetings.get(box.text(), ""))
+	_ck("H2 his default greeting comes before the briefing (%s)" % box.text(),
+		not greeting_take.is_empty())
+	_ck("H2a and the corresponding hello take is playing (%s)" % Voice.line(),
+		Voice.speaking() and Voice.line() == greeting_take)
+
+	# Leave while the hello can still be in his mouth. His farewell has no take,
+	# which is the boundary case for stopping the hello before resolving WRITTEN.
+	await rig.wait_frames(2)
+	await rig.tap(["ui_cancel"])
+	await rig.wait_frames(2)
+	box = rig.dialogue()
+	_ck("H2b Cancel resolves his written farewell (%s)"
+		% (box.text() if box != null else ""),
+		box != null and box.text() == "You're doing wonderfully.")
+	_ck("H2c abandoning the opening leaves the briefing owed",
+		not Game.flag(StoryDb.told_flag(&"elder", &"briefing")))
+	await rig.tap(["ui_cancel"])
+	var closed: bool = await rig.until(func() -> bool: return rig.dialogue() == null, 2.0)
+	_ck("H2d a second Cancel closes the farewell", closed)
+
+	await _walk_to(rig, garrison.keeper)
+	Voice.stop()
+	await rig.tap(["interact"])
+	up = await rig.until(func() -> bool: return rig.dialogue() != null, 3.0)
+	box = rig.dialogue()
+	if not up or box == null:
+		_ck("H2e he can be addressed again", false)
+		return
+	for _i in 4:
+		if box.text().begins_with("Aldric Vane."):
+			break
+		await rig.tap(["interact"])
+		await rig.wait_frames(2)
+	_ck("H2e advancing past the greeting starts the briefing (%s)" % box.text(),
 		box.text().begins_with("Aldric Vane."))
 	await rig.tap(["interact"])
 	await rig.wait_frames(3)
@@ -512,14 +550,41 @@ func _leave(rig) -> void:
 ## the exact way to get a chin or a chest on the other.
 func _gallery(rig) -> void:
 	var garrison: Garrison = rig.scene()
-	var who := {
-		"d_07_alchemist.png": garrison.alchemist,
-		"d_08_keeper.png": garrison.keeper,
-		"d_09_quartermaster.png": garrison.vendor,
-		"d_10_jewelcrafter.png": garrison.jeweller,
+	var people := {
+		"d_07_alchemist.png": {
+			"person": garrison.alchemist,
+			"hellos": {"Need any potions?": "need_any_potions"},
+			"farewell": "Do try to stay alive down there.",
+			"farewell_take": "do_try_to_stay_alive_down_there",
+		},
+		"d_08_keeper.png": {
+			"person": garrison.keeper,
+			"hellos": {
+				"Hail!": "hail",
+				"How go your explorations?": "how_go_your_explorations",
+			},
+			"farewell": "You're doing wonderfully.",
+			"farewell_take": "",
+		},
+		"d_09_quartermaster.png": {
+			"person": garrison.vendor,
+			"hellos": {"I have just the deal for you.": "ive_just_the_deal_for_you"},
+			"farewell": "Come back soon with more treasures.",
+			"farewell_take": "come_back_with_more_treasures",
+		},
+		"d_10_jewelcrafter.png": {
+			"person": garrison.jeweller,
+			"hellos": {
+				"I have just the right amulet for you.":
+					"i_have_just_the_right_amulet_for_you",
+			},
+			"farewell": "If I may say, you are looking quite fashionable.",
+			"farewell_take": "youre_looking_quite_fashionable",
+		},
 	}
-	for shot: String in who:
-		var person: Npc = who[shot]
+	for shot: String in people:
+		var row: Dictionary = people[shot]
+		var person: Npc = row["person"]
 		if person == null:
 			continue
 		await _walk_to(rig, person)
@@ -529,20 +594,33 @@ func _gallery(rig) -> void:
 		if not up:
 			_ck("F %s never opened a box" % shot, false)
 			continue
+		var box: Node = rig.dialogue()
+		var hellos: Dictionary = row["hellos"]
+		var hello_take := String(hellos.get(box.text(), ""))
+		_ck("F %s opens with its default hello (%s)" % [shot, box.text()],
+			not hello_take.is_empty())
+		_ck("F %s plays the corresponding hello take (%s)" % [shot, Voice.line()],
+			not hello_take.is_empty() and Voice.line() == hello_take)
 		# Let the line finish rather than shooting it mid-word: these frames are
 		# about the FACES, and a half-typed sentence is the subject of `d_02`.
-		await rig.tap(["interact"])
-		await rig.wait_frames(6)
+		await rig.until(func() -> bool: return not box.is_typing(), 2.0)
 		await rig.capture(out.path_join(shot))
-		for _i in 4:
-			if rig.dialogue() == null:
-				break
-			await rig.tap(["ui_cancel"])
-			await rig.wait_frames(2)
+		await rig.tap(["ui_cancel"])
+		await rig.wait_frames(2)
+		box = rig.dialogue()
+		_ck("F %s presents its default farewell (%s)"
+			% [shot, box.text() if box != null else ""],
+			box != null and box.text() == String(row["farewell"]))
+		var farewell_take := String(row["farewell_take"])
+		if not farewell_take.is_empty():
+			_ck("F %s plays its farewell take (%s)" % [shot, Voice.line()],
+				Voice.line() == farewell_take)
+		await rig.tap(["ui_cancel"])
+		await rig.until(func() -> bool: return rig.dialogue() == null, 2.0)
 		# Cancel and NOT the pause menu behind it: `ui_cancel` opens `PauseMenu`
 		# too, and a box that lets the press through leaves the yard frozen with a
 		# menu over it -- which the next beat would report as "nobody would talk".
-		_ck("F %s closes on cancel, and only that" % shot,
+		_ck("F %s closes on the second Cancel, and only that" % shot,
 			rig.dialogue() == null and not rig.paused)
 
 
@@ -553,8 +631,9 @@ func _gallery(rig) -> void:
 ## of this wait is the thing waited for and never a frame count (`shoot.until`).
 func _walk_to(rig, who: Node3D) -> void:
 	# Their OWN forward and not world +Z: the keeper and the jewelcrafter are
-	# turned into the yard, and a fixed offset puts you behind their booth.
-	var front: Vector3 = who.global_transform.basis * Vector3(0.0, 0.0, 1.65)
+	# turned into the yard. Stay close enough that the person wins nearest-focus
+	# even where the garden plots now share the alchemist's customer-side pocket.
+	var front: Vector3 = who.global_transform.basis * Vector3(0.0, 0.0, 0.9)
 	_stand_at(rig, who.global_position + front)
 	await rig.wait_physics_frames(6)
 	var focused: bool = await rig.until(

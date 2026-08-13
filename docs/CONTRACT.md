@@ -2921,7 +2921,7 @@ shows it. Both are keyed by the same speaker id `Voice.LINES` and
 DialogueDb.name_of(&"smith")          # "Brannoc" -- the plate says who, not what
 DialogueDb.model_of(&"smith")         # an `NpcBody.PEOPLE` key, for the bust
 DialogueDb.speak(&"smith", &"hello")  # says it AND returns the pages to type
-DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` empty
+DialogueBox.open(host, &"smith", pages, choices, on_read, on_cancel)  # null if empty
 ```
 
 - **The text is looked up by the take that is playing, never by the cue.**
@@ -2947,12 +2947,16 @@ DialogueBox.open(host, &"smith", pages, choices, on_read)  # null if `pages` emp
   `tools/directors/dialogue.gd` beat G reads the RESOLVED theme font off each row
   (`DialogueBox.choice_faces`) so a theme change cannot bring the split back
   quietly.
-- **`on_read` fires when the last opening page is TURNED, not when the box
-  opens.** `StoryDb` hangs its "you have heard this" flag off it, so escaping out
-  of a nine-page briefing leaves the briefing owed.
+- **`Npc.activate` prepends the person's default hello to a pending StoryDb
+  beat.** `on_read` fires when the last opening page is TURNED, not when the box
+  opens, so the beat is acknowledged only after its story portion has been read.
+  Escaping during either the greeting or the story leaves the beat owed.
 - **One button drives all of it** — `interact`, the same press that opened it:
   fill the line, turn the page, ask the question, take the answer, in that order.
-  `ui_cancel` ends a conversation outright. Input is POLLED, for
+  In an ordinary Npc conversation, `ui_cancel` invokes the caller-provided
+  `on_cancel` to resolve that person's default farewell; a second Cancel skips
+  or closes it, and abandoning an unread story leaves it owed. Generic boxes
+  without `on_cancel` still close immediately. Input is POLLED, for
   `TradeScreen._tick_input`'s reason (`Input.action_press` synthesises no event).
 - **The counter is behind the Trade option, not behind the press.** Since
   2026-08-10 `Npc.activate` opens a box; `TradeScreen` opens from a choice inside
@@ -3008,8 +3012,9 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
 
 - **Two shapes.** A **beat** is an ordered, once-only story page-run: the first
   one whose `needs` are met and which has not been heard is what `Npc.activate`
-  opens instead of the recorded greeting. A **topic** is a repeatable question,
-  offered as a `keep` row in the option list. Beats are spent; topics are not.
+  appends after the person's recorded greeting. A **topic** is a repeatable
+  question, offered as a `keep` row in the option list. Beats are spent; topics
+  are not.
 - **Three metrics.** `bosses` counts `boss_dead_*` over `BossDb.BOSSES` — **not**
   every flag of that shape, because minibosses set the same one and there are
   several per floor. `gold` is `Game.gold_earned`, the LIFETIME total, which is a
@@ -3024,11 +3029,11 @@ StoryDb.SMITH_TOKEN                   # &"makers_mark" — the object the gate r
   arrival flag the first time the metric is met, so spending, dropping or losing
   the mark cannot un-arrive Brannoc. `tools/directors/roster.gd` beat D erases
   both the mark and the boss flag and asserts both keepers stay.
-- **The words here are WRITTEN and nothing plays.** Every recorded take is
-  already spoken for by `DialogueDb.SAID`; inventing cue names for lines nobody
-  has been in a booth for would fail `tools/directors/dialogue.gd` beat A0 on
-  purpose. A director that checks the RECORDINGS has to talk a person's story out
-  of them first — `voices.gd`'s `_clear_story`, `dialogue.gd`'s `_exhaust`.
+- **The story words here are WRITTEN and nothing plays for them.** Every recorded
+  take is already spoken for by `DialogueDb.SAID`; inventing cue names for lines
+  nobody has been in a booth for would fail `tools/directors/dialogue.gd` beat A0
+  on purpose. `Npc.activate` plays the person's default hello first, then appends
+  these pages without inventing a recording for them.
 - **`unlocked()` writes.** It stamps `garrison_<who>_arrived` the first time the
   gate is met and answers off the flag ever after (the latch above), which is
   also how `tools/shoot.gd` hands every director the full yard: it sets the
