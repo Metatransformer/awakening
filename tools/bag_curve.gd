@@ -19,7 +19,7 @@ extends SceneTree
 ## `FloorDb.rooms/pack/roster`, `Dungeon.chest_chance`, `Prog.chest_picks` and
 ## `Prog.drop_rolls`, `Enemy.DEFS` health -- rolls them through the real
 ## `ItemDb.roll` tables, and pushes every mote through the real `Run.collect`, so
-## the SLOT arithmetic (three case slots first, then the hold; a part-stack costs
+## the SLOT arithmetic (five case slots first, then the hold; a part-stack costs
 ## a whole slot in each region) is the shipped one rather than a model of it. If
 ## the generator's shape changes, the reads at the top of `_floor` are what to
 ## re-check.

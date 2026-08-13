@@ -7,7 +7,7 @@ extends RefCounted
 ##     --out=/tmp/inventory-drop/x.png --size=1280x720 --warmup=60
 
 const ITEM := &"iron_scrap"
-const CASE_COUNT := 36
+const CASE_COUNT := 60
 const HOLD_COUNT := 6
 const TOTAL_COUNT := CASE_COUNT + HOLD_COUNT
 ## Seven shares cleanly across 756 base value: the six-piece hold cell carries

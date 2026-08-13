@@ -198,10 +198,10 @@ func _pouch(rig) -> void:
 	# Counted off the shared `ItemGrid` rather than off a list of buttons the
 	# panel used to keep: the grid IS the drawn cells now, so this reads what is
 	# on screen instead of a parallel array that could agree with nothing.
-	# TWO grids since the document case (GDD §3.1): three cells above the line and
+	# TWO grids since the document case (GDD §3.1): five cells above the line and
 	# the rest below it. The claim being checked is unchanged -- the grids ARE the
 	# capacity -- it is just spread over two containers now, and the sum is still
-	# `Game.bag_slots` because the case is the bag's top three slots and not three
+	# `Game.bag_slots` because the case is the bag's top five slots and not five
 	# extra ones.
 	var drawn: int = pouch.grid().count() + pouch._case_grid.count()
 	_ck("B1 it draws one cell per bag slot (%d of %d)" % [drawn, Game.bag_slots],
@@ -670,7 +670,7 @@ func _death(rig) -> void:
 	Run.collect(&"cold_iron_core", 1)
 	Run.collect(&"tension_coil", 3)
 	# Everything OUT of the document case, because the rule under test here is the
-	# old one and it is still the rule for nine of the twelve slots: a component
+	# old one and it is still the rule for seven of the twelve slots: a component
 	# in the hold when you die is gone. Pickup fills the case first (GDD §3.1), so
 	# without this the core would come home and G2 would be checking the case
 	# rather than the floor. What the case does with a core is `forgive_loop`'s.

@@ -925,7 +925,7 @@ time, *should this go?* It never once runs it the other way: **is anything that 
 feed push-on-or-leave missing?**
 
 It is. `HUDCHECK` prints `slots=8/12`, and `RunState` splits those twelve into a
-3-slot **case** that comes home when you die and a 9-slot **hold** that does not.
+5-slot **case** that comes home when you die and a 7-slot **hold** that does not.
 That is the most push-on-or-leave fact in the game — it is literally what you lose —
 and no pixel on the screen says it. The rim says the best rarity, the slips say the
 distribution of value, and nothing says *how full* or *how much of this survives*.
@@ -938,8 +938,8 @@ and they do not fit each other. That is the §5.2-versus-§5.2b failure this doc
 opens by criticising, recurring inside the document's own replacement table.
 
 **Decision 26 — the dead band under the slips becomes the slot readout.** One row of
-twelve marks along the rim's bottom inside edge: the first three (the case) full
-height, the other nine half height, each filled when its slot is used and an empty
+twelve marks along the rim's bottom inside edge: the first five (the case) full
+height, the other seven half height, each filled when its slot is used and an empty
 ASH@60% notch when it is not. Then, in one change:
 
 - the rim's empty state has content and teaches the histogram before the player has

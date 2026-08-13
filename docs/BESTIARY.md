@@ -186,7 +186,7 @@ Five things the build had to decide that the table above does not say:
   vertical beam**. The ring alone was the first cut and the render is what
   rejected it — in the garrison it sat behind a knee-high planter.
 
-It steals the **richest reachable slot in the HOLD only**. The three-slot document
+It steals the **richest reachable slot in the HOLD only**. The five-slot document
 case is never touched (`docs/METAGAME.md` — that is what the case is *for*), and
 relics and Echoes are refused outright. Kill it and one `LootMote` carrying the
 whole stack drops where it fell; let it reach the door and the loss is permanent.

@@ -48,7 +48,7 @@ types do not convert into one another automatically.
 | Gold | Coins bank directly and use no bag slot | Kept, minus the extraction charge | Kept |
 | Field Notes | First-time observation ids are pending run knowledge, not carried loot | New ids award permanent notes at debrief | New ids award permanent notes at debrief |
 | Bag | Holds sale goods, components, relics, and temporary finds | Banked by item kind | Exposed contents are lost |
-| Document case | Three secure cells within the bag limit | Banked with the rest | Banked; no extraction fee is charged |
+| Document case | Five secure cells within the bag limit | Banked with the rest | Banked; no extraction fee is charged |
 | Components | Occupy bag cells until brought home | Move to their named workbench | Lost unless packed in the case |
 | Relics | Unique, unsellable, and always exposed | Become available for their home transaction | Return to their authored recovery location |
 | Permanent progress | Lives at home | Kept | Kept |
@@ -65,7 +65,7 @@ rules belong to [ITEMS.md](ITEMS.md), and Echo placement and effects belong to
 ## 3. Bag pressure
 
 The starting bag has **12 cells**. Four purchasable upgrades raise the hard
-maximum to **16 cells**. The document case uses three of those cells; it does
+maximum to **16 cells**. The document case uses five of those cells; it does
 not add capacity.
 
 Each item defines its own stack limit. A stack that exceeds its limit consumes

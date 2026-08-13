@@ -10,12 +10,12 @@ extends RefCounted
 ##   tools/quiet.sh --path . -s tools/shoot.gd -- \
 ##     --scene=res://scenes/rooms/garrison.tscn \
 ##     --director=res://tools/directors/forgive_loop.gd \
-##     --out=/tmp/forgive/x.png --warmup=60
+##     --out=/tmp/forgive/x.png --size=1280x720 --warmup=60
 ##
 ## What it claims, in the order it proves them:
 ##
-##   A  **The document case** (GDD §3.1). Three of the twelve slots come home.
-##      Nine still die, a relic will not fit in it, and the heat premium is
+##   A  **The document case** (GDD §3.1). Five of the twelve slots come home.
+##      Seven still die, a relic will not fit in it, and the heat premium is
 ##      split between the two halves rather than following the body.
 ##   B  The pouch DRAWS the case as the top of the bag, and A moves a stack
 ##      across the line in either direction.
@@ -69,10 +69,11 @@ func _case(rig) -> void:
 	Game.reset()
 	Run.enter(9001)
 
-	_ck("A0 the case is three slots", Run.CASE_SLOTS == 3)
-	_ck("A1 the hold is everything else (%d + %d = %d)" % [
+	_ck("A0 the case is five slots", Run.CASE_SLOTS == 5)
+	_ck("A1 the hold is seven slots and the two regions sum (%d + %d = %d)" % [
 		Run.CASE_SLOTS, Run.hold_slots(), Game.bag_slots],
-		Run.CASE_SLOTS + Run.hold_slots() == Game.bag_slots)
+		Run.hold_slots() == 7
+			and Run.CASE_SLOTS + Run.hold_slots() == Game.bag_slots)
 
 	# Pickup packs the case FIRST. The forgiving default for the player who never
 	# opens a menu, which is exactly the player §3.1 is about; the packing
@@ -99,8 +100,8 @@ func _case(rig) -> void:
 	Run.collect(&"whetstone_grit", 5)
 	Run.collect(&"tension_coil", 7)
 	print("FORGIVE bag=%s cased=%s" % [Run.bag, Run.case_contents()])
-	_ck("A7 the case never overflows its three (%d)" % Run.case_slots_used(),
-		Run.case_slots_used() <= Run.CASE_SLOTS)
+	_ck("A7 the fixture fills exactly the case's five slots (%d)"
+		% Run.case_slots_used(), Run.case_slots_used() == Run.CASE_SLOTS)
 	_ck("A8 slots_used is the two regions summed (%d = %d + %d)" % [
 		Run.slots_used(), Run.case_slots_used(), Run.hold_slots_used()],
 		Run.slots_used() == Run.case_slots_used() + Run.hold_slots_used())
@@ -182,10 +183,12 @@ func _pouch(rig) -> void:
 
 	var pouch: MenuPouchPanel = Menu.get_node("Root/Screens/PouchScreen")
 	_ck("B0 the pouch is showing", pouch.visible)
-	_ck("B1 the case has its own three cells",
-		pouch._case_grid.count() == Run.CASE_SLOTS)
-	_ck("B2 the hold has the rest (%d)" % pouch.grid().count(),
-		pouch.grid().count() == Run.hold_slots())
+	_ck("B1 the case draws its own five cells",
+		pouch._case_grid.count() == 5
+			and pouch._case_grid.count() == Run.CASE_SLOTS)
+	_ck("B2 the hold draws the other seven cells (%d)" % pouch.grid().count(),
+		pouch.grid().count() == 7
+			and pouch.grid().count() == Run.hold_slots())
 	_ck("B3 and together they are the bag",
 		pouch._case_grid.count() + pouch.grid().count() == Game.bag_slots)
 	# The frame still fits. Six columns of 150 px once built a 1400 px frame
@@ -195,8 +198,9 @@ func _pouch(rig) -> void:
 	var screen_size := Vector2(Menu.get_viewport().get_visible_rect().size)
 	print("FORGIVE pouch frame=%.0fx%.0f viewport=%.0fx%.0f" % [
 		frame.size.x, frame.size.y, screen_size.x, screen_size.y])
-	_ck("B4 the frame fits on the screen",
-		frame.size.x <= screen_size.x and frame.size.y <= screen_size.y)
+	_ck("B4 the frame fits the 1280x720 screen",
+		screen_size == Vector2(1280.0, 720.0)
+			and frame.size.x <= screen_size.x and frame.size.y <= screen_size.y)
 	_ck("B5 the cursor opens on the case, which is the answer to 'what if I die'",
 		Menu.get_viewport().gui_get_focus_owner() == pouch._case_grid.cell_at(0))
 	await rig.capture(out.path_join("fg_00_case.png"))
@@ -226,9 +230,9 @@ func _pouch(rig) -> void:
 func _receipt(rig) -> void:
 	Game.reset()
 	Run.enter(9003)
-	# Six kinds, because the case holds three and the beat is about the OTHER
-	# column: a bag that fits entirely in the case dies with nothing on the floor,
-	# and the receipt would honestly draw one grid.
+	# Six kinds: five protected kinds plus exposed overflow, because the beat is
+	# about the OTHER column. A bag that fits entirely in the case dies with
+	# nothing on the floor, and the receipt would honestly draw one grid.
 	Run.collect(&"deep_amber", 2)
 	Run.collect(&"bone_shard", 12)
 	Run.collect(&"tension_coil", 4)

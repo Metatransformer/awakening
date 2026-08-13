@@ -1897,11 +1897,11 @@ snapshot v3, and clears in both `Run.reset()` and a fresh `Run.enter()`. Rebuild
 therefore restores rubble for mined sites during the same run and restores
 intact deterministic veins only when a new run begins.
 
-### The document case — `Run.cased`, three of the bag's slots
+### The document case — `Run.cased`, five of the bag's slots
 
 ```gdscript
 # scripts/autoload/run_state.gd
-const CASE_SLOTS := 3
+const CASE_SLOTS := 5
 var cased: Dictionary[StringName, int] = {}   # a SUBSET of `bag`, never a second pile
 
 func in_case(id: StringName) -> int            # how many of `id` are packed
