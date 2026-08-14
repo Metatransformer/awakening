@@ -4,11 +4,11 @@ extends Node3D
 ## and the Sunken Cut. Gameplay remains with GarrisonOutskirts: this component
 ## owns only the place -- terrain, water, silhouettes, paths, and stable sockets.
 
-const MAT_GRASS := preload("res://assets/materials/mat_grass.tres")
-const MAT_PATH := preload("res://assets/materials/mat_floor.tres")
-const MAT_CLIFF := preload("res://assets/materials/mat_wall_sunlit.tres")
-const MAT_DARK_STONE := preload("res://assets/materials/mat_wall.tres")
-const MAT_WOOD := preload("res://assets/materials/mat_wood.tres")
+const MAT_GRASS := preload("res://assets/materials/mat_outskirts_grass.tres")
+const MAT_PATH := preload("res://assets/materials/mat_outskirts_path.tres")
+const MAT_CLIFF := preload("res://assets/materials/mat_outskirts_rock.tres")
+const MAT_DARK_STONE := preload("res://assets/materials/mat_outskirts_rock.tres")
+const MAT_WOOD := preload("res://assets/materials/mat_outskirts_wood.tres")
 const MAT_IRON := preload("res://assets/materials/mat_iron.tres")
 const WATER_SHADER: Shader = preload("res://assets/shaders/outskirts_water.gdshader")
 const WATERFALL_SHADER: Shader = preload(
@@ -197,6 +197,8 @@ var _ground_patch_material: StandardMaterial3D
 var _crop_leaf_material: StandardMaterial3D
 var _crop_ripe_material: StandardMaterial3D
 var _path_material: StandardMaterial3D
+var _harmonized_mesh_cache: Dictionary[String, Mesh] = {}
+var _harmonized_material_cache: Dictionary[String, StandardMaterial3D] = {}
 var _built: bool = false
 
 
@@ -244,68 +246,62 @@ func port(id: StringName) -> Transform3D:
 func _build() -> void:
 	_water_material = ShaderMaterial.new()
 	_water_material.shader = WATER_SHADER
-	_water_material.set_shader_parameter(&"wave_amp", 0.055)
-	_water_material.set_shader_parameter(&"wave_len", 8.5)
-	_water_material.set_shader_parameter(&"swell_normal", 0.18)
-	_water_material.set_shader_parameter(&"ripple_scale", 0.42)
-	_water_material.set_shader_parameter(&"ripple_strength", 0.16)
-	_water_material.set_shader_parameter(&"fresnel_strength", 0.11)
-	_water_material.set_shader_parameter(&"water_roughness", 0.52)
-	_water_material.set_shader_parameter(&"water_specular", 0.20)
-	_water_material.set_shader_parameter(&"shallow_color", Vector3(0.08, 0.29, 0.28))
-	_water_material.set_shader_parameter(&"deep_color", Vector3(0.018, 0.075, 0.11))
+	_water_material.set_shader_parameter(&"motion_amplitude", 0.025)
+	_water_material.set_shader_parameter(&"motion_wavelength", 11.0)
+	_water_material.set_shader_parameter(&"motion_speed", 0.28)
+	_water_material.set_shader_parameter(&"flow_direction", Vector2(0.92, 0.38))
+	_water_material.set_shader_parameter(&"fresnel_strength", 0.045)
+	_water_material.set_shader_parameter(&"water_roughness", 0.74)
+	_water_material.set_shader_parameter(&"water_specular", 0.12)
+	_water_material.set_shader_parameter(&"deep_color", Vector3(0.045, 0.13, 0.14))
+	_water_material.set_shader_parameter(&"body_color", Vector3(0.085, 0.22, 0.20))
+	_water_material.set_shader_parameter(&"shallow_color", Vector3(0.16, 0.31, 0.24))
 	# Rivers, fishing water, and the quiet south pond need different surface reads.
 	# Sharing one shader keeps the language coherent; duplicated parameter sets stop
 	# every body of water from reading like the same animated sheet.
 	_river_water_material = _water_material.duplicate() as ShaderMaterial
-	_river_water_material.set_shader_parameter(&"wave_amp", 0.035)
-	_river_water_material.set_shader_parameter(&"wave_len", 6.4)
-	_river_water_material.set_shader_parameter(&"wave_speed", 0.92)
-	_river_water_material.set_shader_parameter(&"swell_normal", 0.14)
-	_river_water_material.set_shader_parameter(&"ripple_scale", 0.31)
-	_river_water_material.set_shader_parameter(&"ripple_strength", 0.22)
-	_river_water_material.set_shader_parameter(&"ripple_speed", 0.78)
-	_river_water_material.set_shader_parameter(&"fresnel_strength", 0.015)
+	_river_water_material.set_shader_parameter(&"motion_amplitude", 0.030)
+	_river_water_material.set_shader_parameter(&"motion_wavelength", 8.0)
+	_river_water_material.set_shader_parameter(&"motion_speed", 0.46)
+	_river_water_material.set_shader_parameter(&"flow_direction", Vector2(0.36, 0.93))
+	_river_water_material.set_shader_parameter(&"fresnel_strength", 0.025)
 	_river_water_material.set_shader_parameter(&"water_roughness", 0.82)
-	_river_water_material.set_shader_parameter(&"water_specular", 0.04)
-	_river_water_material.set_shader_parameter(&"shallow_color", Vector3(0.025, 0.14, 0.16))
-	_river_water_material.set_shader_parameter(&"deep_color", Vector3(0.004, 0.024, 0.040))
+	_river_water_material.set_shader_parameter(&"water_specular", 0.08)
+	_river_water_material.set_shader_parameter(&"deep_color", Vector3(0.035, 0.105, 0.12))
+	_river_water_material.set_shader_parameter(&"body_color", Vector3(0.065, 0.17, 0.17))
+	_river_water_material.set_shader_parameter(&"shallow_color", Vector3(0.12, 0.25, 0.21))
 
 	_fishing_water_material = _water_material.duplicate() as ShaderMaterial
-	_fishing_water_material.set_shader_parameter(&"wave_amp", 0.018)
-	_fishing_water_material.set_shader_parameter(&"wave_len", 13.5)
-	_fishing_water_material.set_shader_parameter(&"wave_speed", 0.34)
-	_fishing_water_material.set_shader_parameter(&"swell_normal", 0.07)
-	_fishing_water_material.set_shader_parameter(&"ripple_strength", 0.07)
-	_fishing_water_material.set_shader_parameter(&"ripple_speed", 0.24)
-	_fishing_water_material.set_shader_parameter(&"fresnel_strength", 0.07)
-	_fishing_water_material.set_shader_parameter(&"water_roughness", 0.70)
-	_fishing_water_material.set_shader_parameter(&"water_specular", 0.12)
-	_fishing_water_material.set_shader_parameter(&"shallow_color", Vector3(0.12, 0.31, 0.21))
-	_fishing_water_material.set_shader_parameter(&"deep_color", Vector3(0.025, 0.085, 0.065))
+	_fishing_water_material.set_shader_parameter(&"motion_amplitude", 0.012)
+	_fishing_water_material.set_shader_parameter(&"motion_wavelength", 15.0)
+	_fishing_water_material.set_shader_parameter(&"motion_speed", 0.18)
+	_fishing_water_material.set_shader_parameter(&"flow_direction", Vector2(0.78, -0.62))
+	_fishing_water_material.set_shader_parameter(&"fresnel_strength", 0.045)
+	_fishing_water_material.set_shader_parameter(&"water_roughness", 0.76)
+	_fishing_water_material.set_shader_parameter(&"water_specular", 0.10)
+	_fishing_water_material.set_shader_parameter(&"deep_color", Vector3(0.055, 0.14, 0.105))
+	_fishing_water_material.set_shader_parameter(&"body_color", Vector3(0.10, 0.22, 0.15))
+	_fishing_water_material.set_shader_parameter(&"shallow_color", Vector3(0.18, 0.32, 0.20))
 
 	_scenic_pond_material = _water_material.duplicate() as ShaderMaterial
-	_scenic_pond_material.set_shader_parameter(&"wave_amp", 0.025)
-	_scenic_pond_material.set_shader_parameter(&"wave_len", 10.5)
-	_scenic_pond_material.set_shader_parameter(&"wave_speed", 0.46)
-	_scenic_pond_material.set_shader_parameter(&"swell_normal", 0.10)
-	_scenic_pond_material.set_shader_parameter(&"ripple_strength", 0.11)
-	_scenic_pond_material.set_shader_parameter(&"ripple_speed", 0.38)
-	_scenic_pond_material.set_shader_parameter(&"fresnel_strength", 0.08)
-	_scenic_pond_material.set_shader_parameter(&"water_roughness", 0.58)
-	_scenic_pond_material.set_shader_parameter(&"water_specular", 0.16)
-	_scenic_pond_material.set_shader_parameter(&"shallow_color", Vector3(0.085, 0.28, 0.24))
-	_scenic_pond_material.set_shader_parameter(&"deep_color", Vector3(0.018, 0.07, 0.085))
+	_scenic_pond_material.set_shader_parameter(&"motion_amplitude", 0.018)
+	_scenic_pond_material.set_shader_parameter(&"motion_wavelength", 12.0)
+	_scenic_pond_material.set_shader_parameter(&"motion_speed", 0.22)
+	_scenic_pond_material.set_shader_parameter(&"flow_direction", Vector2(-0.68, 0.73))
+	_scenic_pond_material.set_shader_parameter(&"fresnel_strength", 0.05)
+	_scenic_pond_material.set_shader_parameter(&"water_roughness", 0.72)
+	_scenic_pond_material.set_shader_parameter(&"water_specular", 0.12)
+	_scenic_pond_material.set_shader_parameter(&"deep_color", Vector3(0.045, 0.12, 0.125))
+	_scenic_pond_material.set_shader_parameter(&"body_color", Vector3(0.08, 0.20, 0.18))
+	_scenic_pond_material.set_shader_parameter(&"shallow_color", Vector3(0.15, 0.29, 0.22))
 
-	_soil_material = _plain_material(Color(0.20, 0.105, 0.045), 1.0)
-	_reed_material = _plain_material(Color(0.25, 0.31, 0.13), 0.95)
-	_mine_dark_material = _plain_material(Color(0.006, 0.005, 0.004), 1.0)
-	_ground_patch_material = _plain_material(Color(0.19, 0.22, 0.09), 1.0)
-	_crop_leaf_material = _plain_material(Color(0.16, 0.34, 0.08), 0.95)
-	_crop_ripe_material = _plain_material(Color(0.62, 0.28, 0.055), 0.88)
-	_path_material = MAT_PATH.duplicate() as StandardMaterial3D
-	_path_material.albedo_color = Color(0.82, 0.67, 0.47)
-	_path_material.roughness = 0.96
+	_soil_material = _plain_material(Color(0.30, 0.18, 0.095), 0.94)
+	_reed_material = _plain_material(Color(0.34, 0.40, 0.18), 0.94)
+	_mine_dark_material = _plain_material(Color(0.035, 0.045, 0.065), 0.96)
+	_ground_patch_material = _plain_material(Color(0.28, 0.34, 0.15), 0.95)
+	_crop_leaf_material = _plain_material(Color(0.22, 0.42, 0.12), 0.92)
+	_crop_ripe_material = _plain_material(Color(0.58, 0.34, 0.095), 0.86)
+	_path_material = MAT_PATH
 
 	var terrain := _group(self, &"Terrain")
 	var water := _group(self, &"Water")
@@ -422,9 +418,12 @@ func _build_water(parent: Node3D) -> void:
 func _build_waterfalls(parent: Node3D) -> void:
 	var material := ShaderMaterial.new()
 	material.shader = WATERFALL_SHADER
-	material.set_shader_parameter(&"base_color", Vector3(0.19, 0.42, 0.47))
-	material.set_shader_parameter(&"foam_color", Vector3(0.72, 0.84, 0.82))
-	material.set_shader_parameter(&"water_roughness", 0.34)
+	material.set_shader_parameter(&"base_color", Vector3(0.09, 0.22, 0.21))
+	material.set_shader_parameter(&"body_band_color", Vector3(0.16, 0.33, 0.29))
+	material.set_shader_parameter(&"foam_color", Vector3(0.56, 0.64, 0.55))
+	material.set_shader_parameter(&"scroll_speed", 0.62)
+	material.set_shader_parameter(&"water_roughness", 0.78)
+	material.set_shader_parameter(&"water_specular", 0.10)
 	for row: Vector4 in [Vector4(35.6, 15.0, 3.5, 6.4),
 			Vector4(7.0, 34.8, 2.4, 4.6)]:
 		var fall := MeshInstance3D.new()
@@ -1126,6 +1125,7 @@ func _batch_normalized_models(parent: Node3D, batch_name: StringName,
 	if template == null:
 		return
 	parent.add_child(template)
+	_harmonize_model(template, _model_family(packed))
 	var bounds := _model_bounds(template)
 	var parts: Array[Dictionary] = []
 	var can_batch := _collect_model_parts(template, template, parts)
@@ -1168,6 +1168,7 @@ func _batch_scaled_models(parent: Node3D, batch_name: StringName,
 	if template == null:
 		return
 	parent.add_child(template)
+	_harmonize_model(template, _model_family(packed))
 	var parts: Array[Dictionary] = []
 	var can_batch := _collect_model_parts(template, template, parts)
 	parent.remove_child(template)
@@ -1256,6 +1257,7 @@ func _model(parent: Node3D, node_name: StringName, packed: PackedScene,
 	model.position = model_offset
 	model.scale = scale_value
 	holder.add_child(model)
+	_harmonize_model(model, _model_family(packed))
 	return holder
 
 
@@ -1280,7 +1282,129 @@ func _normalized_model(parent: Node3D, node_name: StringName, packed: PackedScen
 			bounds.position.z + bounds.size.z * 0.5)
 		model.scale = Vector3.ONE * factor
 		model.position = -base_center * factor
+	_harmonize_model(model, _model_family(packed))
 	return holder
+
+
+func _model_family(packed: PackedScene) -> StringName:
+	var file_name := packed.resource_path.get_file()
+	if file_name == "hearthstone_cottage.glb":
+		return &"cottage"
+	if file_name == "cave_mouth.glb":
+		return &"cave"
+	if file_name.begins_with("boulder_"):
+		return &"boulder"
+	if file_name.begins_with("tree_"):
+		return &"tree"
+	if file_name.begins_with("meadow_") or file_name.contains("flower") \
+			or file_name.begins_with("poppy_") or file_name == "daisy_white.glb":
+		return &"foliage"
+	if file_name == "lamp_post.glb":
+		return &"lamp"
+	if file_name in ["rusted_spade.glb", "watering_can.glb", "woodsmans_axe.glb"]:
+		return &"tool"
+	if file_name in ["wooden_barrels.glb", "wooden_bucket.glb", "wooden_crate.glb"]:
+		return &"wood_prop"
+	return &"prop"
+
+
+func _harmonize_model(node: Node, family: StringName) -> void:
+	var mesh_instance := node as MeshInstance3D
+	if mesh_instance != null and mesh_instance.mesh != null:
+		var source_mesh := mesh_instance.mesh
+		mesh_instance.mesh = _harmonized_mesh(source_mesh, family)
+		if mesh_instance.material_override != null:
+			mesh_instance.material_override = _harmonized_material(
+				mesh_instance.material_override, family)
+		for surface: int in source_mesh.get_surface_count():
+			var source_override := mesh_instance.get_surface_override_material(surface)
+			if source_override != null:
+				mesh_instance.set_surface_override_material(surface,
+					_harmonized_material(source_override, family))
+	for child: Node in node.get_children():
+		_harmonize_model(child, family)
+
+
+func _harmonized_mesh(source: Mesh, family: StringName) -> Mesh:
+	var key := "%d:%s" % [source.get_instance_id(), family]
+	if _harmonized_mesh_cache.has(key):
+		return _harmonized_mesh_cache[key]
+	var mesh := source.duplicate(false) as Mesh
+	if mesh == null:
+		return source
+	for surface: int in source.get_surface_count():
+		mesh.surface_set_material(surface,
+			_harmonized_material(source.surface_get_material(surface), family))
+	_harmonized_mesh_cache[key] = mesh
+	return mesh
+
+
+func _harmonized_material(source: Material, family: StringName) -> Material:
+	if not source is StandardMaterial3D:
+		return source
+	var standard := source as StandardMaterial3D
+	var key := "%d:%s" % [standard.get_instance_id(), family]
+	if _harmonized_material_cache.has(key):
+		return _harmonized_material_cache[key]
+	var material := standard.duplicate(false) as StandardMaterial3D
+	if material == null:
+		return source
+	var multiplier := _family_color_multiplier(family)
+	material.albedo_color = Color(
+		standard.albedo_color.r * multiplier.r,
+		standard.albedo_color.g * multiplier.g,
+		standard.albedo_color.b * multiplier.b,
+		standard.albedo_color.a)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	var roughness_band := _family_roughness_band(family)
+	material.roughness = clampf(material.roughness,
+		roughness_band.x, roughness_band.y)
+	var true_metal := standard.metallic >= 0.45
+	if not true_metal:
+		material.metallic = 0.0
+		material.metallic_specular = minf(material.metallic_specular, 0.25)
+	var source_name := standard.resource_name.to_lower()
+	var wood_surface := family in [&"tree", &"wood_prop"] \
+		or source_name.contains("wood") or source_name.contains("timber")
+	material.normal_scale = minf(material.normal_scale, 0.30 if wood_surface else 0.45)
+	material.texture_filter = \
+		BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_harmonized_material_cache[key] = material
+	return material
+
+
+func _family_color_multiplier(family: StringName) -> Color:
+	match family:
+		&"cottage":
+			return Color(0.98, 0.94, 0.86, 1.0)
+		&"cave", &"boulder":
+			return Color(0.94, 0.92, 0.86, 1.0)
+		&"tree":
+			return Color(0.92, 0.96, 0.86, 1.0)
+		&"foliage":
+			return Color(0.95, 0.98, 0.90, 1.0)
+		&"lamp", &"tool":
+			return Color(0.95, 0.91, 0.84, 1.0)
+		&"wood_prop":
+			return Color(0.96, 0.91, 0.82, 1.0)
+	return Color(0.97, 0.95, 0.90, 1.0)
+
+
+func _family_roughness_band(family: StringName) -> Vector2:
+	match family:
+		&"cottage":
+			return Vector2(0.78, 0.92)
+		&"cave", &"boulder":
+			return Vector2(0.82, 0.95)
+		&"tree", &"wood_prop":
+			return Vector2(0.78, 0.92)
+		&"foliage":
+			return Vector2(0.84, 0.96)
+		&"lamp", &"tool":
+			return Vector2(0.72, 0.88)
+	return Vector2(0.80, 0.94)
 
 
 func _model_bounds(root_node: Node3D) -> AABB:
@@ -1380,6 +1504,11 @@ func _cylinder(parent: Node3D, node_name: StringName, material: Material,
 func _plain_material(color: Color, roughness: float) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	material.metallic = 0.0
+	material.metallic_specular = 0.10
 	material.roughness = roughness
 	return material
 

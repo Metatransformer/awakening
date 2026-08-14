@@ -217,7 +217,7 @@ func _build_cliff_crown_forest(source_mesh: ArrayMesh) -> void:
 	trunk_mesh.bottom_radius = 0.24
 	trunk_mesh.height = 1.0
 	trunk_mesh.radial_segments = 6
-	trunk_mesh.material = _plain_forest_material(Color(0.16, 0.09, 0.045))
+	trunk_mesh.material = _plain_forest_material(Color(0.24, 0.145, 0.085))
 	var crown_meshes: Array[CylinderMesh] = []
 	for layer: int in 3:
 		var crown := CylinderMesh.new()
@@ -226,8 +226,9 @@ func _build_cliff_crown_forest(source_mesh: ArrayMesh) -> void:
 		crown.height = 1.0
 		crown.radial_segments = 7
 		crown.material = _plain_forest_material(
-			Color(0.055 + float(layer) * 0.012,
-				0.14 + float(layer) * 0.018, 0.065))
+			Color(0.105 + float(layer) * 0.014,
+				0.205 + float(layer) * 0.020,
+				0.09 + float(layer) * 0.010))
 		crown_meshes.append(crown)
 	var baked_vertices := _mesh_vertices(source_mesh)
 	var transforms: Array[Transform3D] = []
@@ -300,7 +301,12 @@ func _nearest_baked_height(vertices: PackedVector3Array, point: Vector2) -> floa
 func _plain_forest_material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
-	material.roughness = 1.0
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	material.metallic = 0.0
+	material.metallic_specular = 0.10
+	material.roughness = 0.94
 	return material
 
 
