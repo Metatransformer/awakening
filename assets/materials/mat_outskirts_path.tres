@@ -1,0 +1,19 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/textures/outskirts/sunworn_path_v1.svg" id="1_albedo"]
+
+[resource]
+resource_name = "mat_outskirts_path"
+shading_mode = 1
+diffuse_mode = 0
+specular_mode = 0
+albedo_color = Color(0.94, 0.91, 0.84, 1)
+albedo_texture = ExtResource("1_albedo")
+metallic = 0.0
+metallic_specular = 0.12
+roughness = 0.88
+uv1_scale = Vector3(0.18, 0.18, 0.18)
+uv1_triplanar = true
+uv1_world_triplanar = true
+texture_filter = 5
+texture_repeat = true

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#777168"/>
+  <path d="M-18 12 L55 5 L91 39 L75 93 L18 105 L-18 78 Z" fill="#858076"/>
+  <path d="M92 0 L166 0 L188 42 L161 87 L84 76 L75 38 Z" fill="#69665f"/>
+  <path d="M168 4 L274 14 L274 86 L224 105 L183 76 L190 40 Z" fill="#8b8377"/>
+  <path d="M-18 109 L44 98 L82 128 L68 181 L12 194 L-18 172 Z" fill="#6d6a63"/>
+  <path d="M84 83 L161 90 L190 131 L164 180 L92 188 L65 145 Z" fill="#827b70"/>
+  <path d="M174 101 L229 91 L274 112 L274 183 L220 195 L177 168 L190 130 Z" fill="#716d66"/>
+  <path d="M-18 198 L52 181 L91 213 L78 274 L-18 274 Z" fill="#8a8275"/>
+  <path d="M91 191 L164 181 L197 220 L178 274 L76 274 Z" fill="#6b6861"/>
+  <path d="M201 193 L274 181 L274 274 L177 274 L190 222 Z" fill="#817a70"/>
+  <path d="M0 105 L44 98 M76 38 L84 76 M183 76 L224 105 M68 181 L92 188 M164 180 L177 168 M52 181 L91 191 M178 274 L190 222" fill="none" stroke="#4f4d49" stroke-width="6" stroke-linecap="round" opacity="0.72"/>
+  <path d="M18 43 C34 31 51 32 64 44 M110 122 C130 108 150 112 162 129 M209 145 C226 132 244 135 256 148 M18 232 C39 218 59 221 73 237" fill="none" stroke="#a19a8d" stroke-width="7" stroke-linecap="round" opacity="0.48"/>
+</svg>
