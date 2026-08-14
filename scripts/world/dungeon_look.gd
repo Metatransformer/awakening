@@ -22,8 +22,8 @@ const HOIST_SCENE: PackedScene = preload(
 	"res://assets/valenfeld/cistern/pulley-crate.glb")
 
 const CARDINALS: Array[StringName] = [&"n", &"e", &"s", &"w"]
-const WALL_UV_SCALE := Vector3(0.12, 0.12, 0.12)
-const FLOOR_UV_SCALE := Vector3(0.16, 0.16, 0.16)
+const WALL_UV_SCALE := Vector3(0.20, 0.20, 0.20)
+const FLOOR_UV_SCALE := Vector3(0.12, 0.12, 0.12)
 const PROP_UV_SCALE := Vector3.ONE
 const BAY_INSET := 0.45
 const RUNNEL_LENGTH := 4.8
@@ -43,7 +43,7 @@ static func _apply_drowned_bronze(dungeon: Node3D, level: int,
 		rooms: Dictionary) -> void:
 	var tint: Dictionary = FloorDb.tint(level)
 	var materials: Dictionary = _make_materials()
-	_retint_atmosphere(dungeon, tint)
+	_retint_atmosphere(dungeon, tint, rooms)
 	_retint_kit(dungeon, tint, materials)
 
 	var look := Node3D.new()
@@ -53,17 +53,22 @@ static func _apply_drowned_bronze(dungeon: Node3D, level: int,
 	_dress_corridors(dungeon, look, materials)
 
 
-static func _retint_atmosphere(dungeon: Node3D, tint: Dictionary) -> void:
+static func _retint_atmosphere(dungeon: Node3D, tint: Dictionary,
+		rooms: Dictionary) -> void:
 	var scene_root: Node = dungeon.get_parent()
 	if scene_root == null:
 		return
 	var world: WorldEnvironment = null
 	var fill: DirectionalLight3D = null
+	var enemy_fill: DirectionalLight3D = null
 	for node: Node in _tree(scene_root):
 		if world == null and node is WorldEnvironment:
 			world = node as WorldEnvironment
 		elif fill == null and node is DirectionalLight3D and node.name == &"Fill":
 			fill = node as DirectionalLight3D
+		elif enemy_fill == null and node is DirectionalLight3D \
+				and node.name == &"EnemyReadFill":
+			enemy_fill = node as DirectionalLight3D
 
 	# The scene resource is shared by every floor. The instance gets its own copy
 	# before any floor-specific values are written.
@@ -73,35 +78,53 @@ static func _retint_atmosphere(dungeon: Node3D, tint: Dictionary) -> void:
 		var air: Color = tint.get("air", Color(0.1255, 0.1569, 0.1882))
 		environment.background_mode = Environment.BG_COLOR
 		environment.background_color = air
-		environment.ambient_light_color = tint.get("ambient", Color(0.30, 0.34, 0.47))
-		environment.ambient_light_energy = float(tint.get("ambient_energy", 0.38))
+		var ambient: Color = tint.get("ambient", Color(0.30, 0.34, 0.47))
+		environment.ambient_light_color = ambient.lerp(Color(0.62, 0.66, 0.72), 0.36)
+		environment.ambient_light_energy = maxf(
+			float(tint.get("ambient_energy", 0.38)), 0.62)
 		environment.fog_enabled = true
 		environment.fog_light_color = air
 		var fog_density := float(tint.get("fog_density", 0.0062))
 		environment.fog_density = fog_density
-		environment.volumetric_fog_density = fog_density
-		# The inherited volume was warm enough to turn every nominally cool surface
-		# sepia. Drowned Bronze uses blue-grey particulate air so warm pools remain
-		# local keys instead of becoming a full-screen colour grade.
-		environment.volumetric_fog_albedo = Color(
-			air.r * 2.8, air.g * 2.8, air.b * 2.8, 1.0)
-		environment.adjustment_brightness = 1.06
-		environment.adjustment_contrast = 1.08
-		environment.adjustment_saturation = 1.0
+		environment.volumetric_fog_enabled = false
+		environment.tonemap_exposure = 1.02
+		environment.tonemap_white = 3.2
+		environment.adjustment_brightness = 1.04
+		environment.adjustment_contrast = 1.0
+		environment.adjustment_saturation = 0.88
 		environment.ssao_enabled = false
 		environment.glow_enabled = false
 
 	if fill != null:
 		fill.light_color = tint.get("fill", Color(0.58, 0.80, 0.96))
-		fill.light_energy = 0.32
-		fill.light_specular = 0.0
+		fill.light_energy = 0.60
+		fill.light_specular = 0.18
+
+	# The camera's actor-only fill must describe bone and cloth without bleaching
+	# pale materials into the same white as combat VFX. It remains camera-relative,
+	# shadowless, enemy-layer-only, and contributes nothing to the room.
+	if enemy_fill != null:
+		enemy_fill.light_energy = 1.15
+		enemy_fill.light_specular = 0.35
 
 	# Progression doors and stairs own other OmniLight colours. Only the authored
 	# torch class is part of the floor palette, and its energy remains untouched.
 	var fire: Color = tint.get("fire", Color(1.0, 0.74, 0.46))
-	for node: Node in _tree(dungeon):
-		if node is KitTorch:
-			(node as KitTorch).light_color = fire
+	for cell: Vector2i in rooms:
+		var room: Dictionary = rooms[cell]
+		var room_node := room.get("node") as Node3D
+		if room_node == null:
+			continue
+		for node: Node in _tree(room_node):
+			if not node is KitTorch:
+				continue
+			var torch := node as KitTorch
+			torch.light_color = fire
+			# Cistern fire is a local pool, not an olive room-wide grade. The flame
+			# stays authored and bright while its physical reach ends well before the
+			# opposite wall.
+			torch.light_range = minf(torch.light_range, 6.5)
+			torch.light_attenuation = maxf(torch.light_attenuation, 1.90)
 
 
 static func _retint_kit(dungeon: Node3D, tint: Dictionary,
@@ -152,55 +175,60 @@ static func _retint_lantern(lantern: Lantern) -> void:
 static func _make_materials() -> Dictionary:
 	var materials: Dictionary = {}
 	materials[&"wall"] = _material(WALL_TEXTURE,
-		Color(0.95, 1.08, 1.20), true, WALL_UV_SCALE)
+		Color(1.10, 1.14, 1.18), true, WALL_UV_SCALE, 0.92, 0.12)
 	materials[&"structure"] = _material(STRUCTURE_TEXTURE,
-		Color(0.95, 1.08, 1.20), true, WALL_UV_SCALE)
+		Color(1.05, 1.09, 1.13), true, WALL_UV_SCALE, 0.84, 0.18)
 	materials[&"floor"] = _material(FLOOR_TEXTURE,
-		Color(0.52, 0.62, 0.64), true, FLOOR_UV_SCALE)
+		Color(0.66, 0.70, 0.69), true, FLOOR_UV_SCALE, 0.95, 0.08)
 	materials[&"ceiling"] = _material(WALL_TEXTURE,
-		Color(0.75, 0.86, 0.96), true, WALL_UV_SCALE)
+		Color(0.82, 0.86, 0.90), true, WALL_UV_SCALE, 0.96, 0.06)
 	materials[&"moss"] = _material(MOSS_TEXTURE,
-		Color(0.30, 0.38, 0.36), true, WALL_UV_SCALE)
+		Color(0.24, 0.31, 0.30), true, WALL_UV_SCALE, 0.98, 0.04)
 	materials[&"water"] = _material(WATER_TEXTURE,
-		Color(0.34, 0.48, 0.52), false, PROP_UV_SCALE)
+		Color(0.30, 0.45, 0.50), false, PROP_UV_SCALE, 0.38, 0.42)
 	materials[&"bronze"] = _material(null,
-		Color(0.15, 0.12, 0.095), false, PROP_UV_SCALE)
+		Color(0.20, 0.14, 0.09), false, PROP_UV_SCALE, 0.54, 0.48, 0.62)
 	materials[&"bronze_wear"] = _material(null,
-		Color(0.29, 0.23, 0.15), false, PROP_UV_SCALE)
+		Color(0.40, 0.29, 0.16), false, PROP_UV_SCALE, 0.44, 0.54, 0.68)
 	materials[&"verdigris"] = _material(null,
-		Color(0.13, 0.20, 0.18), false, PROP_UV_SCALE)
+		Color(0.12, 0.24, 0.22), false, PROP_UV_SCALE, 0.68, 0.30, 0.38)
 	materials[&"mineral"] = _material(null,
-		Color(0.44, 0.50, 0.47), false, PROP_UV_SCALE)
+		Color(0.34, 0.43, 0.43), false, PROP_UV_SCALE, 0.72, 0.20)
 	materials[&"drain_metal"] = _material(null,
-		Color(0.38, 0.36, 0.30), false, PROP_UV_SCALE)
+		Color(0.34, 0.29, 0.21), false, PROP_UV_SCALE, 0.58, 0.40, 0.52)
 	materials[&"recess"] = _material(null,
-		Color(0.035, 0.050, 0.060), false, PROP_UV_SCALE)
+		Color(0.15, 0.20, 0.24), false, PROP_UV_SCALE, 0.88, 0.08)
 	materials[&"source_cache"] = {}
 	return materials
 
 
 static func _material(texture: Texture2D, color: Color, triplanar: bool,
-		uv_scale: Vector3) -> StandardMaterial3D:
+		uv_scale: Vector3, roughness: float = 0.90, specular: float = 0.12,
+		metallic: float = 0.0) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = texture
 	material.albedo_color = color
 	_configure_material(material, triplanar, uv_scale)
+	material.roughness = roughness
+	material.metallic_specular = specular
+	material.metallic = metallic
 	return material
 
 
 static func _configure_material(material: StandardMaterial3D,
 		triplanar: bool, uv_scale: Vector3) -> void:
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
-	material.diffuse_mode = BaseMaterial3D.DIFFUSE_LAMBERT
-	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.diffuse_mode = BaseMaterial3D.DIFFUSE_BURLEY
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	material.metallic = 0.0
-	material.metallic_specular = 0.0
-	material.roughness = 1.0
+	material.metallic_specular = 0.12
+	material.roughness = 0.90
 	material.normal_enabled = false
 	material.normal_texture = null
 	material.emission_enabled = false
 	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+	material.texture_filter = \
+		BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	material.texture_repeat = true
 	material.uv1_scale = uv_scale
 	material.uv1_triplanar = triplanar
@@ -233,8 +261,14 @@ static func _dress_rooms(dungeon: Node3D, look: Node3D, rooms: Dictionary,
 		var index := int(room["index"])
 		var side: StringName = _quiet_side(cell, room)
 		var lateral := _bay_offset(cell, room, side)
-		var full_frame: bool = index == 0 or cell == deepest_cell \
-			or (gate_cell != null and cell == gate_cell)
+		var landmark_role: StringName = &""
+		if index == 0:
+			landmark_role = &"entrance"
+		elif gate_cell != null and cell == gate_cell:
+			landmark_role = &"gate"
+		elif cell == deepest_cell:
+			landmark_role = &"deepest"
+		var full_frame := not landmark_role.is_empty()
 		if gate_cell != null and cell == gate_cell:
 			# Gate prefabs own the room centre. Wrap the hydraulic frame onto the
 			# adjoining wall and tuck it into the quiet corner so both silhouettes
@@ -244,7 +278,7 @@ static func _dress_rooms(dungeon: Node3D, look: Node3D, rooms: Dictionary,
 			lateral = gate_corner[&"lateral"]
 		elif not full_frame and float(room.get("size", 16.0)) >= 24.0:
 			lateral = _ordinary_route_corner(room, side)
-		_build_bay(look, cell, room, side, lateral, full_frame, materials)
+		_build_bay(look, cell, room, side, lateral, landmark_role, materials)
 
 
 static func _quiet_side(cell: Vector2i, room: Dictionary) -> StringName:
@@ -310,7 +344,7 @@ static func _ordinary_route_corner(room: Dictionary, side: StringName) -> float:
 
 
 static func _build_bay(look: Node3D, cell: Vector2i, room: Dictionary,
-		side: StringName, lateral: float, full_frame: bool,
+		side: StringName, lateral: float, landmark_role: StringName,
 		materials: Dictionary) -> void:
 	var room_node := room.get("node") as Node3D
 	if room_node == null:
@@ -336,6 +370,7 @@ static func _build_bay(look: Node3D, cell: Vector2i, room: Dictionary,
 	bay.set_meta(&"room_index", int(room["index"]))
 	bay.set_meta(&"side", side)
 	bay.set_meta(&"lateral", lateral)
+	bay.set_meta(&"landmark_role", landmark_role)
 	room_look.add_child(bay)
 
 	# Every added element stays in the wall's 1.5 m perimeter band and has no
@@ -355,8 +390,8 @@ static func _build_bay(look: Node3D, cell: Vector2i, room: Dictionary,
 		_sanitize_import(water, materials[&"water"], materials)
 		bay.add_child(water)
 
-	if full_frame:
-		_overflow_frame(bay, int(room["index"]), materials)
+	if not landmark_role.is_empty():
+		_overflow_frame(bay, int(room["index"]), landmark_role, materials)
 	else:
 		_ordinary_structure(bay, int(room["index"]), materials)
 
@@ -429,9 +464,10 @@ static func _chipped_lip(bay: Node3D, prefix: String, z: float,
 
 
 static func _overflow_frame(bay: Node3D, room_index: int,
-		materials: Dictionary) -> void:
+		landmark_role: StringName, materials: Dictionary) -> void:
 	var frame := Node3D.new()
 	frame.name = &"OverflowFrame"
+	frame.set_meta(&"landmark_role", landmark_role)
 	bay.add_child(frame)
 	# A dark hydraulic mouth makes the paired piers one readable silhouette; it
 	# also keeps the imported columns from dissolving into the same wall texture.
@@ -439,6 +475,16 @@ static func _overflow_frame(bay: Node3D, room_index: int,
 		Vector3(0.0, 1.27, -0.36), materials[&"recess"])
 	_box(frame, &"OverflowSpill", Vector3(1.15, 1.92, 0.08),
 		Vector3(0.0, 0.98, -0.29), materials[&"water"])
+	# The opening keeps two broad planes visible in cool shadow. They preserve
+	# depth without turning the recess into a bright prop or a featureless black
+	# rectangle.
+	_box(frame, &"OverflowBackSill", Vector3(3.65, 0.18, 0.12),
+		Vector3(0.0, 0.24, -0.27), materials[&"structure"])
+	_box(frame, &"OverflowBackCourse", Vector3(3.60, 0.14, 0.12),
+		Vector3(0.0, 2.18, -0.27), materials[&"structure"])
+	for x: float in [-1.56, 1.56]:
+		_box(frame, &"OverflowInnerJamb", Vector3(0.14, 1.76, 0.12),
+			Vector3(x, 1.20, -0.27), materials[&"structure"])
 	for x: float in [-2.05, 2.05]:
 		var column := COLUMN_SCENE.instantiate() as Node3D
 		if column == null:
@@ -464,6 +510,7 @@ static func _overflow_frame(bay: Node3D, room_index: int,
 			Vector3(joint_x, 3.18, 0.14), materials[&"bronze_wear"])
 	_box(frame, &"LintelWearEdge", Vector3(4.35, 0.055, 0.66),
 		Vector3(0.0, 2.91, 0.14), materials[&"bronze_wear"])
+	_landmark_crown(frame, landmark_role, materials)
 	if room_index != 0:
 		var condition_sign := -1.0 if room_index % 2 == 0 else 1.0
 		lintel.rotation.z = condition_sign * 0.065
@@ -503,6 +550,41 @@ static func _overflow_frame(bay: Node3D, room_index: int,
 		Vector3(0.07, chain_delta.length(), 0.07),
 		(grip_position + chain_top) * 0.5, materials[&"bronze"])
 	chain.rotation.z = -atan2(chain_delta.x, chain_delta.y)
+
+
+static func _landmark_crown(frame: Node3D, landmark_role: StringName,
+		materials: Dictionary) -> void:
+	match landmark_role:
+		&"entrance":
+			# A high triangular crown makes the arrival chamber a ceremonial
+			# threshold instead of another service drain.
+			var left := _box(frame, &"EntranceCrown", Vector3(2.70, 0.44, 0.78),
+				Vector3(-1.02, 3.84, 0.14), materials[&"structure"])
+			left.rotation.z = 0.43
+			var right := _box(frame, &"EntranceCrown", Vector3(2.70, 0.44, 0.78),
+				Vector3(1.02, 3.84, 0.14), materials[&"structure"])
+			right.rotation.z = -0.43
+			_box(frame, &"EntranceCrest", Vector3(0.72, 0.72, 0.84),
+				Vector3(0.0, 4.42, 0.14), materials[&"structure"])
+		&"gate":
+			# An asymmetric counterweight tower gives the control room a tall edge
+			# mass while leaving its generated gate and route centre untouched.
+			_box(frame, &"GateCounterweight", Vector3(1.12, 4.30, 0.82),
+				Vector3(-2.55, 2.15, 0.18), materials[&"structure"])
+			_box(frame, &"GateCounterweightBand", Vector3(1.42, 0.38, 0.88),
+				Vector3(-2.55, 3.56, 0.18), materials[&"bronze_wear"])
+			_box(frame, &"GateCounterweightCap", Vector3(1.62, 0.34, 0.92),
+				Vector3(-2.55, 4.42, 0.18), materials[&"bronze"])
+		&"deepest":
+			# The deepest landmark is a compressed, wide abutment: deliberately
+			# lower and heavier than the entrance's pointed crown.
+			_box(frame, &"DeepestHood", Vector3(6.80, 0.62, 0.94),
+				Vector3(0.0, 3.58, 0.16), materials[&"structure"])
+			_box(frame, &"DeepestHoodBand", Vector3(6.10, 0.22, 1.00),
+				Vector3(0.0, 3.96, 0.16), materials[&"bronze"])
+			for x: float in [-2.85, 2.85]:
+				_box(frame, &"DeepestShoulder", Vector3(1.18, 2.72, 0.88),
+					Vector3(x, 2.10, 0.16), materials[&"structure"])
 
 
 static func _overflow_bucket(frame: Node3D, room_index: int,

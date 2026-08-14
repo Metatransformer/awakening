@@ -8,6 +8,11 @@ extends RefCounted
 
 const SEED := 20260809
 const EYE_HEIGHT := 1.65
+const DARK_LUMA := 16
+const DARK_MAX_SHARE := 35.0
+const MEAN_LUMA_MIN := 28.0
+const MEAN_LUMA_MAX := 48.0
+const CLIPPED_MAX_SHARE := 1.0
 
 
 func run(rig) -> void:
@@ -161,6 +166,23 @@ func _prove_landmark_rooms(rig, look: Node3D, entrance: Vector2i,
 		var bay := _bay_for(look, pair[1])
 		var has_frame := bay != null and not _named(bay, &"OverflowFrame").is_empty()
 		rig.check(has_frame, "%s room carries its full OverflowFrame" % pair[0])
+		if bay == null:
+			continue
+		var role := StringName(bay.get_meta(&"landmark_role", &""))
+		var expected: StringName = {
+			"entrance": &"entrance", "gate-path": &"gate", "deepest": &"deepest",
+		}[pair[0]]
+		rig.check(role == expected,
+			"%s room carries its unique %s silhouette role" % [pair[0], expected])
+	var entrance_bay := _bay_for(look, entrance)
+	var gate_bay := _bay_for(look, gate)
+	var deepest_bay := _bay_for(look, deepest)
+	rig.check(entrance_bay != null and _named(entrance_bay, &"EntranceCrown").size() == 1,
+		"entrance landmark owns one stepped EntranceCrown")
+	rig.check(gate_bay != null and _named(gate_bay, &"GateCounterweight").size() == 1,
+		"gate landmark owns one asymmetric GateCounterweight")
+	rig.check(deepest_bay != null and _named(deepest_bay, &"DeepestHood").size() == 1,
+		"deepest landmark owns one broad DeepestHood")
 
 
 func _capture_room(rig, camera: Camera3D, look: Node3D, cell: Vector2i,
@@ -174,7 +196,7 @@ func _capture_room(rig, camera: Camera3D, look: Node3D, cell: Vector2i,
 	elif not _named(bay, &"ServiceDrain").is_empty():
 		composition = _plain_room_composition(rig, bay, room)
 	else:
-		composition = _landmark_composition(bay)
+		composition = _landmark_route_composition(rig, bay, room)
 	if composition.is_empty():
 		return
 	camera.fov = float(composition[&"fov"])
@@ -185,20 +207,34 @@ func _capture_room(rig, camera: Camera3D, look: Node3D, cell: Vector2i,
 	if Hud != null:
 		Hud.visible = false
 	await rig.capture(path)
+	_prove_luma(rig, path)
 
 
-func _landmark_composition(bay: Node3D) -> Dictionary:
-	# Modestly tighter than the old room-wide view, but still lateral enough to
-	# retain playable floor beside the complete paired-pier silhouette.
-	var inward := bay.global_transform.basis.z.normalized()
-	var along := bay.global_transform.basis.x.normalized()
-	var lateral := float(bay.get_meta(&"lateral", 0.0))
-	var side := -signf(lateral) if not is_zero_approx(lateral) else 1.0
+func _landmark_route_composition(rig, bay: Node3D, room: Dictionary) -> Dictionary:
+	var room_node := room.get("node") as Node3D
+	if room_node == null:
+		return {}
+	var doors: Array = room.get("doors", [])
+	if not rig.check(not doors.is_empty(),
+			"landmark room exposes a generated retreat route"):
+		return {}
+	var doorway := _doorway_pose(room, doors[0] as StringName)
+	if doorway.is_empty():
+		return {}
+	var route_focus: Vector3 = doorway[&"centre"] + Vector3.UP * 1.55
+	var bay_focus := bay.global_position + Vector3.UP * 2.10
+	var room_eye := room_node.global_position + Vector3.UP * EYE_HEIGHT
+	var to_bay := (bay_focus - room_eye).normalized()
+	var to_route := (route_focus - room_eye).normalized()
+	var aim_direction := (to_bay + to_route).normalized()
+	if aim_direction.is_zero_approx():
+		aim_direction = to_bay
 	return {
-		&"origin": bay.global_position + inward * 6.50 + along * side * 2.65
-			+ Vector3.UP * EYE_HEIGHT,
-		&"aim": bay.global_position + Vector3.UP * 1.72,
-		&"fov": 50.0,
+		&"origin": room_eye,
+		&"aim": room_eye + aim_direction * float(room.get("size", 16.0)),
+		# The fixed proof must show both the landmark mass and a retreat door,
+		# even when generation places them on opposite walls.
+		&"fov": 78.0,
 	}
 
 
@@ -395,6 +431,44 @@ func _capture_corridor(rig, camera: Camera3D, dungeon: Node3D,
 	if Hud != null:
 		Hud.visible = false
 	await rig.capture(path)
+	_prove_luma(rig, path)
+
+
+func _prove_luma(rig, path: String) -> void:
+	var image := Image.load_from_file(path)
+	if not rig.check(image != null, "%s can be read back for luma proof" % path):
+		return
+	if image.get_format() != Image.FORMAT_RGB8:
+		image.convert(Image.FORMAT_RGB8)
+	var bytes := image.get_data()
+	var pixels := image.get_width() * image.get_height()
+	var dark := 0
+	var sum := 0
+	var clipped := 0
+	var i := 0
+	while i < bytes.size():
+		var luma: int = (int(bytes[i]) * 299 + int(bytes[i + 1]) * 587 \
+			+ int(bytes[i + 2]) * 114) / 1000
+		sum += luma
+		if luma < DARK_LUMA:
+			dark += 1
+		if luma > 224:
+			clipped += 1
+		i += 3
+	var dark_share := 100.0 * float(dark) / float(maxi(pixels, 1))
+	var mean := float(sum) / float(maxi(pixels, 1))
+	var clipped_share := 100.0 * float(clipped) / float(maxi(pixels, 1))
+	print("FLOOR LUMA %s dark<%d=%.2f%% mean=%.2f clipped>224=%.2f%%"
+		% [path.get_file(), DARK_LUMA, dark_share, mean, clipped_share])
+	rig.check(dark_share <= DARK_MAX_SHARE,
+		"%s preserves readable shadow (dark<%d %.2f%% <= %.2f%%)"
+		% [path.get_file(), DARK_LUMA, dark_share, DARK_MAX_SHARE])
+	rig.check(mean >= MEAN_LUMA_MIN and mean <= MEAN_LUMA_MAX,
+		"%s carries dark-warm range (mean %.2f in %.2f..%.2f)"
+		% [path.get_file(), mean, MEAN_LUMA_MIN, MEAN_LUMA_MAX])
+	rig.check(clipped_share <= CLIPPED_MAX_SHARE,
+		"%s preserves highlight shape (clipped>224 %.2f%% <= %.2f%%)"
+		% [path.get_file(), clipped_share, CLIPPED_MAX_SHARE])
 
 
 func _rebuild(rig) -> Node3D:
