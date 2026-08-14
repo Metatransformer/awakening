@@ -85,7 +85,7 @@ const ATTACK_EXACT := true
 ## Pitch multiplier per chain step. Two rises, three drops — the chain should
 ## sound like it is going somewhere, and the finisher is the heaviest thing in
 ## it. Cheapest honest way to make three swings read as one sentence.
-const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
+const _CHAIN_PITCH: Array[float] = Player.Audio.Light.WHOOSH_PITCH
 
 @export_group("Loadout")
 @export var sword_id: String = "sword_knightly"
@@ -95,7 +95,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 
 @export_group("Sword")
 ## HP per slash.
-@export var damage: int = 2
+@export var damage: int = Player.Attack.Light.DAMAGE[0]
 ## Seconds the whole swing owns the hero. The clips are 1.4-2.4 s, far too slow
 ## for OOT, so they are time-scaled onto this — `Hero.request_attack` divides the
 ## clip length by this number, so raising it slows the ANIMATION, not just the
@@ -106,14 +106,14 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## in particular went past before you could see it was an overhead. 0.60 is that
 ## +30%. The damage windows are fractions of this, so the blade's live slice
 ## stays in the same place in the swing and the hit timing is unchanged in feel.
-@export var swing_time: float = 0.60
+@export var swing_time: float = Player.Attack.Light.TIME[0]
 ## The slice of the swing during which the blade can hurt something, as
 ## fractions of swing_time. Before it is the wind-up, after it is the recovery.
-@export var damage_window := Vector2(0.22, 0.62)
+@export var damage_window: Vector2 = Player.Attack.Light.WINDOW[0]
 ## Reach from the hero's centre, metres. The blade is 0.92 m and the arm adds.
-@export var reach: float = 1.35
-@export var arc_degrees: float = 130.0
-@export var knockback: float = K.KNOCKBACK_LIGHT
+@export var reach: float = Player.Attack.Light.REACH
+@export var arc_degrees: float = Player.Attack.Light.ARC
+@export var knockback: float = Player.Attack.Light.KNOCKBACK[0]
 
 @export_group("Heavy")
 ## The Heavy combo finisher — the swing the light chain also keeps behind two
@@ -124,13 +124,13 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## is the second of commitment and K.STAMINA_HEAVY, which is more than twice a
 ## light swing — the whole point of an Elden Ring stamina bar is that the big
 ## button is the one you cannot lean on.
-@export var heavy_damage: int = 4
-@export var heavy_swing_time: float = 0.99
+@export var heavy_damage: int = Player.Attack.Heavy.DAMAGE
+@export var heavy_swing_time: float = Player.Attack.Heavy.TIME
 ## Later and narrower than the light window: the clip leaps before it lands, so a
 ## window opened at the light's 0.22 puts the blade live while he is still in the
 ## air on the way up.
-@export var heavy_damage_window := Vector2(0.34, 0.68)
-@export var heavy_knockback: float = K.KNOCKBACK_HEAVY
+@export var heavy_damage_window: Vector2 = Player.Attack.Heavy.WINDOW
+@export var heavy_knockback: float = Player.Attack.Heavy.KNOCKBACK
 
 @export_group("Spin")
 ## Seconds the trigger must be HELD before the release becomes a magic spin.
@@ -143,13 +143,13 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## is actually down, which is a frame or three. What 0.42 buys is the other side:
 ## a threshold short enough that committing to the spin does not feel like
 ## waiting, and long enough that a hurried press cannot fall into it by accident.
-@export var charge_time: float = 0.42
+@export var charge_time: float = Player.Attack.Spin.CHARGE_TIME
 ## 5 HP, against the light swing's 2 HP. The spin is worth the
 ## commitment or nobody presses it twice.
 ##
 ## Note that this is what EVERYONE in the circle takes. The spin is not priced as
 ## a bigger single blow — it is priced as this blow, delivered to a room.
-@export var spin_damage: int = 5
+@export var spin_damage: int = Player.Attack.Spin.DAMAGE
 ## Longer than any other swing in the kit. This number IS the cost — the whole
 ## trade is that you are unsteerable and unable to guard for this long.
 ##
@@ -168,15 +168,15 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## above widens as a result — the sword is now further ahead of its own magic —
 ## which is the same read, only stronger. The window below is fractional, so the
 ## live slice scales with this and needs no edit.
-@export var spin_swing_time: float = 0.523
+@export var spin_swing_time: float = Player.Attack.Spin.TIME
 ## The live slice, as fractions of spin_swing_time. It opens LATE and stays open
 ## LONG, which is the opposite shape to every other swing here and is the whole
 ## point: the blade is genuinely travelling through 360 degrees, so the window
 ## has to be wide enough to still be open when the far side of the circle comes
 ## round. Measured against the clip — the sweep peaks at 0.87 s of a 1.35 s
 ## trim, which lands at 0.64 of the way through (tools/_clip_motion.gd).
-@export var spin_damage_window := Vector2(0.34, 0.86)
-@export var spin_knockback: float = K.KNOCKBACK_HEAVY
+@export var spin_damage_window: Vector2 = Player.Attack.Spin.WINDOW
+@export var spin_knockback: float = Player.Attack.Spin.KNOCKBACK
 ## How far the circle reaches, metres from the hero's centre. Wider than the
 ## sword's forward `reach` (1.35): a spin that only caught what a standing swing
 ## would have caught is a worse standing swing that costs you a hold.
@@ -184,22 +184,22 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## 2.1 m is a little over one enemy's width past the blade's tip, which is the
 ## distance a second attacker stands off at while the first one is engaging.
 ## Catching that second attacker IS the move.
-@export var spin_reach: float = 2.1
+@export var spin_reach: float = Player.Attack.Spin.REACH
 ## Degrees of arc the blade is credited with. 360 means the direction test in
 ## `_maybe_hit` never rejects anything, which is what makes this the one attack
 ## in the kit you cannot be behind. [tune]
-@export var spin_arc: float = 360.0
+@export var spin_arc: float = Player.Attack.Spin.ARC
 
 @export_group("Combo")
 ## Seconds after a swing ends during which another press continues the chain
 ## instead of starting a new one. Short enough that you cannot wander off and
 ## come back to a finisher; long enough that the chain is not a rhythm test.
-@export var chain_window: float = 0.34
+@export var chain_window: float = Player.Attack.Light.CHAIN_WINDOW
 ## Fraction of the current swing after which a press is REMEMBERED rather than
 ## dropped. Before it, an input is the player mashing; after it, they have seen
 ## the swing and are asking for the next one. This buffer is the whole difference
 ## between a chain that obeys you and one that eats inputs made a frame early.
-@export var chain_buffer_from: float = 0.35
+@export var chain_buffer_from: float = Player.Attack.Light.BUFFER_FROM
 ## Seconds a press made DURING A DODGE stays owed ON TOP of the dodge it is
 ## waiting out. **Zero switches the dodge buffer off entirely** — which is what
 ## `tools/directors/dodge_cancel.gd` sets for its null case, because the buffer
@@ -221,22 +221,24 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## thing that knows it) and this is the slack on the far end: enough that a
 ## window arriving into a hitstun, a prompt or a landing does not throw the press
 ## away, short enough that it cannot come out at a fight that has moved on. [tune]
-@export var dodge_buffer_grace: float = 0.20
+@export var dodge_buffer_grace: float = Player.Attack.Light.DODGE_BUFFER_GRACE
 ## Multipliers on swing_time for steps 2 and 3. Two is faster than one — a chain
 ## should accelerate — and three is much slower, because it is the one that
 ## hurts AND because its clip is a 2.4 s leaping overhead: at step two's pace the
 ## whole slam would go past in a third of a second and read as a twitch.
-@export var chain_time_scale := Vector2(0.92, 1.65)
+@export var chain_time_scale := Vector2(
+	Player.Attack.Light.TIME[1] / Player.Attack.Light.TIME[0],
+	Player.Attack.Light.TIME[2] / Player.Attack.Light.TIME[0])
 ## Extra HP on the finisher, and the shove it delivers. The payoff
 ## for landing three in a row instead of backing off after one.
-@export var chain_finisher_bonus: int = 2
-@export var chain_finisher_knockback: float = K.KNOCKBACK_HEAVY
+@export var chain_finisher_bonus: int = Player.Attack.Light.DAMAGE[2] - Player.Attack.Light.DAMAGE[0]
+@export var chain_finisher_knockback: float = Player.Attack.Light.KNOCKBACK[2]
 
 @export_group("Dash")
 ## The Heavy combo's short turning opener, also reused by the earned riposte.
 ## It is not a better light swing and it is not the magic spin: what it buys is
 ## that it CLOSES without a lock. Priced between the two.
-@export var dash_damage: int = 3
+@export var dash_damage: int = Player.Attack.Dash.DAMAGE
 ## Shorter than a spin (0.90). The commitment is most of the cost, because the
 ## drive has already thrown the hero somewhere he did not have to be.
 ##
@@ -246,20 +248,20 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## chain the slowdown was for. So it is now barely longer than a light — the
 ## drive still prices it, but if it starts reading as free, this is the number.
 ## [tune]
-@export var dash_swing_time: float = 0.62
+@export var dash_swing_time: float = Player.Attack.Dash.TIME
 ## Opens after the drive has ended (see dash_drive_time), so the point lands at
 ## the END of the lunge. Live earlier and the thrust sweeps through everything it
 ## travelled past, which is a spin attack wearing a thrust's clip.
-@export var dash_damage_window := Vector2(0.34, 0.60)
+@export var dash_damage_window: Vector2 = Player.Attack.Dash.WINDOW
 ## A thrust does not launch. Shoving the enemy away is also self-defeating here —
 ## the whole move was about closing the gap that the knockback would reopen.
-@export var dash_knockback: float = K.KNOCKBACK_LIGHT
+@export var dash_knockback: float = Player.Attack.Dash.KNOCKBACK
 ## Seconds of forward drive, and how fast. 0.20 s at 8.0 m/s is 1.6 m of closing:
 ## about one enemy's width, which is the gap a guarded player actually stands
 ## off at. Fast enough to read as an explosion out of the guard rather than a
 ## walk. [tune]
-@export var dash_drive_time: float = 0.20
-@export var dash_speed: float = 8.0
+@export var dash_drive_time: float = Player.Attack.Dash.DRIVE_TIME
+@export var dash_speed: float = Player.Attack.Dash.DRIVE_SPEED
 
 @export_group("Slam")
 ## The air slam's blow. It is the heaviest single hit in the kit — 1 HP
@@ -267,11 +269,11 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## jump to reach, it cannot be aimed once committed, and `slam_recover` roots the
 ## hero on the floor afterwards with no roll out of it. Everything else in here
 ## can be thrown from where you already are. [tune]
-@export var slam_damage: int = 6
+@export var slam_damage: int = Player.Attack.Slam.DAMAGE
 ## Metres of the circle it damages, measured from the hero's feet. Deliberately
 ## wider than the spin's 2.1: the spin is a blade at arm's length and this is the
 ## FLOOR moving, so the thing that hits you is not the weapon.
-@export var slam_radius: float = 2.6
+@export var slam_radius: float = Player.Attack.Slam.RADIUS
 ## What the dust reads as, which is not what the damage is. The ring is drawn a
 ## little past the edge of the blow — a shockwave whose visible crest stops
 ## exactly where the damage does reads as a hitbox, and a player who takes the
@@ -281,20 +283,20 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## narrower. Wide, a player who dodges the visible edge is safe and the effect
 ## simply looks generous; narrow, a player standing clearly outside the dust
 ## takes a hit he had every reason to think he had avoided.
-@export var slam_fx_radius: float = 3.1
+@export var slam_fx_radius: float = Player.Attack.Slam.FX_RADIUS
 ## Everything it hits goes flying. Same as the spin's — the two are the kit's
 ## "get off me" moves and a crowd that scatters differently from each would make
 ## one of them feel weaker than its damage says it is.
-@export var slam_knockback: float = K.KNOCKBACK_HEAVY
+@export var slam_knockback: float = Player.Attack.Slam.KNOCKBACK
 ## Seconds the victims are stunned. The spin does not stun and this does, which
 ## is the other half of what the recovery buys back: the hero is rooted for
 ## `slam_recover` (0.42), so without a stun the slam's own reward would be a ring
 ## of enemies free to hit him while he stands in his own dust.
-@export var slam_stun: float = 0.5
+@export var slam_stun: float = Player.Attack.Slam.STUN
 
 @export_group("Shield")
 ## Half-angle of the block cone, degrees. A blow from outside it is not blocked.
-@export var block_cone: float = 70.0
+@export var block_cone: float = Player.Attack.Shield.BLOCK_CONE
 ## Half-angle of the PARRY cone, degrees. Tighter than the block, and that is the
 ## only thing about the parry that is harsher than the guard it comes out of.
 ##
@@ -303,50 +305,50 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## specific thing, and catching a blow arriving from 65 degrees off that would
 ## read as the game being generous with a move that is supposed to be a read.
 ## Still wide enough that aiming is not the skill being tested; the timing is.
-@export var parry_cone: float = 45.0
+@export var parry_cone: float = Player.Attack.Shield.PARRY_CONE
 
 @export_group("Flurry")
 ## The leaping overhead thrown out of a perfect dodge. It is the biggest single
 ## sword blow in the kit outside the slam, and it should be: the price is the
 ## hardest defensive read in the game, and a reward smaller than the charged spin
 ## would make the correct play "dodge, then do the thing you could always do".
-@export var flurry_damage: int = 5
+@export var flurry_damage: int = Player.Attack.Flurry.DAMAGE
 ## Longer than the lunge's 0.78, because this leap carries its own anticipation
 ## crouch (`Hero.clip_flurry`) where the lunge's clip does not. It is also thrown
 ## in slow motion more often than not, so the wall-clock cost is smaller than the
 ## number looks. [tune]
-@export var flurry_swing_time: float = 1.02
+@export var flurry_swing_time: float = Player.Attack.Flurry.TIME
 ## Opens at 0.57 because that is where `ex_jump_attack` strikes — 1.20 of its
 ## 2.10 — and the window was fitted to the clip rather than the clip to the
 ## window. See `Hero._SWING_START_OFFSET` for why that direction round.
-@export var flurry_damage_window := Vector2(0.57, 0.74)
+@export var flurry_damage_window: Vector2 = Player.Attack.Flurry.WINDOW
 ## It LAUNCHES, and that is most of the payoff. `K.KNOCKBACK_HEAVY` is weight 1
 ## on the impact scale, so a goblin caught by this goes up nearly every time
 ## (docs/BESTIARY.md §3.5) — which is precisely the "sent flying" this whole
 ## reaction system exists for, arriving on the move you had to earn.
-@export var flurry_knockback: float = K.KNOCKBACK_HEAVY
+@export var flurry_knockback: float = Player.Attack.Flurry.KNOCKBACK
 ## Seconds of forward drive and the hop off the floor. The drive is longer than
 ## the lunge's 0.24 because the leap is higher and the clip spends real time in
 ## the air. See `Hero.request_flurry`.
-@export var flurry_drive_time: float = 0.34
+@export var flurry_drive_time: float = Player.Attack.Flurry.DRIVE_TIME
 ## Metres per second UP, and it is priced against the clip rather than picked.
 ## `K.GRAVITY` is 22, so 5.5 buys 0.69 m of rise and about half a second of air —
 ## which puts touchdown a breath BEFORE `flurry_damage_window` opens at 0.57, so
 ## the blow reads as the landing rather than as a swing taken in mid-air. It
 ## started at 2.4, matching the lunge's hop, and 2.4 is 0.13 m: a jump attack
 ## that never visibly left the floor. [tune]
-@export var flurry_hop: float = 5.5
+@export var flurry_hop: float = Player.Attack.Flurry.HOP
 ## How far short of the target the leap aims to land, metres. Also doubles as the
 ## stride when there is genuinely nothing in front — see `Hero.request_flurry`.
-@export var flurry_stop_short: float = 1.5
+@export var flurry_stop_short: float = Player.Attack.Flurry.STOP_SHORT
 ## How far and how wide the leap looks for something to land on when the player
 ## is not locked on, which after a dodge is most of the time. See `_leap_target`.
-@export var flurry_seek_range: float = 6.0
-@export var flurry_seek_cone: float = 75.0
+@export var flurry_seek_range: float = Player.Attack.Flurry.SEEK_RANGE
+@export var flurry_seek_cone: float = Player.Attack.Flurry.SEEK_CONE
 
 @export_group("Audio")
-@export var sfx_swing: AudioStream = preload("res://audio/sfx/swing.ogg")
-@export var sfx_impact: AudioStream = preload("res://audio/sfx/weapon_impact_sword_1.ogg")
+@export var sfx_swing: AudioStream = load(Player.Audio.SFX_SWING)
+@export var sfx_impact: AudioStream = load(Player.Audio.SFX_IMPACT)
 # THE BLOCK SOUND IS NOT HERE. `on_blocked` emits `Bus.shield_blocked` and `Sfx`
 # owns which clang that is (`shield_block`), because a sound that only ever plays
 # on a signal the whole game can hear belongs in the table with the rest of them.
@@ -357,7 +359,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## Stopped rather than left to finish, and that matters — the stream is 1.9 s
 ## against a 0.42 s hold, so a hum allowed to run out would still be winding up
 ## a second after the spin it belonged to had already landed.
-@export var sfx_charging: AudioStream = preload("res://audio/sfx/sword_charging.ogg")
+@export var sfx_charging: AudioStream = load(Player.Audio.SFX_CHARGING)
 ## The release: the sword, and the hero.
 ##
 ## BOTH play on the release and NEITHER plays when the charge arms, which is the
@@ -370,9 +372,8 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## takes on light and starts pulling motes in (SpinVfx). That is a better tell
 ## than the ping was — it is legible at a glance, it is legible WHILE you are
 ## reading the room, and it does not go off in a corridor you were sneaking down.
-@export var sfx_spin: AudioStream = preload("res://audio/sfx/sword_release.ogg")
-@export var sfx_yell: AudioStream = preload(
-	"res://audio/sfx/weapon_full_charge_voice_male_1.ogg")
+@export var sfx_spin: AudioStream = load(Player.Audio.SFX_RELEASE)
+@export var sfx_yell: AudioStream = load(Player.Audio.SFX_YELL)
 ## The right hand changing what is in it -- the blade going onto the hip, the bow
 ## coming off the back. `equip.ogg` is the leather-and-buckle sound the pickup cue
 ## already uses, which is the right family: a weapon swap is gear being handled,
@@ -382,7 +383,7 @@ const _CHAIN_PITCH: Array[float] = [1.0, 1.08, 0.86]
 ## one input in the game with NO other feedback on a controller: the model
 ## changes in the corner of the eye and the HUD cell changes off-screen. The
 ## sound is what tells a player mid-fight that the press landed.
-@export var sfx_swap: AudioStream = preload("res://audio/sfx/equip.ogg")
+@export var sfx_swap: AudioStream = load(Player.Audio.SFX_SWAP)
 
 ## True while the swing is inside its damage window.
 var swinging: bool = false
@@ -495,6 +496,18 @@ var _vfx: SpinVfx
 ## that damages things during a roll.
 var _hit_shape: CollisionShape3D
 var _hit_sphere: SphereShape3D
+## The swing's scheduled sounds, as fractions of the swing that is running.
+## -1 means "already fired, or never fires". Armed by `_commit` / `_cue_sounds`
+## out of [Player.Audio] and paid out by `_fire_due_cues`. THIS is what makes
+## "when does the whoosh play" a number you can edit rather than a call site.
+var _cue_whoosh: float = -1.0
+var _cue_yell: float = -1.0
+var _cue_release: float = -1.0
+var _cue_yell_pitch := Vector2(0.97, 1.03)
+var _cue_release_pitch := Vector2(0.96, 1.04)
+## The pitch the armed whoosh will ring at, chosen when the swing commits so a
+## delayed cue still sounds like the swing it belongs to.
+var _cue_whoosh_pitch: float = 1.0
 var _swing_player: AudioStreamPlayer3D
 var _impact_player: AudioStreamPlayer3D
 ## The wind-up hum. One player, held across the whole hold so it can be STOPPED
@@ -1771,7 +1784,7 @@ func _begin(intent: int) -> void:
 				if slash_trail != null:
 					slash_trail.begin_stroke(
 						_hero.slam_strike_time, Vector2(0.0, 1.0), true)
-				Game.spend_stamina(K.STAMINA_SLAM, true)
+				Game.spend_stamina(Player.Attack.Slam.STAMINA, true)
 		Intent.SPIN:
 			_spin_swing()
 		Intent.DASH:
@@ -1818,21 +1831,15 @@ func _spin_swing() -> void:
 		if _vfx != null:
 			_vfx.clear()
 		return
-	# Voice, steel and the ring, all on the frame the spin actually starts. The
-	# yell used to fire at the top of the HOLD, which announced a commitment the
-	# player had not made yet.
-	if _spin_player != null:
-		_spin_player.pitch_scale = randf_range(0.96, 1.04)
-		_spin_player.play()
-	if _yell_player != null:
-		_yell_player.pitch_scale = randf_range(0.97, 1.03)
-		_yell_player.play()
+	# Voice, steel and the ring are CUED rather than played here — see
+	# `_cue_sounds` below the commit. The yell used to fire at the top of the
+	# HOLD, which announced a commitment the player had not made yet.
 	if _vfx != null:
 		_vfx.fire()
 	# Paid AFTER the hero has agreed to swing, like every other cost in this file:
 	# a spin refused by `request_attack` must not also empty a quarter of the bar.
 	Game.spend_magic(K.MAGIC_SPIN)
-	Game.spend_stamina(K.STAMINA_SPIN, true)
+	Game.spend_stamina(Player.Attack.Spin.STAMINA, true)
 	# A spin ENDS the chain rather than counting as a step in it. It is the other
 	# half of the same button; letting it slot into the light chain would make the
 	# finisher something you reach by pressing whatever, which is not a combo.
@@ -1842,8 +1849,12 @@ func _spin_swing() -> void:
 	_aim_hitbox(spin_reach, 0.0, spin_arc)
 	# Pitched down, the cheapest honest way to make the swings sound like
 	# different amounts of effort.
+	var wobble: Vector2 = Player.Audio.Spin.WHOOSH_WOBBLE
 	_commit(spin_swing_time, spin_damage_window, spin_damage, spin_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.68, 0.78), K.STUN_HEAVY)
+		Player.Attack.Spin.HITSTOP, randf_range(wobble.x, wobble.y),
+		Player.Attack.Spin.STUN, Player.Audio.Spin.WHOOSH_AT)
+	_cue_sounds(Player.Audio.Spin.YELL_AT, Player.Audio.Spin.YELL_WOBBLE,
+		Player.Audio.Spin.RELEASE_AT, Player.Audio.Spin.RELEASE_WOBBLE)
 
 
 ## THE DASH-SPIN: Heavy's opener, also reused by the counter a landed parry buys.
@@ -1883,7 +1894,7 @@ func _dash_swing(earned_riposte: bool, starts_heavy_combo: bool = false) -> void
 	# It is the flurry that has no i-frames — see `_flurry_swing`.
 	if earned_riposte:
 		_hero.grant_iframes(dash_swing_time)
-	Game.spend_stamina(K.STAMINA_DASH, true)
+	Game.spend_stamina(Player.Attack.Dash.STAMINA, true)
 	# It never advances the light chain. The Heavy route below advances only the
 	# dedicated two-step chain; the riposte route resets it.
 	_chain_step = 0
@@ -1899,8 +1910,10 @@ func _dash_swing(earned_riposte: bool, starts_heavy_combo: bool = false) -> void
 	# wiring from the DASH intent or shared clip would also trail refused swings.
 	if slash_trail != null:
 		slash_trail.begin_stroke(dash_swing_time, dash_damage_window, true)
+	var wobble: Vector2 = Player.Audio.Dash.WHOOSH_WOBBLE
 	_commit(dash_swing_time, dash_damage_window, dash_damage, dash_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.86, 0.94), K.STUN_HEAVY)
+		Player.Attack.Dash.HITSTOP, randf_range(wobble.x, wobble.y),
+		Player.Attack.Dash.STUN, Player.Audio.Dash.WHOOSH_AT)
 
 
 ## The parry: the shield thrown out to meet a blow that has not landed yet.
@@ -2074,16 +2087,16 @@ func _flurry_swing() -> void:
 			flurry_stop_short, _leap_target()):
 		return
 	_flurry_t = 0.0
-	Game.spend_stamina(K.STAMINA_LUNGE, true)
+	Game.spend_stamina(Player.Attack.Lunge.STAMINA, true)
 	_chain_step = 0
 	_chain_timer = 0.0
 	_reset_heavy_combo()
-	if _yell_player != null:
-		_yell_player.pitch_scale = randf_range(0.97, 1.03)
-		_yell_player.play()
 	_aim_sword()
+	var wobble: Vector2 = Player.Audio.Flurry.WHOOSH_WOBBLE
 	_commit(flurry_swing_time, flurry_damage_window, flurry_damage, flurry_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.72, 0.80), K.STUN_HEAVY)
+		Player.Attack.Flurry.HITSTOP, randf_range(wobble.x, wobble.y),
+		Player.Attack.Flurry.STUN, Player.Audio.Flurry.WHOOSH_AT)
+	_cue_sounds(Player.Audio.Flurry.YELL_AT, Player.Audio.Flurry.YELL_WOBBLE)
 
 
 ## WHAT to leap at. The lock if there is one, otherwise the nearest body in front.
@@ -2140,11 +2153,12 @@ func _light_swing(step: int) -> void:
 	var dur := swing_time
 	var dmg := damage
 	var knock := knockback
-	var hitstop := K.HITSTOP_LIGHT
 	# The finisher reels a body for longer, exactly as it shoves harder and stops
 	# the world for longer. Three identical staggers would make the chain's third
-	# step a bigger number and nothing else.
-	var stun := K.STUN_LIGHT
+	# step a bigger number and nothing else. Both tables are per step, so the
+	# match below no longer has to restate them.
+	var hitstop: int = Player.Attack.Light.HITSTOP[step]
+	var stun: float = Player.Attack.Light.STUN[step]
 	match step:
 		1:
 			variant = Hero.Swing.LIGHT2
@@ -2154,8 +2168,6 @@ func _light_swing(step: int) -> void:
 			dur = swing_time * chain_time_scale.y
 			dmg += chain_finisher_bonus
 			knock = chain_finisher_knockback
-			hitstop = K.HITSTOP_HEAVY
-			stun = K.STUN_HEAVY
 	if not _can_swing():
 		return
 	# Only commit the swing's numbers once the hero has agreed to swing — he
@@ -2169,14 +2181,16 @@ func _light_swing(step: int) -> void:
 	# would put the same ordinary trail on Heavy, spin, dash and flurry.
 	if slash_trail != null:
 		slash_trail.begin_stroke(dur, damage_window, step == 2)
-	Game.spend_stamina(K.STAMINA_SWING, true)
+	Game.spend_stamina(Player.Attack.Light.STAMINA, true)
 	# Wraps back to 0 after the finisher: the chain is a loop, not a staircase
 	# you fall off the end of.
 	_chain_step = (step + 1) % 3
 	_chain_timer = chain_window
 	_aim_sword()
+	var wobble: Vector2 = Player.Audio.Light.WHOOSH_WOBBLE
 	_commit(dur, damage_window, dmg, knock, hitstop,
-		randf_range(0.94, 1.07) * _CHAIN_PITCH[step], stun)
+		randf_range(wobble.x, wobble.y) * _CHAIN_PITCH[step], stun,
+		Player.Audio.Light.WHOOSH_AT[step])
 
 ## Advance the dedicated two-hit Heavy chain. Resolve the step only when the
 ## Intent is honoured so a release buffered during the opener becomes step two.
@@ -2206,7 +2220,7 @@ func _heavy_swing() -> void:
 		return
 	if not _hero.request_attack(heavy_swing_time, Hero.Swing.LIGHT3):
 		return
-	Game.spend_stamina(K.STAMINA_HEAVY, true)
+	Game.spend_stamina(Player.Attack.Heavy.STAMINA, true)
 	_chain_step = 0
 	_chain_timer = 0.0
 	_reset_heavy_combo()
@@ -2219,8 +2233,10 @@ func _heavy_swing() -> void:
 	# The lowest pitch in the kit outside the spin. Three swings that sound
 	# identical are three swings the player cannot tell apart with their eyes on
 	# the enemy.
+	var wobble: Vector2 = Player.Audio.Heavy.WHOOSH_WOBBLE
 	_commit(heavy_swing_time, heavy_damage_window, heavy_damage, heavy_knockback,
-		K.HITSTOP_HEAVY, randf_range(0.74, 0.82), K.STUN_HEAVY)
+		Player.Attack.Heavy.HITSTOP, randf_range(wobble.x, wobble.y),
+		Player.Attack.Heavy.STUN, Player.Audio.Heavy.WHOOSH_AT)
 
 
 ## The air slam has arrived. Everything the blow IS happens here, on the one
@@ -2255,7 +2271,8 @@ func _slam_impact(at: Vector3, fall_speed: float) -> void:
 		# hit-stops would freeze the game for a fifth of a second and play the
 		# steel sound as a burst of noise. One blow, one bang.
 		if _impact_player != null and not _impact_player.playing:
-			_impact_player.pitch_scale = randf_range(0.72, 0.80)
+			_impact_player.pitch_scale = randf_range(
+				Player.Audio.Slam.IMPACT_WOBBLE.x, Player.Audio.Slam.IMPACT_WOBBLE.y)
 			_impact_player.play()
 	# Silence the unused argument without dropping it from the signal: how fast
 	# he was going is exactly what a future scaling of this blow would read, and
@@ -2311,7 +2328,8 @@ func _slam_targets(at: Vector3) -> Array[Node]:
 ## does not visibly take, and "forgot to pass it" must not be spelled the same
 ## way as "this blow deliberately does not stagger".
 func _commit(dur: float, window: Vector2, dmg: int, knock: float,
-		hitstop: int, pitch: float, stun: float = K.STUN_LIGHT) -> void:
+		hitstop: int, pitch: float, stun: float = K.STUN_LIGHT,
+		whoosh_at: float = 0.0) -> void:
 	_swing_dur = dur
 	_swing_window = window
 	_swing_damage = dmg
@@ -2320,13 +2338,56 @@ func _commit(dur: float, window: Vector2, dmg: int, knock: float,
 	_swing_hitstop = hitstop
 	_swing_t = 0.0
 	_hit_this_swing.clear()
-	_swing_player.pitch_scale = pitch
-	_swing_player.play()
+	# The whoosh is a CUE, not a call: `whoosh_at` is a fraction of this swing
+	# (Player.Audio), so 0.0 rings on the commit frame exactly as it always did
+	# and 0.22 would ring as the blade goes live. Everything else stays armed
+	# until `_advance_swing` reaches it.
+	_cue_whoosh_pitch = pitch
+	_cue_whoosh = whoosh_at
+	_cue_yell = -1.0
+	_cue_release = -1.0
+	_fire_due_cues(0.0)
+
+
+## Arm the sounds a swing makes AFTER its whoosh — the hero's effort and the
+## ring of released magic. Called by the two attacks that have them, straight
+## after `_commit`, because `_commit` clears the slots.
+func _cue_sounds(yell_at: float, yell_pitch: Vector2,
+		release_at: float = -1.0, release_pitch := Vector2(0.96, 1.04)) -> void:
+	_cue_yell = yell_at
+	_cue_yell_pitch = yell_pitch
+	_cue_release = release_at
+	_cue_release_pitch = release_pitch
+	_fire_due_cues(0.0)
+
+
+## Play whatever this swing had scheduled at or before `frac`. Each cue fires
+## once: it is cleared to -1 as it goes off, so a long swing cannot ring twice
+## and a cue whose moment was skipped by a big delta still fires on the next
+## frame rather than being lost.
+func _fire_due_cues(frac: float) -> void:
+	if _cue_whoosh >= 0.0 and frac >= _cue_whoosh:
+		_cue_whoosh = -1.0
+		if _swing_player != null:
+			_swing_player.pitch_scale = _cue_whoosh_pitch
+			_swing_player.play()
+	if _cue_release >= 0.0 and frac >= _cue_release:
+		_cue_release = -1.0
+		if _spin_player != null:
+			_spin_player.pitch_scale = randf_range(_cue_release_pitch.x, _cue_release_pitch.y)
+			_spin_player.play()
+	if _cue_yell >= 0.0 and frac >= _cue_yell:
+		_cue_yell = -1.0
+		if _yell_player != null:
+			_yell_player.pitch_scale = randf_range(_cue_yell_pitch.x, _cue_yell_pitch.y)
+			_yell_player.play()
 
 
 func _advance_swing(delta: float) -> void:
 	_swing_t += delta
 	var frac := _swing_t / maxf(_swing_dur, 0.01)
+
+	_fire_due_cues(frac)
 
 	var live := frac >= _swing_window.x and frac <= _swing_window.y
 	if live != swinging:
@@ -2339,6 +2400,11 @@ func _advance_swing(delta: float) -> void:
 		_swing_t = -1.0
 		swinging = false
 		_hitbox.monitoring = false
+		# Nothing may survive the swing it was scheduled inside: a cue armed at
+		# 1.2 would otherwise fire on the first frame of the NEXT attack.
+		_cue_whoosh = -1.0
+		_cue_yell = -1.0
+		_cue_release = -1.0
 
 
 ## Damage anything overlapping, once per swing, and only if it is actually in
@@ -2383,7 +2449,8 @@ func _maybe_hit(node: Node) -> void:
 	if landed == false:
 		return
 
-	_impact_player.pitch_scale = randf_range(0.92, 1.08)
+	_impact_player.pitch_scale = randf_range(
+		Player.Audio.IMPACT_WOBBLE.x, Player.Audio.IMPACT_WOBBLE.y)
 	_impact_player.play()
 	Bus.request_hitstop.emit(_swing_hitstop)
 

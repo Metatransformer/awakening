@@ -413,12 +413,63 @@ class is not knowing the pattern.
   and `max_health_points`; `K.HEALTH_POINT` = 1, `K.START_HEALTH_POINTS` = 12,
   `K.HEALTH_UPGRADE_POINTS` = 4, `K.JEWEL_VIGOR_HEALTH_POINTS` = 2 per rung,
   and `K.MAX_HEALTH_POINTS` = 32.
-- Metric: 1 unit = 1 m. Hero is 1.65 m. Constants live in `scripts/core/consts.gd` (`K`).
+- Metric: 1 unit = 1 m. Hero is 1.65 m. Shared constants live in
+  `scripts/core/consts.gd` (`K`); per-system TUNING lives in `scripts/constants/`
+  (§6.1).
 - Values tagged `[oot]` in `K` are **measured from reference footage**. They are
   not typos and they are not yours to "correct".
 - Comments explain *why*, and especially why the obvious thing is wrong. Match
   the density already in the file — this codebase comments its traps on purpose.
 - `Flow` is the only thing that calls `change_scene_to_file`. Do not add a second.
+
+### 6.1 Tuning is configuration, and it lives in `scripts/constants/`
+
+**Every system you build here has to be tunable without opening its code.** The
+hero's numbers used to be `@export` defaults buried in a 4,000-line `hero.gd`
+and a 2,400-line `hero_combat.gd`; editing the pace of an attack meant hunting
+exports across two files, and there was no way at all to slow *every* attack at
+once. That is the failure this convention exists to stop.
+
+`scripts/constants/` is the game's config directory — one file per system, each
+a `class_name` that acts as the namespace, each holding a tree of nested inner
+classes so a path reads like a config object:
+
+```gdscript
+Player.Animations.LIGHT_ATTACK[1]   # the clip the chain's SECOND step plays
+Player.Attack.Light.TIME[1]         # how long that step lasts
+Player.Attack.TIME_SCALE            # one multiplier over every attack
+Player.Motion.Dodge.ROLL_TIME
+```
+
+Rules, all of them load-bearing:
+
+- **Nested inner classes, not a `Dictionary` tree.** All four of the mechanics
+  this depends on were probed on 4.7 rather than assumed: inner classes nest,
+  `const` arrays may be typed, a `const` may reference `K.X` or another class's
+  `const`, and an inner class may read the enclosing class's consts. A const
+  `Dictionary` buys the same dotted-ish paths and loses static types,
+  autocomplete and the parse error on a typo'd key — and §3's trap table already
+  has two rows about const `Dictionary` indexing.
+- **Anything that comes in steps is an ARRAY**, indexed from 0. The light chain
+  is `TIME[0..2]`, not `swing_time` plus a `Vector2` of multipliers.
+- **The system's script keeps its `@export`s and its behaviour; only the numbers
+  move.** Exports default to the config (`@export var swing_time: float =
+  Player.Attack.Light.TIME[0]`), which is what keeps every director in `tools/`
+  working — they read these properties by name.
+- **A number `K` owns stays in `K`.** The config references it (`const KNOCKBACK
+  := K.KNOCKBACK_HEAVY`) when enemies, props or the HUD read the same constant.
+  Two sources of truth is worse than one hop.
+- **Timings are seconds; windows and audio cues are FRACTIONS of the move they
+  belong to**, so they stay in the same place in the animation when the duration
+  changes.
+- **A scene must not store an override for a wired export.** `hero.tscn`
+  deliberately stores no properties: an override saved in a `.tscn` silently
+  wins over the config, and the symptom is "I edited the constant and nothing
+  happened".
+
+New system with numbers in it? Add `scripts/constants/<system>.gd` in the same
+shape. Do not scatter literals through the implementation and do not invent a
+second convention.
 
 ---
 

@@ -91,10 +91,10 @@ enum Swing { LIGHT1, LIGHT2, LIGHT3, SPIN, LUNGE, DASH, PARRY, FLURRY }
 const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 
 @export_group("Rig")
-@export var hero_model: PackedScene = preload("res://assets/characters/hero.fbx")
-@export var anim_library: AnimationLibrary = preload("res://assets/animations/hero_anims.res")
+@export var hero_model: PackedScene = load(Player.Animations.MODEL)
+@export var anim_library: AnimationLibrary = load(Player.Animations.LIBRARY)
 ## The source mesh is 1.0 units tall. K.HERO_SCALE lifts it to adult height.
-@export var model_scale: float = K.HERO_SCALE
+@export var model_scale: float = Player.Motion.Body.SCALE
 ## Yaw correction, degrees, aligning the rig's facing with the body's -Z.
 ##
 ## Measured, not derived: tools/scenes/_facing.tscn renders four copies of the
@@ -109,39 +109,39 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## where the character is looking. The render disagrees with it. If you are
 ## tempted to reintroduce a per-clip correction, re-run _facing.tscn with that
 ## clip first — the image settles it in one frame.)
-@export var model_yaw_offset: float = 180.0
+@export var model_yaw_offset: float = Player.Motion.Body.YAW_OFFSET
 
 @export_group("Locomotion")
-@export var accel: float = K.ACCEL
-@export var decel: float = K.DECEL
+@export var accel: float = Player.Motion.Ground.ACCEL
+@export var decel: float = Player.Motion.Ground.DECEL
 ## Degrees/sec the body swings onto its heading. [tune] K.TURN_RATE.
-@export var turn_rate: float = K.TURN_RATE
-@export var gravity: float = K.GRAVITY
+@export var turn_rate: float = Player.Motion.Ground.TURN_RATE
+@export var gravity: float = Player.Motion.Ground.GRAVITY
 ## Grace after leaving the floor before we treat the hero as properly airborne.
-@export var coyote_time: float = 0.10
+@export var coyote_time: float = Player.Motion.Ground.COYOTE_TIME
 ## [oot] Past this angle a reversal stops steering and becomes a 180. §3.3
-@export var turnaround_angle_deg: float = 135.0
+@export var turnaround_angle_deg: float = Player.Motion.Turn.TURNAROUND_ANGLE
 ## Fraction of the run cap the hero must be carrying for a reversal to become a
 ## full 180 rather than an ordinary pivot.
-@export var turnaround_min_speed01: float = 0.45
-@export var turn180_time: float = 0.30
+@export var turnaround_min_speed01: float = Player.Motion.Turn.TURNAROUND_MIN_SPEED01
+@export var turn180_time: float = Player.Motion.Turn.TIME
 
 @export_group("Lunge")
 ## Ceiling on the leap's ground speed, m/s. Without it a lock on something far
 ## away turns the lunge into a teleport — the drive is "close this gap in this
 ## many seconds", and a big enough gap divides into an absurd number.
-@export var lunge_max_speed: float = 12.0
+@export var lunge_max_speed: float = Player.Motion.Lunge.MAX_SPEED
 ## Metres of the gap the leap deliberately leaves. Landing ON the target shoves
 ## the hero through him, and a lunge that ends behind the enemy is a whiff the
 ## player will read as the hitbox being broken.
-@export var lunge_stop_short: float = 1.0
+@export var lunge_stop_short: float = Player.Motion.Lunge.STOP_SHORT
 
 @export_group("Roll")
-@export var roll_speed: float = K.ROLL_SPEED
-@export var roll_time: float = K.ROLL_TIME
+@export var roll_speed: float = Player.Motion.Dodge.ROLL_SPEED
+@export var roll_time: float = Player.Motion.Dodge.ROLL_TIME
 ## The backflip's speed, which is not the roll's: it is only walking-out-of-
 ## trouble quick (4.37 m/s against 6.55). [oot], and measured.
-@export var backflip_speed: float = K.BACKFLIP_SPEED
+@export var backflip_speed: float = Player.Motion.Dodge.BACKFLIP_SPEED
 # THERE IS NO SIDEHOP ANY MORE, and `K.SIDEHOP_SPEED` (6.19 m/s) / the 0.44 s
 # hop window it used to pair with are deliberately not read here. They are OOT's
 # numbers for a short hop out of the way, and the sideways dodge in this game is
@@ -174,9 +174,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## 27% cut to what the button buys defensively, against 0.06 s of snap nobody
 ## asked for. 0.50 is a 17% cut and the move is already snappier than the ask
 ## from the head cut alone. [tune]
-@export var backflip_time: float = 0.50
+@export var backflip_time: float = Player.Motion.Dodge.BACKFLIP_TIME
 ## The hard recovery. Input is locked and speed bleeds off through it.
-@export var roll_recover_time: float = 0.20
+@export var roll_recover_time: float = Player.Motion.Dodge.RECOVER_TIME
 ## Seconds at the END of `roll_recover_time` in which a COMMITTED action may cut
 ## the recovery short: a swing, a parry, the shield, a bow, another dodge, a jump.
 ##
@@ -201,7 +201,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## `dodge_unwind_deg` walks a sideways roll's model yaw back onto the body over
 ## the whole 0.20, so a window that opened on the first frame of the recovery
 ## would let him swing while still visibly crabwise. [tune]
-@export var dodge_cancel_time: float = 0.14
+@export var dodge_cancel_time: float = Player.Motion.Dodge.CANCEL_TIME
 ## Seconds a jump's LANDING RECOVERY is allowed to hold the body after touchdown
 ## before it is faded back into locomotion — and only once the player is asking
 ## for something (see `_tick_jump_cut`).
@@ -219,31 +219,31 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## wrong one: it would speed up the airborne stretch too, and that stretch is
 ## the arc `K.JUMP_SPEED` was chosen to match. Cutting the tail leaves the leap
 ## exactly as authored.
-@export var jump_land_time: float = 0.12
+@export var jump_land_time: float = Player.Motion.Jump.LAND_TIME
 ## Degrees per second the model turns back onto the body after a sideways roll
 ## (see `_dodge_model_yaw`). 420 walks the 90-degree case back in 0.21 s, which
 ## is `roll_recover_time` — so the unwind IS the recovery, and he is square again
 ## on the frame he gets his input back. Slower and he stands up crabwise; faster
 ## and the last frame of the roll snaps, which is the exact pop this avoids.
-@export var dodge_unwind_deg: float = 420.0
+@export var dodge_unwind_deg: float = Player.Motion.Dodge.UNWIND_DEG
 ## [oot] roll/backflip/sidehop need a near-full stick deflection. §3.2
-@export var roll_stick_gate: float = K.STICK_ACTION_GATE
+@export var roll_stick_gate: float = Player.Motion.Dodge.STICK_GATE
 ## The roll is the i-frame button (roll grants K.ROLL_IFRAMES). Free i-frames
 ## make it the only button anyone presses, so it costs. See K.MAX_STAMINA.
-@export var roll_stamina: float = K.STAMINA_ROLL
+@export var roll_stamina: float = Player.Motion.Dodge.STAMINA
 
 @export_group("Jump")
 ## Straight up, m/s. See K.JUMP_SPEED for what it buys against K.GRAVITY (0.96 m
 ## of apex, 0.59 s in the air) and why both numbers are the ones the clips want.
-@export var jump_speed: float = K.JUMP_SPEED
+@export var jump_speed: float = Player.Motion.Jump.SPEED
 ## Seconds a `jump` press stays live. A press made in the last moments of a fall
 ## still jumps on touchdown rather than being eaten — without it the only way to
 ## chain jumps is to press exactly on the landing frame, and nobody can.
-@export var jump_buffer_time: float = 0.12
+@export var jump_buffer_time: float = Player.Motion.Jump.BUFFER_TIME
 ## Ground speed at launch above which the RUNNING jump plays. Set at walking
 ## pace, not at the run cap: the standing clip's near-vertical arc reads wrong
 ## the moment the hero is visibly travelling, well before he is sprinting.
-@export var jump_run_speed_gate: float = K.WALK_SPEED
+@export var jump_run_speed_gate: float = Player.Motion.Jump.RUN_SPEED_GATE
 
 @export_group("Slam")
 ## Seconds the hero HANGS before the drive, with the weapon coming overhead.
@@ -254,24 +254,24 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## can see wind up cannot be reacted to by anything, including the player who
 ## threw it. A sixth of a second is enough to read the pose and short enough that
 ## it never feels like a stall.
-@export var slam_hang: float = 0.16
+@export var slam_hang: float = Player.Attack.Slam.HANG
 ## Metres/sec straight down, once the hang is over. Deliberately far faster than
 ## a fall (K.GRAVITY tops a jump out at about 6.5 m/s): the drive is what makes
 ## this a strike rather than a landing, and at gravity's own speed it reads as
 ## the hero giving up mid-air.
-@export var slam_speed: float = 16.0
+@export var slam_speed: float = Player.Attack.Slam.DRIVE_SPEED
 ## Seconds rooted after touchdown. This is the cost of the move and the only
 ## thing keeping it off the "press it constantly" list — it is longer than any
 ## swing's recovery, and it cannot be rolled out of.
-@export var slam_recover: float = 0.42
+@export var slam_recover: float = Player.Attack.Slam.RECOVER
 ## How far above the floor the slam may be STARTED. Below this there is not
 ## enough air for the hang to read, and what the player gets for the press is a
 ## hero who twitches and is immediately rooted for `slam_recover`.
-@export var slam_min_height: float = 0.35
+@export var slam_min_height: float = Player.Attack.Slam.MIN_HEIGHT
 
 @export_group("Animation")
-@export var clip_idle: StringName = &"ss_idle_01"
-@export var clip_walk: StringName = &"ss_walk_01"
+@export var clip_idle: StringName = Player.Animations.IDLE
+@export var clip_walk: StringName = Player.Animations.WALK
 ## The run is `ex_running` — a FREE run, arms driving — and NOT `ss_run_01`, the
 ## sword-and-shield pack's own, which is what shipped here for a year on the
 ## reasoning that the idle and the walk came from that pack so the run should
@@ -311,7 +311,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## middle of the curve, at the speed the player crosses most often. Now the only
 ## seam left is walk -> run, where a hero lowering his guard as he opens up is
 ## the thing you would animate on purpose.
-@export var clip_run: StringName = &"ex_running"
+@export var clip_run: StringName = Player.Animations.RUN
 ## The four dodges. **The Pro Sword and Shield Pack contains no roll of any
 ## kind** — 52 clips, not one of them a dodge — which is why every direction once
 ## played `ex_roll_to_run`, a 3.2 m forward shoulder dive, including the
@@ -349,10 +349,10 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## `K.BACKFLIP_SPEED` has been named after since the day it was measured. It is
 ## also the one dodge that must NOT be turned: it is authored travelling
 ## backwards already.
-@export var clip_roll: StringName = &"ex_roll_to_run"
-@export var clip_roll_back: StringName = &"ex_backflip"
-@export var clip_roll_left: StringName = &"ex_roll_to_run"
-@export var clip_roll_right: StringName = &"ex_roll_to_run"
+@export var clip_roll: StringName = Player.Animations.DODGE[Dodge.FORWARD]
+@export var clip_roll_back: StringName = Player.Animations.DODGE[Dodge.BACK]
+@export var clip_roll_left: StringName = Player.Animations.DODGE[Dodge.LEFT]
+@export var clip_roll_right: StringName = Player.Animations.DODGE[Dodge.RIGHT]
 ## Where in `ex_backflip` the flip starts, in seconds. `jump_start_offset`'s
 ## problem exactly, and worse here, because the hero is not standing still while
 ## the anticipation plays — he is travelling backwards at 4.37 m/s from the frame
@@ -374,15 +374,15 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the flip pops out of the guard with no gather at all; keeping the last slice
 ## of the unload buys one frame of compression to launch off. The jump can cut
 ## clean because it opens from a neutral stand — this opens from a raised shield.
-@export var backflip_start_offset: float = 0.45
-@export var clip_turn180: StringName = &"ss_180_turn_01"
+@export var backflip_start_offset: float = Player.Animations.DODGE_START_OFFSET[Dodge.BACK]
+@export var clip_turn180: StringName = Player.Animations.TURN180
 ## FALLING, not jumping. These two are what plays when the ground goes away
 ## underneath him — walking off a ledge, a pit, the end of a hookshot pull — and
 ## they stay on the sword-and-shield set because that is the stance he falls in.
 ## A deliberate jump plays clip_jump/clip_jump_run below instead, and suppresses
 ## both of these: those clips contain their own air pose AND their own landing.
-@export var clip_air: StringName = &"ss_jump_01"
-@export var clip_land: StringName = &"ss_jump_02"
+@export var clip_air: StringName = Player.Animations.AIR
+@export var clip_land: StringName = Player.Animations.LAND
 ## The two jumps. Standing and running are separate clips rather than one clip
 ## leaned on, because they are different ARCS, not the same arc at two speeds:
 ## the standing jump rises 0.57 in hip height and the running one 0.26, which is
@@ -391,8 +391,8 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## Both come from `extra`, which is where this project's non-sword-set clips
 ## live — the Pro Sword and Shield Pack has no jump in it either (see the note
 ## on the dodges above; it had no roll and no 360 for the same reason).
-@export var clip_jump: StringName = &"ex_jump"
-@export var clip_jump_run: StringName = &"ex_jump_running"
+@export var clip_jump: StringName = Player.Animations.JUMP
+@export var clip_jump_run: StringName = Player.Animations.JUMP_RUN
 ## Where in each clip the feet leave the ground, in seconds. Measured off the
 ## hips Y track — see the TRIM note in tools/build_anim_lib.gd for the full
 ## profile of both.
@@ -416,8 +416,8 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## squat this comment says is never seen. `_anim_node` sets the four properties
 ## it actually takes now. The jump is half a second more responsive than it was,
 ## which is not a change of intent — it is this comment finally becoming true.
-@export var jump_start_offset: float = 0.50
-@export var jump_run_start_offset: float = 0.47
+@export var jump_start_offset: float = Player.Animations.JUMP_START_OFFSET
+@export var jump_run_start_offset: float = Player.Animations.JUMP_RUN_START_OFFSET
 ## The air slam, which is ONE clip cut into two one-shots — the dive and the
 ## impact — for the reason clip_air/clip_land are two: the game does not know how
 ## long the hero will be falling, so a single clip covering both would have to
@@ -438,12 +438,12 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ##   1.70  contact, deep crouch, blade coming down across the body
 ##   1.83  the bottom of the compression
 ##   2.75  standing again; after this it is a man holding an axe
-@export var clip_slam: StringName = &"ax_melee_run_jump_attack"
-@export var slam_start_offset: float = 1.50
-@export var slam_land_offset: float = 1.70
+@export var clip_slam: StringName = Player.Animations.SLAM
+@export var slam_start_offset: float = Player.Animations.SLAM_START_OFFSET
+@export var slam_land_offset: float = Player.Animations.SLAM_LAND_OFFSET
 ## The utility axe's one committed cut. It is deliberately not one of `Swing`:
 ## no hitbox, stamina cost, weapon slot or combo may grow out of cutting a tree.
-@export var clip_woodsman_chop: StringName = &"ax_melee_attack_downward"
+@export var clip_woodsman_chop: StringName = Player.Animations.WOODSMAN_CHOP
 ## The three steps of the light chain. Three DIFFERENT clips, not one replayed:
 ## a combo whose every hit is the same swing reads as a stutter, and the whole
 ## point of a chain is that the player can see how far into it they are.
@@ -452,9 +452,9 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## and ends low, 03 sweeps back up from there, 04 is a leaping overhead slam that
 ## finishes on one knee. Down, up, over — each one starts where the last ended,
 ## which is what makes three clips read as one sentence instead of three swings.
-@export var clip_attack: StringName = &"ss_slash_01"
-@export var clip_light2: StringName = &"ss_slash_03"
-@export var clip_light3: StringName = &"ss_slash_04"
+@export var clip_attack: StringName = Player.Animations.LIGHT_ATTACK[0]
+@export var clip_light2: StringName = Player.Animations.LIGHT_ATTACK[1]
+@export var clip_light3: StringName = Player.Animations.LIGHT_ATTACK[2]
 ## The charged release: a full 360 spin, Zelda's. It is a DIFFERENT clip, not a
 ## slash time-scaled down — slowing ss_slash_01 to 0.9 s reads as the hero being
 ## tired, not as a blow that weighs something.
@@ -468,23 +468,23 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## The pose is what earns the 360 hitbox: he crouches into the turn and carries
 ## the blade out at arm's length the whole way round, so the circle the damage
 ## claims is a circle you can see him cut.
-@export var clip_spin: StringName = &"ax_melee_attack_360_low"
+@export var clip_spin: StringName = Player.Animations.SPIN_ATTACK
 ## Seconds into `clip_attack` that the charge holds on. This is a FRAME PICKED
 ## OFF THE RENDER, not a fraction of the clip: see tools/directors/charge_pose.gd,
 ## which photographs the whole slash and then the live hold, because "the bottom
 ## of the swing" is a thing you can see and not a thing you can compute. It wants
 ## the frame where the follow-through has carried the blade out to his left and
 ## the shoulders have not started coming back yet.
-@export var charge_pose_time: float = 0.70
+@export var charge_pose_time: float = Player.Animations.CHARGE_POSE_TIME
 ## Seconds to ease the hold pose in and out of. Slower than the shield's, because
 ## the pose is arrived at out of a swing that is still finishing — snapping into
 ## it reads as the swing being cut off rather than settling.
-@export var charge_pose_fade: float = 0.18
+@export var charge_pose_fade: float = Player.Animations.CHARGE_POSE_FADE
 ## The lock-on lunge. ss_attack_01 is the one clip in the library where the hero
 ## leaves the ground — a leap straight up into a downward slam that lands on one
 ## knee. That is why it made a terrible heavy (it shipped as one for a day and
 ## looked like a physics bug) and exactly the right leap at a locked target.
-@export var clip_lunge: StringName = &"ss_attack_01"
+@export var clip_lunge: StringName = Player.Animations.LUNGE_ATTACK
 ## The dash attack — the stab out from behind the raised shield. Also PICKED OFF
 ## THE RENDER (tools/directors/dodge_lookdev.gd): ss_attack_03 coils low with the
 ## blade drawn back across the body, explodes into a deep split-legged lunge with
@@ -492,7 +492,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## is the only clip in the library whose blade goes FORWARD rather than across —
 ## every `slash` is an arc, and an arc played on a lunge reads as a man swinging
 ## at the air beside the thing he just closed on.
-@export var clip_dash: StringName = &"ss_attack_03"
+@export var clip_dash: StringName = Player.Animations.DASH_ATTACK
 ## The parry. **It IS a block clip**, and the comment that used to sit here said
 ## the opposite in as many words — "NOT one of the two `ss_block_*` clips, which
 ## are a body absorbing something; this one is a body going to meet it".
@@ -515,7 +515,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## this on its own and it never could".
 ##
 ## Card #89 holds the other option, which is sourcing a real bash clip.
-@export var clip_parry: StringName = &"ex_parry"
+@export var clip_parry: StringName = Player.Animations.PARRY
 ## How far forward the MODEL is driven on a parry, in metres, and how far it
 ## pitches into the shove. See `_bash_pose`.
 ##
@@ -525,8 +525,8 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## 0.26 m is about a shield's width and it is the number the render was checked
 ## at — far enough to be a lunge from the game camera, near enough that the hero
 ## does not visibly detach from the capsule the world collides against.
-@export var parry_bash_reach: float = 0.26
-@export var parry_bash_pitch: float = 16.0
+@export var parry_bash_reach: float = Player.Attack.Shield.BASH_REACH
+@export var parry_bash_pitch: float = Player.Attack.Shield.BASH_PITCH
 ## The flurry attack — the leaping overhead the perfect dodge opens. A full
 ## crouch, a launch, a fall with the blade held overhead, a strike, and a
 ## landing on one knee with the point in the ground.
@@ -538,7 +538,7 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## This one carries its own anticipation and its own landing, which is exactly
 ## what a move thrown from a standing start out of slow-motion needs and what
 ## neither of the other two has.
-@export var clip_flurry: StringName = &"ex_jump_attack"
+@export var clip_flurry: StringName = Player.Animations.FLURRY
 ## A bow shot is TWO clips, not one, and they fire from two separate one-shots.
 ##
 ## It was one for a while — `bow_aim_recoil` alone, time-scaled across the whole
@@ -557,23 +557,23 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## the SEAM between them. The two clips abut cleanly because the first ends on
 ## exactly the pose the second opens on, which is why this pair and not, say,
 ## `bow_shoot_*`.
-@export var clip_bow_draw: StringName = &"bow_draw_arrow"
+@export var clip_bow_draw: StringName = Player.Animations.BOW_DRAW
 ## The loose. Opens at full draw — where `clip_bow_draw` left him — and snaps the
 ## string arm back.
-@export var clip_bow_shot: StringName = &"bow_aim_recoil"
+@export var clip_bow_shot: StringName = Player.Animations.BOW_SHOT
 ## Firing the hookshot. A brace-and-punch with the barrel out front, from
 ## Shooting.fbx; the bow clips would have him loosing an arrow off a grapple.
-@export var clip_hook_shot: StringName = &"ex_hookshot_fire"
+@export var clip_hook_shot: StringName = Player.Animations.HOOK_SHOT
 ## The held aim, and the two ends of the aim-walk blend. These are what the
 ## over-the-shoulder stance looks like: `bow_aim_overdraw` is a sustained pull at
 ## full draw, and the aim-walk clips carry the bow through a step instead of
 ## sliding a statue across the floor.
-@export var clip_aim_idle: StringName = &"bow_aim_overdraw"
-@export var clip_aim_walk: StringName = &"bow_aim_walk_forward"
+@export var clip_aim_idle: StringName = Player.Animations.AIM_IDLE
+@export var clip_aim_walk: StringName = Player.Animations.AIM_WALK
 ## Seconds the aim stance takes to blend in and out. Matches K.CAM_AIM_BLEND so
 ## the body and the camera arrive at the shoulder together.
-@export var aim_fade: float = K.CAM_AIM_BLEND
-@export var clip_block: StringName = &"ss_block_idle_01"
+@export var aim_fade: float = Player.Animations.AIM_FADE
+@export var clip_block: StringName = Player.Animations.BLOCK
 ## The guarded eight-way. Z-Parallel pins the facing and turns the stick into a
 ## strafe (`_tick_camera_facing`), which makes the guard the one stance in this
 ## file where travel and facing come apart every single frame — so a
@@ -605,17 +605,17 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## one-axis SPEED blend, which has no way to express direction — so holding the
 ## shield and pushing the stick forward played the backpedal, and the hero
 ## moon-walked wherever he went except backwards.
-@export var clip_guard_fwd_walk: StringName = &"ss_walk_01"
-@export var clip_guard_fwd_run: StringName = &"ss_run_01"
-@export var clip_guard_back_walk: StringName = &"ss_walk_02"
-@export var clip_guard_back_run: StringName = &"ss_run_02"
-@export var clip_guard_right_walk: StringName = &"ss_strafe_01"
-@export var clip_guard_right_run: StringName = &"ss_strafe_04"
-@export var clip_guard_left_walk: StringName = &"ss_strafe_02"
-@export var clip_guard_left_run: StringName = &"ss_strafe_03"
+@export var clip_guard_fwd_walk: StringName = Player.Animations.GUARD_FWD_WALK
+@export var clip_guard_fwd_run: StringName = Player.Animations.GUARD_FWD_RUN
+@export var clip_guard_back_walk: StringName = Player.Animations.GUARD_BACK_WALK
+@export var clip_guard_back_run: StringName = Player.Animations.GUARD_BACK_RUN
+@export var clip_guard_right_walk: StringName = Player.Animations.GUARD_RIGHT_WALK
+@export var clip_guard_right_run: StringName = Player.Animations.GUARD_RIGHT_RUN
+@export var clip_guard_left_walk: StringName = Player.Animations.GUARD_LEFT_WALK
+@export var clip_guard_left_run: StringName = Player.Animations.GUARD_LEFT_RUN
 ## Seconds the shield takes to come up and go down. Fast enough to be a
 ## reaction, slow enough that you can see it happen.
-@export var block_fade: float = 0.12
+@export var block_fade: float = Player.Animations.BLOCK_FADE
 
 ## The seated pose he eats a ration in (`docs/METAGAME.md` §6.4). A HELD pose, so
 ## it blends rather than fires — the same arrangement `clip_block` gets, for the
@@ -635,10 +635,10 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## LIGHT and HEAVY are the owner's own labelling of the sword-and-shield pack's
 ## two reactions; `ss_impact_01` is the third and is deliberately not wired,
 ## because two flinches that read as one flinch is worse than one.
-@export var clip_flinch_light: StringName = &"ss_impact_02"
-@export var clip_flinch_heavy: StringName = &"ss_impact_03"
-@export var clip_knocked_down: StringName = &"ex_knocked_down"
-@export var clip_getting_up: StringName = &"ex_getting_up"
+@export var clip_flinch_light: StringName = Player.Animations.FLINCH_LIGHT
+@export var clip_flinch_heavy: StringName = Player.Animations.FLINCH_HEAVY
+@export var clip_knocked_down: StringName = Player.Animations.KNOCKED_DOWN
+@export var clip_getting_up: StringName = Player.Animations.GETTING_UP
 ## Seconds of `clip_getting_up` that are never played -- the same trick
 ## `jump_start_offset` and `_SWING_START_OFFSET` use, for a related reason.
 ##
@@ -648,13 +648,13 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## that opening again is the rise visibly failing to start on the frame the game
 ## says it has. Trimmed at the far end instead, in build_anim_lib's TRIM table,
 ## because a tail is a tail wherever you cut it and a head is a delay.
-@export var getup_start_offset: float = 0.28
+@export var getup_start_offset: float = Player.Animations.GETUP_START_OFFSET
 
 @export_group("Stances")
-@export var clip_rest: StringName = &"ss_crouch_idle_01"
+@export var clip_rest: StringName = Player.Animations.REST
 ## The full-body lift used by the item-get ceremony. It sits above Rest as a
 ## one-shot so the presentation pose wins over every locomotion or held stance.
-@export var clip_item_get: StringName = &"ss_power_up_01"
+@export var clip_item_get: StringName = Player.Animations.ITEM_GET
 ## Seconds the seated pose takes to fold down into and to come up out of.
 ##
 ## Slower than the shield's 0.12 on purpose, and it is the only fade in this file
@@ -662,10 +662,10 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## must never read as instant: the whole item is that eating costs you the twelve
 ## seconds AND the two beats at either end of it, and a hero who snapped into a
 ## crouch and back could be eaten mid-corridor with no felt cost at all.
-@export var rest_fade: float = 0.30
+@export var rest_fade: float = Player.Animations.REST_FADE
 ## Speeds, in m/s, the walk and run clips are authored to read as.
-@export var walk_blend_speed: float = K.WALK_SPEED
-@export var run_blend_speed: float = K.RUN_SPEED
+@export var walk_blend_speed: float = Player.Animations.WALK_BLEND_SPEED
+@export var run_blend_speed: float = Player.Animations.RUN_BLEND_SPEED
 ## The sprint's own clip and its point on the same speed axis. `ex_fast_run` has
 ## been sitting unused in the library since the day it was imported; it is a
 ## 0.53 s cycle against the run's 0.70 s, so the cadence comes from the CLIP
@@ -674,17 +674,17 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ##
 ## Adding it as a fourth blend point keeps §3.2 intact: one continuous curve of
 ## idle -> walk -> run -> sprint, still no branch anywhere in the locomotion.
-@export var clip_sprint: StringName = &"ex_fast_run"
-@export var sprint_blend_speed: float = K.SPRINT_SPEED
+@export var clip_sprint: StringName = Player.Animations.SPRINT
+@export var sprint_blend_speed: float = Player.Animations.SPRINT_BLEND_SPEED
 ## Playback rate applied to the locomotion blend at a standstill and at the run
 ## cap. Keeps the feet from skating at in-between speeds.
-@export var stride_scale_idle: float = 1.0
-@export var stride_scale_run: float = 1.06
+@export var stride_scale_idle: float = Player.Animations.STRIDE_SCALE_IDLE
+@export var stride_scale_run: float = Player.Animations.STRIDE_SCALE_RUN
 
 @export_group("Sprint")
 ## Top speed while the dodge button is held. See K.SPRINT_SPEED for why it is
 ## deliberately slower than a roll.
-@export var sprint_speed: float = K.SPRINT_SPEED
+@export var sprint_speed: float = Player.Motion.Sprint.SPEED
 ## The tap window. `context` released inside it is a DODGE; still down when it
 ## expires, the press is a RUN and will never be a dodge, however it ends.
 ## Elden Ring's arrangement — tap to roll, hold to sprint, one button — and this
@@ -706,20 +706,20 @@ const VOICE_EFFORT := &"weapon_full_charge_voice_male_1"
 ## classified. The window is one number and not two on purpose: the frame the
 ## sprint begins is the frame the dodge stops being possible, so there is no
 ## band in which a press means neither.
-@export var sprint_hold_time: float = 0.36
+@export var sprint_hold_time: float = Player.Motion.Sprint.HOLD_TIME
 ## Stamina per second, spent while running. The bar is the whole limit on it —
 ## there is no separate sprint meter, so a run and a dodge come out of the same
 ## pocket and a player who sprints everywhere arrives with nothing to dodge on.
-@export var sprint_stamina_rate: float = K.STAMINA_SPRINT
+@export var sprint_stamina_rate: float = Player.Motion.Sprint.STAMINA_RATE
 ## Fraction of the bar that must come back before an exhausted run can restart.
 ## Without it a held button re-starts the sprint the instant one frame's worth of
 ## stamina regenerates, and the hero stutters between running and not.
-@export var sprint_recover01: float = 0.25
+@export var sprint_recover01: float = Player.Motion.Sprint.RECOVER01
 
 @export_group("Footsteps")
 ## Metres of ground covered per footfall at walk speed and at the run cap.
-@export var stride_walk: float = 0.72
-@export var stride_run: float = 1.55
+@export var stride_walk: float = Player.Motion.Ground.STRIDE_WALK
+@export var stride_run: float = Player.Motion.Ground.STRIDE_RUN
 
 ## Set by P3 when it parents a targeting node under the hero. Read-only here.
 ## docs/CONTRACT.md §8 — `get_first_node_in_group("player").targeting`.
@@ -932,8 +932,8 @@ const _DODGE_NODES: Array[StringName] = [
 ## The roll gets the widest fade of the four: it is the longest move and the one
 ## that ends lying down, so snapping out of it pops the hero upright. The hops
 ## are quick steps and a slow fade on a quick step reads as lag.
-const _DODGE_FADE_IN: Array[float] = [0.05, 0.05, 0.04, 0.04]
-const _DODGE_FADE_OUT: Array[float] = [0.16, 0.14, 0.12, 0.12]
+const _DODGE_FADE_IN: Array[float] = Player.Animations.DODGE_FADE_IN
+const _DODGE_FADE_OUT: Array[float] = Player.Animations.DODGE_FADE_OUT
 ## NOTE: the backflip's dead tail is cut at BAKE time, in build_anim_lib's TRIM
 ## table, not here. `_fire_dodge` scales `clip_len / duration` so the one-shot
 ## ends exactly when the dodge does; trimming at this end would shorten the
@@ -965,8 +965,18 @@ const _SWING_NODES: Array[StringName] = [
 ## see, on the frame they pressed, that the shield went out.
 ## The FLURRY is the loosest, for the opposite reason: it comes out of a dodge's
 ## recovery in slow-motion, where there is time to see the hero gather.
-const _SWING_FADE_IN: Array[float] = [0.06, 0.04, 0.05, 0.04, 0.08, 0.04, 0.02, 0.09]
-const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18, 0.14, 0.22]
+const _SWING_FADE_IN: Array[float] = [
+	Player.Animations.LIGHT_ATTACK_FADE_IN[0], Player.Animations.LIGHT_ATTACK_FADE_IN[1],
+	Player.Animations.LIGHT_ATTACK_FADE_IN[2], Player.Animations.SPIN_ATTACK_FADE_IN,
+	Player.Animations.LUNGE_ATTACK_FADE_IN, Player.Animations.DASH_ATTACK_FADE_IN,
+	Player.Animations.PARRY_FADE_IN, Player.Animations.FLURRY_FADE_IN,
+]
+const _SWING_FADE_OUT: Array[float] = [
+	Player.Animations.LIGHT_ATTACK_FADE_OUT[0], Player.Animations.LIGHT_ATTACK_FADE_OUT[1],
+	Player.Animations.LIGHT_ATTACK_FADE_OUT[2], Player.Animations.SPIN_ATTACK_FADE_OUT,
+	Player.Animations.LUNGE_ATTACK_FADE_OUT, Player.Animations.DASH_ATTACK_FADE_OUT,
+	Player.Animations.PARRY_FADE_OUT, Player.Animations.FLURRY_FADE_OUT,
+]
 ## Seconds of each swing clip that are never played, indexed by Swing. This is
 ## the jump's trick (`jump_start_offset`) applied to the sword, and it is here
 ## for the same reason: the clip opens with an anticipation the game has no
@@ -1025,7 +1035,10 @@ const _SWING_FADE_OUT: Array[float] = [0.16, 0.12, 0.18, 0.22, 0.20, 0.18, 0.14,
 ##           is already 0.09 m off the floor. A wind-up you can see is worth
 ##           keeping on the one move in the kit that is thrown IN SLOW MOTION.
 const _SWING_START_OFFSET: Array[float] = [
-	0.22, 0.46, 0.47, 0.41, 0.00, 0.17, 0.08, 0.00,
+	Player.Animations.LIGHT_ATTACK_START_OFFSET[0], Player.Animations.LIGHT_ATTACK_START_OFFSET[1],
+	Player.Animations.LIGHT_ATTACK_START_OFFSET[2], Player.Animations.SPIN_ATTACK_START_OFFSET,
+	Player.Animations.LUNGE_ATTACK_START_OFFSET, Player.Animations.DASH_ATTACK_START_OFFSET,
+	Player.Animations.PARRY_START_OFFSET, Player.Animations.FLURRY_START_OFFSET,
 ]
 
 const _P_BOW_DRAW := "parameters/BowDraw/request"
