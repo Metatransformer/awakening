@@ -17,9 +17,10 @@
 // 2. It refuses to build unless run/main_scene is the shipping scene. `pnpm
 //    play` rewrites that line to whatever room it launched (tools/play.mjs,
 //    syncMainScene) and dungeon.tscn is first in its candidate list, so any
-//    playtest leaves the project pointed underground. Shipping that skips the
-//    descent gate -- the bug project.godot says has already escaped three
-//    times. A deploy is the one command where that must not be silent.
+//    playtest can leave the project pointed underground. Shipping that skips
+//    the title screen and descent gate -- the bug project.godot says has already
+//    escaped three times. A deploy is the one command where that must not be
+//    silent.
 
 import { existsSync, readFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -32,7 +33,7 @@ const ITCH_TARGET = 'metatransformer/the-lower-worlds-awakening'
 const ITCH_URL = 'https://metatransformer.itch.io/the-lower-worlds-awakening'
 
 // The scene a player must boot into. See note 2 above.
-const SHIP_SCENE = 'res://scenes/rooms/garrison.tscn'
+const SHIP_SCENE = 'res://scenes/ui/title/title_screen.tscn'
 
 // The .app / .exe basename. No colon: macOS treats it as a path separator and
 // Godot rewrites it to "-", which is why the bundle on disk is "The Lower
@@ -165,8 +166,9 @@ if (!existsSync(join(ROOT, 'export_presets.cfg'))) {
         `run/main_scene is ${found}, not ${SHIP_SCENE}.\n\n` +
           '  Something -- almost certainly `pnpm play`, which rewrites that line to\n' +
           '  whatever room it launched -- has left the project pointed at another\n' +
-          '  scene. Shipping it means players boot straight into a run they never\n' +
-          '  started, and never meet the descent gate until after their first death.\n\n' +
+          '  scene. Shipping it can bypass the title screen where players continue\n' +
+          '  or start a new game. A dungeon scene also boots them into a run they\n' +
+          '  never started and skips the descent gate.\n\n' +
           `  Fix it:  set run/main_scene="${SHIP_SCENE}" in project.godot\n` +
           '  Or, if you really mean to ship this scene:  pnpm deploy --allow-any-scene'
       )

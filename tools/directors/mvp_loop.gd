@@ -284,18 +284,20 @@ func _buy(rig) -> bool:
 	await rig.wait_frames(14)
 	await rig.capture(out.path_join("m_05_shop.png"))
 
-	# Walk to the BAG SLOT line -- cheap enough that one run pays for it.
+	# Walk to the first bag rung -- cheap enough that one run pays for it.
 	#
 	# By NAME, not by counting presses. Availability and future ladder additions
 	# can change a progression board's order, so no fixed count is safe.
+	var bag_rungs: Array = SupplyDb.RUNG_NAMES[&"bag_slot"]
+	var bag_rung := String(bag_rungs[0])
 	var walked := 0
-	while screen.cursor_label() != "BAG SLOT" and walked < screen.line_count():
+	while screen.cursor_label() != bag_rung and walked < screen.line_count():
 		# RIGHT is one cell. Down is a whole ROW now that the counter is a grid.
 		await rig.tap(["ui_right"])
 		await rig.wait_frames(4)
 		walked += 1
-	if screen.cursor_label() != "BAG SLOT":
-		rig.fail("MVP FAIL Upgrades has no BAG SLOT line to buy")
+	if screen.cursor_label() != bag_rung:
+		rig.fail("MVP FAIL Upgrades has no %s rung to buy" % bag_rung)
 		return false
 	var was_gold := Game.gold
 	var was_slots := Game.bag_slots
