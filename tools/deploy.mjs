@@ -237,6 +237,21 @@ for (const p of platforms) {
 
   const built = join(ROOT, t.out)
   if (!existsSync(built)) die(`${p} export reported success but produced no ${t.out}`)
+  // The built-in ad-hoc signature can verify yet be killed at exec on macOS.
+  // Sign the final bundle with Apple's tool, then prove that its binary starts.
+  if (p === 'mac' && process.platform === 'darwin') {
+    const unpacked = join(ROOT, t.dir, '.signing')
+    const appName = 'The Lower Worlds- Awakening.app'
+    const app = join(unpacked, appName)
+    mkdirSync(unpacked, { recursive: true })
+    run('/usr/bin/ditto', ['-x', '-k', built, unpacked], 'mac archive extraction')
+    run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', app], 'mac native signing')
+    run('/usr/bin/codesign', ['--verify', '--deep', '--strict', app], 'mac signature verification')
+    run(join(app, 'Contents/MacOS/The Lower Worlds- Awakening'), ['--version'], 'mac executable check')
+    rmSync(built)
+    run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, built], 'mac archive packaging')
+    rmSync(unpacked, { recursive: true })
+  }
   console.log(`  ${t.out}  ${humanSize(statSync(built).size)}\n`)
 }
 
